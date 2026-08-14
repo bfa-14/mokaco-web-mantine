@@ -1,0 +1,705 @@
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Button, Modal, Select, TextInput } from '@mantine/core'
+import { DatePickerInput } from '@mantine/dates'
+import { IconCalendar } from '@tabler/icons-react'
+import { notifications } from '@mantine/notifications'
+import {
+  branchesService,
+  departmentsService,
+  employeesService,
+  positionsService,
+} from '../../services/hrService'
+import { branchManagerService } from '../../services/workflowService'
+import type { BranchWithManager } from '../../types/workflow'
+import { usersService } from '../../services/securityService'
+import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import type {
+  Branch,
+  Department,
+  EmployeeListItem,
+  EmployeeLoginStatus,
+  EmployeeProfile,
+  Position,
+  ReportingLineEntry,
+} from '../../types/hr'
+import { APPROVAL_TIER_OPTIONS, employeeLabel } from '../../types/hr'
+import type { UnlinkedUser } from '../../types/security'
+
+/**
+ * notify(msg, type, ms) → Mantine notifications, adapted once so every call site below
+ * stays byte-identical to the original.
+ */
+function notify(message: string, type: 'success' | 'warning' | 'error', ms: number) {
+  notifications.show({
+    message,
+    color: type === 'success' ? 'green' : type === 'warning' ? 'orange' : 'red',
+    autoClose: ms,
+  })
+}
+
+/**
+ * DevExtreme's `confirm(message, title)` dialog, rebuilt as a promise-backed Mantine Modal so the
+ * call site keeps its original `const ok = await …; if (!ok) return` shape. Closing the dialog any
+ * other way answers "no".
+ */
+interface ConfirmState {
+  title: string
+  message: ReactNode
+  resolve: (proceed: boolean) => void
+}
+
+interface FormState {
+  fullName: string
+  branchId: number | null
+  departmentId: number | null
+  positionId: number | null
+  hireDate: string
+  nationalId: string
+  nssfNumber: string
+  userId: number | null
+  terminationDate: string
+  /** 1 = staff (default), 2 = management, 3 = executive. */
+  approvalTier: number
+  /** Who this person reports to, or null for the top of a line. Saved via its own endpoint. */
+  reportsToEmployeeId: number | null
+}
+
+const EMPTY: FormState = {
+  fullName: '',
+  branchId: null,
+  departmentId: null,
+  positionId: null,
+  hireDate: '',
+  nationalId: '',
+  nssfNumber: '',
+  userId: null,
+  terminationDate: '',
+  approvalTier: 1,
+  reportsToEmployeeId: null,
+}
+
+/* PORT NOTE: DevExtreme ValidationGroup/RequiredRule → the same five required checks, message for
+   message, run in submit() and shown as field-level errors. */
+interface FieldErrors {
+  fullName?: string
+  branchId?: string
+  departmentId?: string
+  positionId?: string
+  hireDate?: string
+}
+
+/** The shape the account picker renders — unlinked accounts, plus (in edit) the currently-linked one. */
+interface AccountOption {
+  userId: number
+  username: string
+  isActive: boolean
+}
+
+/** ONE WORDING for an account, in the picker: "username — disabled" when the login is off. */
+const accountLabel = (u: AccountOption): string =>
+  `${u.username}${u.isActive ? '' : ' — disabled'}`
+
+interface EmployeeFormPopupProps {
+  visible: boolean
+  /** null → create; a profile → edit. */
+  employee: EmployeeProfile | null
+  onClose: () => void
+  onSaved: () => void
+}
+
+export function EmployeeFormPopup({
+  visible,
+  employee,
+  onClose,
+  onSaved,
+}: EmployeeFormPopupProps) {
+  const isEdit = employee !== null
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  // Linking an account is account administration; hide the whole section from anyone who cannot do it.
+  const canManageAccounts = hasPermission('USER_MANAGE')
+
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [positions, setPositions] = useState<Position[]>([])
+  const [unlinked, setUnlinked] = useState<UnlinkedUser[]>([])
+  /** Every active employee — the "Reports to" options (self excluded when rendering). */
+  const [employees, setEmployees] = useState<EmployeeListItem[]>([])
+  /** Branch → manager, so a new employee can default their "Reports to" to their branch's manager. */
+  const [branchManagers, setBranchManagers] = useState<BranchWithManager[]>([])
+  /** This person's chain of command (edit only), bottom-up from usp_Employee_GetReportingLine. */
+  const [reportingLine, setReportingLine] = useState<ReportingLineEntry[]>([])
+  /** This employee's login row (edit only) — the source of the current username and branch-manager status. */
+  const [loginRow, setLoginRow] = useState<EmployeeLoginStatus | null>(null)
+
+  const [form, setForm] = useState<FormState>(EMPTY)
+  const [saving, setSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+
+  /** The confirm dialog currently on screen, if any — see ConfirmState. */
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+
+  const askConfirm = (message: ReactNode, title: string): Promise<boolean> =>
+    new Promise<boolean>((resolve) => setConfirmState({ title, message, resolve }))
+
+  function settleConfirm(proceed: boolean) {
+    confirmState?.resolve(proceed)
+    setConfirmState(null)
+  }
+
+  // Unlinked accounts + (in edit) this employee's login status. Refreshed after an unlink.
+  async function loadAccounts() {
+    if (!canManageAccounts) return
+    const [unlinkedList, statusList] = await Promise.all([
+      usersService.unlinked().catch(() => [] as UnlinkedUser[]),
+      isEdit && employee
+        ? employeesService.getLoginStatus().catch(() => [] as EmployeeLoginStatus[])
+        : Promise.resolve([] as EmployeeLoginStatus[]),
+    ])
+    setUnlinked(unlinkedList)
+    if (isEdit && employee)
+      setLoginRow(statusList.find((r) => r.employeeId === employee.employeeId) ?? null)
+  }
+
+  /** Refresh the chain of command shown under "Reports to" — edit only; a new employee has none yet. */
+  async function loadReportingLine() {
+    if (!isEdit || !employee) return
+    const line = await employeesService
+      .getReportingLine(employee.employeeId)
+      .catch(() => [] as ReportingLineEntry[])
+    setReportingLine(line)
+  }
+
+  // Load the lookup lists once.
+  useEffect(() => {
+    let cancelled = false
+    async function loadLookups() {
+      const [b, d, p, emps, bm] = await Promise.all([
+        branchesService.getAll().catch(() => [] as Branch[]),
+        departmentsService.getAll().catch(() => [] as Department[]),
+        positionsService.getAll().catch(() => [] as Position[]),
+        employeesService.getAll().catch(() => [] as EmployeeListItem[]),
+        // Best-effort: needs branch-manager read access. Its absence just means no auto-default.
+        branchManagerService.getAll().catch(() => [] as BranchWithManager[]),
+      ])
+      if (!cancelled) {
+        setBranches(b)
+        setDepartments(d)
+        setPositions(p)
+        setEmployees(emps)
+        setBranchManagers(bm)
+      }
+      await loadAccounts()
+      await loadReportingLine()
+    }
+    void loadLookups()
+    return () => {
+      cancelled = true
+    }
+    // Mount-once; canManageAccounts/employee are stable for a given mounted popup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Populate the form when the popup opens (an event, so React state stays in sync
+  // without a cascading-render effect).
+  function populateForm() {
+    setFieldErrors({})
+    if (employee) {
+      setForm({
+        fullName: employee.fullName,
+        branchId: employee.branchId,
+        departmentId: employee.departmentId,
+        positionId: employee.positionId,
+        hireDate: employee.hireDate?.slice(0, 10) ?? '',
+        nationalId: employee.nationalId ?? '',
+        nssfNumber: employee.nssfNumber ?? '',
+        userId: employee.userId,
+        terminationDate: employee.terminationDate?.slice(0, 10) ?? '',
+        approvalTier: employee.approvalTier ?? 1,
+        reportsToEmployeeId: employee.reportsToEmployeeId ?? null,
+      })
+    } else {
+      setForm(EMPTY)
+    }
+  }
+
+  /* PORT NOTE: the DX Popup's onShowing event → state adjusted during render when `visible` flips
+     open, the sanctioned pattern for prop-derived state (same as RequestsHubPage's view pref).
+     Starts false so a popup mounted already-visible still populates on its first render. */
+  const [wasVisible, setWasVisible] = useState(false)
+  if (visible !== wasVisible) {
+    setWasVisible(visible)
+    if (visible) populateForm()
+  }
+
+  // Edit picker options: the current account (so leaving the field untouched keeps it) + unlinked ones.
+  const currentAccount: AccountOption | null =
+    isEdit && employee?.userId != null
+      ? {
+          userId: employee.userId,
+          username: loginRow?.username ?? 'Current account',
+          isActive: loginRow?.userIsActive ?? true,
+        }
+      : null
+  const editAccountItems: AccountOption[] = currentAccount
+    ? [currentAccount, ...unlinked]
+    : unlinked
+
+  // "Reports to" options — everyone except this person (you cannot report to yourself; the server
+  // refuses that and any loop, but there is no reason to offer self in the first place). The current
+  // manager is guaranteed to be in the list, keyed off the value the form holds, so the control shows
+  // their NAME the moment it opens — even before the employee list has loaded — and never silently
+  // drops a real value into a blank box.
+  const managerOptions: { employeeId: number; fullName: string }[] = (() => {
+    const opts = employees
+      .filter((e) => e.employeeId !== employee?.employeeId)
+      .map((e) => ({ employeeId: e.employeeId, fullName: e.fullName }))
+    const current = form.reportsToEmployeeId
+    if (current != null && !opts.some((o) => o.employeeId === current)) {
+      opts.unshift({ employeeId: current, fullName: employee?.reportsToName ?? 'Current manager' })
+    }
+    return opts
+  })()
+
+  async function confirmUnlink() {
+    if (!employee) return
+    const ok = await askConfirm(
+      <>
+        <b>{employee.fullName}</b> will no longer be able to sign in or raise requests. Requests
+        they already raised are not affected.
+        {loginRow?.isBranchManager && (
+          <>
+            <br />
+            <br />
+            <span style={{ color: '#c53030' }}>
+              They manage {loginRow.branchName}. Branch-manager approvals for that branch will be
+              skipped until you link them again or set a different manager.
+            </span>
+          </>
+        )}
+      </>,
+      'Unlink account',
+    )
+    if (!ok) return
+    try {
+      const result = await employeesService.unlinkUser(employee.employeeId)
+      if (result.requestsLeftWaiting > 0)
+        notify(
+          `${result.requestsLeftWaiting} request${result.requestsLeftWaiting === 1 ? ' was' : 's were'} waiting on this person and can no longer be signed by them.`,
+          'warning',
+          6000,
+        )
+      else notify('Account unlinked.', 'success', 2500)
+      setForm((f) => ({ ...f, userId: null }))
+      await loadAccounts()
+      onSaved()
+    } catch (err) {
+      notify(getErrorMessage(err), 'error', 5000)
+    }
+  }
+
+  async function submit() {
+    // The DX RequiredRules are gone with DevExtreme; the same rules, in the same words, run here.
+    const errors: FieldErrors = {}
+    if (!form.fullName.trim()) errors.fullName = 'Full name is required'
+    if (form.branchId == null) errors.branchId = 'Branch is required'
+    if (form.departmentId == null) errors.departmentId = 'Department is required'
+    if (form.positionId == null) errors.positionId = 'Position is required'
+    if (!form.hireDate) errors.hireDate = 'Hire date is required'
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) return
+
+    setSaving(true)
+    try {
+      if (isEdit && employee) {
+        await employeesService.update(employee.employeeId, {
+          branchId: form.branchId!,
+          departmentId: form.departmentId!,
+          positionId: form.positionId!,
+          fullName: form.fullName.trim(),
+          nationalId: form.nationalId.trim() || null,
+          nssfNumber: form.nssfNumber.trim() || null,
+          hireDate: form.hireDate,
+          terminationDate: form.terminationDate || null,
+        })
+        // The account is linked separately (usp_Employee_Update does not touch UserId). Only when the
+        // picked account actually changed — leaving the field alone must never re-link or clear.
+        if (form.userId != null && form.userId !== employee.userId) {
+          const link = await employeesService.linkUser(employee.employeeId, form.userId)
+          if (link.warning) notify(link.warning, 'warning', 6000)
+        }
+        // The tier has its own endpoint too; only touch it when it actually changed.
+        if (form.approvalTier !== (employee.approvalTier ?? 1)) {
+          await employeesService.setApprovalTier(employee.employeeId, form.approvalTier)
+        }
+        // Reports-to is its own endpoint as well; only when changed. A loop/self-reference throws
+        // here and its message is shown verbatim by the catch; a warning means "saved, but the
+        // manager has no login".
+        if (form.reportsToEmployeeId !== (employee.reportsToEmployeeId ?? null)) {
+          const res = await employeesService.setReportsTo(
+            employee.employeeId,
+            form.reportsToEmployeeId,
+          )
+          if (res.warning) notify(res.warning, 'warning', 6000)
+        }
+        notify('Employee updated.', 'success', 2200)
+      } else {
+        const created = await employeesService.create({
+          userId: form.userId,
+          branchId: form.branchId!,
+          departmentId: form.departmentId!,
+          positionId: form.positionId!,
+          fullName: form.fullName.trim(),
+          nationalId: form.nationalId.trim() || null,
+          nssfNumber: form.nssfNumber.trim() || null,
+          hireDate: form.hireDate,
+        })
+        // Create defaults everyone to Staff; set the tier straight after only when it is higher.
+        if (form.approvalTier !== 1) {
+          await employeesService.setApprovalTier(created.employeeId, form.approvalTier)
+        }
+        // A new employee reports to nobody by default; set it only when one was chosen.
+        if (form.reportsToEmployeeId != null) {
+          const res = await employeesService.setReportsTo(created.employeeId, form.reportsToEmployeeId)
+          if (res.warning) notify(res.warning, 'warning', 6000)
+        }
+        notify('Employee created.', 'success', 2200)
+      }
+      onSaved()
+      onClose()
+    } catch (err) {
+      // A taken login comes back as the friendly "already linked to {name}" message, verbatim.
+      notify(getErrorMessage(err), 'error', 5000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const accountHint =
+    'Without an account this employee cannot sign in or raise requests. You can link one later.'
+
+  return (
+    <>
+      <Modal
+        opened={visible}
+        onClose={onClose}
+        title={isEdit ? 'Edit Employee' : 'New Employee'}
+        size={560}
+        centered
+      >
+        <div className="form-grid">
+          <div className="form-field full">
+            <label className="form-label" htmlFor="emp-name">
+              Full name
+            </label>
+            <TextInput
+              id="emp-name"
+              value={form.fullName}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setForm((f) => ({ ...f, fullName: value }))
+              }}
+              disabled={saving}
+              error={fieldErrors.fullName}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-branch">
+              Branch
+            </label>
+            <Select
+              id="emp-branch"
+              data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
+              value={form.branchId != null ? String(form.branchId) : null}
+              placeholder="Select branch…"
+              allowDeselect={false}
+              disabled={saving}
+              error={fieldErrors.branchId}
+              onChange={(v) => {
+                const branchId = v != null ? Number(v) : null
+                setForm((f) => {
+                  const next = { ...f, branchId }
+                  // On CREATE, seed "Reports to" with the branch's manager — the natural default line
+                  // manager. Editing an existing person never re-defaults; their manager is theirs.
+                  if (!isEdit && branchId != null) {
+                    next.reportsToEmployeeId =
+                      branchManagers.find((b) => b.branchId === branchId)?.managerEmployeeId ?? null
+                  }
+                  return next
+                })
+              }}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-dept">
+              Department
+            </label>
+            <Select
+              id="emp-dept"
+              data={departments.map((d) => ({ value: String(d.departmentId), label: d.name }))}
+              value={form.departmentId != null ? String(form.departmentId) : null}
+              placeholder="Select department…"
+              allowDeselect={false}
+              disabled={saving}
+              error={fieldErrors.departmentId}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, departmentId: v != null ? Number(v) : null }))
+              }
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-position">
+              Position
+            </label>
+            <Select
+              id="emp-position"
+              data={positions.map((p) => ({ value: String(p.positionId), label: p.title }))}
+              value={form.positionId != null ? String(form.positionId) : null}
+              placeholder="Select position…"
+              allowDeselect={false}
+              disabled={saving}
+              error={fieldErrors.positionId}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, positionId: v != null ? Number(v) : null }))
+              }
+            />
+          </div>
+
+          {/* Reports to — the reporting line a LineManager chain step climbs. Optional (the top of the
+              org reports to nobody), self excluded, saved via its own endpoint. */}
+          <div className="form-field full">
+            <label className="form-label" htmlFor="emp-reports-to">
+              Reports to <span className="form-optional">(optional)</span>
+            </label>
+            {/* PORT NOTE: searchEnabled + searchExpr → Mantine `searchable`, which matches on the
+                option label (the same employeeLabel wording the DX displayExpr rendered). */}
+            <Select
+              id="emp-reports-to"
+              data={managerOptions.map((o) => ({
+                value: String(o.employeeId),
+                label: employeeLabel(o),
+              }))}
+              value={form.reportsToEmployeeId != null ? String(form.reportsToEmployeeId) : null}
+              searchable
+              clearable
+              placeholder="Select a manager…"
+              disabled={saving}
+              onChange={(v) =>
+                setForm((f) => ({ ...f, reportsToEmployeeId: v != null ? Number(v) : null }))
+              }
+            />
+            {/* Left empty, any line-manager approval step for this person has nobody to resolve to
+                and will skip. Quiet, not an error — a top-of-org person genuinely reports to nobody. */}
+            {form.reportsToEmployeeId == null && (
+              <div className="hint">Line-manager steps will skip for this person.</div>
+            )}
+            {/* The chain of command upward — each superior, flagged if they have no login (a
+                line-manager step resolving to them would skip). Managers are lvl > 0; lvl 0 is self. */}
+            {form.reportsToEmployeeId != null && reportingLine.length > 1 && (
+              <div className="hint wf-reporting-line">
+                {reportingLine
+                  .filter((r) => r.lvl > 0)
+                  .map((r) => (
+                    <span key={r.employeeId} className="wf-reporting-step">
+                      <span className="wf-reporting-arrow">→</span>
+                      <span className={r.hasLogin ? undefined : 'wf-reporting-nologin'}>
+                        {r.fullName}
+                        {!r.hasLogin && ' (no login)'}
+                      </span>
+                    </span>
+                  ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-hire">
+              Hire date
+            </label>
+            {/* Required, so not clearable. State stays 'yyyy-MM-dd'. */}
+            <DatePickerInput
+              id="emp-hire"
+              valueFormat="DD/MM/YYYY"
+              leftSection={<IconCalendar size={14} />}
+              value={form.hireDate || null}
+              disabled={saving}
+              error={fieldErrors.hireDate}
+              onChange={(v) => setForm((f) => ({ ...f, hireDate: v ?? '' }))}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-national">
+              National ID
+            </label>
+            <TextInput
+              id="emp-national"
+              value={form.nationalId}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setForm((f) => ({ ...f, nationalId: value }))
+              }}
+              disabled={saving}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-nssf">
+              NSSF number
+            </label>
+            <TextInput
+              id="emp-nssf"
+              value={form.nssfNumber}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setForm((f) => ({ ...f, nssfNumber: value }))
+              }}
+              disabled={saving}
+            />
+          </div>
+
+          {isEdit && (
+            <div className="form-field">
+              <label className="form-label" htmlFor="emp-termination">
+                Termination date
+              </label>
+              {/* PORT NOTE: the DX showClearButton + "— still employed —" placeholder is back as
+                  the picker's own clear button and placeholder. Empty means still employed, so
+                  this one MUST be clearable — un-terminating somebody is a real edit. */}
+              <DatePickerInput
+                id="emp-termination"
+                valueFormat="DD/MM/YYYY"
+                leftSection={<IconCalendar size={14} />}
+                clearable
+                placeholder="— still employed —"
+                value={form.terminationDate || null}
+                disabled={saving}
+                onChange={(v) => setForm((f) => ({ ...f, terminationDate: v ?? '' }))}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* System access — deliberately its own section, below employment. Position (the job) and
+            Role (system access) are INDEPENDENT: this form links an account, it never grants a role
+            or infers one from the position. Roles are assigned on the Users page. */}
+        {canManageAccounts && (
+          <div className="form-section">
+            <h3 className="form-section-title">System access</h3>
+
+            {/* Approval tier — which population's chain this person's requests follow. Staff is the
+                default; management and executive may follow shorter chains. */}
+            <div className="form-field full">
+              <label className="form-label" htmlFor="emp-tier">
+                Approval tier
+              </label>
+              <Select
+                id="emp-tier"
+                data={APPROVAL_TIER_OPTIONS.map((o) => ({
+                  value: String(o.value),
+                  label: o.label,
+                }))}
+                value={String(form.approvalTier)}
+                allowDeselect={false}
+                w={220}
+                disabled={saving}
+                onChange={(v) =>
+                  setForm((f) => ({ ...f, approvalTier: v != null ? Number(v) : 1 }))
+                }
+              />
+              <div className="hint">
+                Management and executive requests may follow shorter approval chains.
+              </div>
+            </div>
+
+            {/* No unlinked accounts and none currently linked → offer the path to create one, on the
+                Users page, because creating a login is a security action and stays there. */}
+            {editAccountItems.length === 0 && !currentAccount ? (
+              <div className="form-field full">
+                <label className="form-label">User account</label>
+                <div className="empty-inline">
+                  <span>No unlinked accounts available.</span>
+                  <Button variant="subtle" onClick={() => navigate('/security/users')}>
+                    Create a user account →
+                  </Button>
+                </div>
+                <div className="hint">{accountHint}</div>
+              </div>
+            ) : (
+              <div className="form-field full">
+                <label className="form-label" htmlFor="emp-user">
+                  User account <span className="form-optional">(optional)</span>
+                </label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Select
+                    id="emp-user"
+                    data={(isEdit ? editAccountItems : unlinked).map((u) => ({
+                      value: String(u.userId),
+                      label: accountLabel(u),
+                    }))}
+                    value={form.userId != null ? String(form.userId) : null}
+                    searchable
+                    // Create can clear back to "no account"; edit removes via the explicit Unlink action.
+                    clearable={!isEdit}
+                    allowDeselect={!isEdit}
+                    placeholder="Select an account…"
+                    disabled={saving}
+                    onChange={(v) =>
+                      setForm((f) => ({ ...f, userId: v != null ? Number(v) : null }))
+                    }
+                    style={{ flex: 1 }}
+                  />
+                  {isEdit && employee?.userId != null && (
+                    <Button
+                      variant="outline"
+                      color="red"
+                      disabled={saving}
+                      onClick={() => void confirmUnlink()}
+                    >
+                      Unlink
+                    </Button>
+                  )}
+                </div>
+                <div className="hint">{accountHint}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="form-actions">
+          <Button variant="default" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={() => void submit()} disabled={saving}>
+            {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create employee'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* The confirm dialog — devextreme/ui/dialog's confirm(), as a Mantine Modal. */}
+      {confirmState && (
+        <Modal
+          opened
+          onClose={() => settleConfirm(false)}
+          title={confirmState.title}
+          size={480}
+          centered
+        >
+          <div>{confirmState.message}</div>
+          <div className="form-actions">
+            <Button variant="default" onClick={() => settleConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => settleConfirm(true)}>OK</Button>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}

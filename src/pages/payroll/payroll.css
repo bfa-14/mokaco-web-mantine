@@ -1,0 +1,82 @@
+/* src/pages/payroll/payroll.css */
+.pr-chip { display:inline-block; padding:2px 10px; border-radius:12px; font-size:12px;
+  background:#E3E2DC; color:#2E2E2A; }
+.pr-chip-approved { background:#d9ead9; color:#1e5c1e; }
+.pr-chip-review { background:#f7ecd4; color:#7a5a12; }
+.pr-chip-cancelled { background:#eee; color:#888; text-decoration:line-through; }
+
+.pr-create-panel { background:#fff; border:1px solid #E3E2DC; border-radius:10px;
+  padding:16px; margin-bottom:16px; }
+.pr-ready { border-radius:8px; padding:10px 12px; margin:10px 0; font-size:13px; }
+.pr-ready-ok { background:#eef6ee; border:1px solid #cfe5cf; }
+.pr-ready-bad { background:#fdf3f0; border:1px solid #f0d5cc; }
+.pr-ready-item { margin-inline-end:14px; }
+.pr-ready-item-bad a { color:#a33; font-weight:600; }
+.pr-ready-verdict { margin-top:6px; font-weight:600; }
+
+.pr-card { background:#fff; border:1px solid #E3E2DC; border-radius:10px;
+  padding:14px 16px; margin-bottom:14px; }
+.pr-card-title { font-weight:600; margin-bottom:8px; }
+.pr-muted { color:#777; font-size:13px; }
+.pr-lock-banner { background:#eef6ee; border:1px solid #cfe5cf; border-radius:8px;
+  padding:10px 14px; margin-bottom:14px; }
+
+.pr-totals { border-collapse:collapse; }
+/* FIGURES STAY PHYSICALLY RIGHT-ALIGNED IN BOTH DIRECTIONS — not mirrored to `end`.
+   Two reasons, and they agree: digits line up under digits only when the units digit is on a fixed
+   edge, and DevExtreme aligns every number column `right` regardless of rtlEnabled
+   (`getAlignmentByDataType` mirrors text and leaves numbers alone). A hand-built table that
+   mirrored would disagree with the grid next to it on the same Arabic page. */
+.pr-totals th, .pr-totals td { padding-block:4px; padding-inline:0 14px; text-align: right; }
+.pr-totals td:first-child, .pr-totals th:first-child { text-align: start; }
+.pr-totals-net td { border-top:1px solid #ccc; font-weight:600; }
+
+.pr-actions { display:flex; gap:10px; margin:12px 0; align-items:center; }
+.pr-warn-link { background:none; border:none; color:#a2700f; cursor:pointer;
+  padding:6px 0 0; font-size:13px; }
+.pr-neg { color:#a33; }
+.pr-src { font-size:12px; color:#8a6d3b; }
+
+.pr-doc { background:#fff; border:1px solid #E3E2DC; border-radius:10px; padding:22px; max-width:820px; }
+.pr-doc-head { display:flex; justify-content:space-between; margin-bottom:10px; }
+.pr-doc-name { font-size:18px; font-weight:700; }
+.pr-doc-period { text-align: end; }
+.pr-doc-att { color:#555; margin-bottom:12px; }
+.pr-lines { width:100%; border-collapse:collapse; margin-bottom:14px; }
+.pr-lines th { text-align: start; border-bottom:1px solid #ddd; padding:4px 8px; font-size:12px; color:#666; }
+.pr-lines td { padding:5px 8px; border-bottom:1px solid #f0efe9; }
+.pr-lines .num { text-align: right; }
+.pr-lines-block { page-break-inside:avoid; }
+.pr-doc-totals { margin-top:8px; }
+.pr-paid { margin-top:12px; font-weight:600; color:#1e5c1e; }
+.pr-payment { margin-top:14px; border-top:1px dashed #ddd; padding-top:12px; }
+
+/* ── the receipt block: what the person signs when they take the money ──
+   On screen too, deliberately — a faint preview of the paper, so nobody is
+   surprised by what prints. */
+.pr-sign { margin-top: 36px; border-top: 1px solid #ddd; padding-top: 14px; }
+.pr-sign-row { display: flex; gap: 40px; margin-top: 26px; }
+.pr-sign-cell { flex: 1; }
+.pr-sign-line { border-bottom: 1px solid #555; height: 34px; margin-bottom: 6px; }
+.pr-sign-label { font-size: 12px; color: #666; }
+
+/* ── printing ──
+   HIDE BY VISIBILITY, NOT BY DISPLAY, and target only the document.
+   The previous rule listed the chrome it wanted gone by class name — .dx-drawer-panel-content,
+   nav, .page-head-actions — which meant it was a guess about the layout that had to stay true.
+   It stopped being true, every wrapper the payslip sits inside kept printing, and the payslip
+   came out blank or on a second page. Hiding EVERYTHING and then revealing .pr-doc and its
+   descendants cannot drift that way: it names the one thing that should print, and knows nothing
+   about what encloses it. `visibility` rather than `display` is what makes that work — a
+   display:none ancestor takes its children with it, a visibility:hidden one does not. */
+@media print {
+  body * { visibility: hidden; }
+  .pr-doc, .pr-doc * { visibility: visible; }
+  .pr-doc { position: absolute; top: 0; inset-inline-start: 0; width: 100%;
+            border: none; padding: 0; max-width: none; }
+  /* Still needed: controls INSIDE the document (the Record payment row, the Source column)
+     are revealed by the rule above, so they have to be taken out by name. */
+  .no-print { display: none !important; }
+  .pr-lines tr, .pr-lines-block, .pr-sign { page-break-inside: avoid; }
+  body { background: #fff; }
+}

@@ -1,0 +1,1108 @@
+:root {
+  /* ── Moka & Co brand palette (from the v1.0 style sheet) ── */
+  --brand-graphite: #2e2e2a;
+  --brand-black: #171d1a;
+  --brand-desert: #bd8648;
+  --brand-desert-strong: #a5723b;
+  --brand-stone: #e3e2dc;
+  --brand-offwhite: #f6f5f3;
+
+  /* Semantic tokens */
+  --ink: #2e2e2a;
+  --ink-muted: #6f6b62;
+  --surface: #ffffff;
+  --page-bg: var(--brand-offwhite);
+  --border: #e3e2dc;
+  --accent: var(--brand-desert);
+  --accent-strong: var(--brand-desert-strong);
+  --accent-tint: rgba(189, 134, 72, 0.12);
+
+  color-scheme: light;
+  font-family: 'Poppins', system-ui, 'Segoe UI', Roboto, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--ink);
+  font-family: 'Poppins', system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ── DevExtreme accent overrides → brand Desert ── */
+.dx-button-mode-contained.dx-button-default {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+.dx-button-mode-contained.dx-button-default.dx-state-hover {
+  background-color: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+.dx-button-mode-contained.dx-button-default.dx-state-focused {
+  background-color: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+.dx-button-mode-contained.dx-button-default .dx-button-text,
+.dx-button-mode-contained.dx-button-default .dx-icon {
+  color: #fff;
+}
+.dx-button-mode-text.dx-button-default .dx-button-text,
+.dx-button-mode-text.dx-button-default .dx-icon,
+.dx-button-mode-outlined.dx-button-default .dx-button-text,
+.dx-button-mode-outlined.dx-button-default .dx-icon {
+  color: var(--accent-strong);
+}
+.dx-button-mode-outlined.dx-button-default {
+  border-color: var(--accent);
+}
+
+/* Checkbox / switch checked state → Desert */
+.dx-checkbox-checked .dx-checkbox-icon {
+  color: var(--accent);
+}
+.dx-switch-on-value .dx-switch-handle::before {
+  background-color: var(--accent);
+}
+.dx-switch-on-value .dx-switch-container {
+  border-color: var(--accent);
+}
+
+/* Focused inputs → Desert underline/border */
+.dx-texteditor.dx-state-focused.dx-editor-outlined {
+  border-color: var(--accent);
+}
+
+/* ── Shared page primitives ── */
+.page-title {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.page-subtitle {
+  margin: 0 0 20px;
+  color: var(--ink-muted);
+}
+
+.card {
+  padding: 20px 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(46, 46, 42, 0.05);
+}
+
+.card-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+code {
+  padding: 2px 6px;
+  font-size: 0.9em;
+  background: var(--brand-stone);
+  border-radius: 4px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+/* Page header with actions */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.page-head .page-subtitle {
+  margin-bottom: 0;
+}
+
+.page-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.page-loading {
+  display: flex;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+/* Alerts */
+.alert {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.alert--error {
+  color: #b91c1c;
+  background: #fdf2ef;
+  border: 1px solid #f3c9bd;
+}
+
+/* Status badges */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge--on {
+  color: #4b6b3a;
+  background: #e4ecda;
+}
+
+.badge--off {
+  color: #b91c1c;
+  background: #f6e0da;
+}
+
+.badge--muted {
+  color: #6f6b62;
+  background: var(--brand-stone);
+}
+
+/* Form fields (popups / cards) */
+.form-field {
+  margin-bottom: 16px;
+}
+
+.form-field--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.form-field--row .form-label {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a463f;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* A titled sub-section within a form (e.g. "System access"), set apart by a rule above it. */
+.form-section {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.form-section-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+/* An inline "nothing to pick — do this instead" row, in place of a dead dropdown. */
+.empty-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.form-optional {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+
+/* A field-level refusal, shown under the input it belongs to rather than as a page-wide alert —
+   so "these do not match" points at the box that does not match. */
+.form-error {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #b91c1c;
+}
+
+.empty-state {
+  color: var(--ink-muted);
+  text-align: center;
+  padding: 40px 24px;
+}
+
+/* Role permissions */
+.perm-modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.perm-module {
+  padding: 16px;
+}
+
+.perm-module-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.perm-module-title {
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1;
+}
+
+.perm-module-count {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.perm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.perm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.perm-item .dx-checkbox {
+  flex: 1;
+  min-width: 0;
+}
+
+.perm-item-code {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #a29d93;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+/* Grid helpers */
+.grid-link {
+  color: var(--accent-strong);
+  font-weight: 500;
+  cursor: pointer;
+}
+.grid-link:hover {
+  text-decoration: underline;
+}
+
+.grid-actions {
+  display: flex;
+  gap: 2px;
+  /* Keep the buttons on one line and let the CELL be the thing that is sized. Without this a
+     second button in a narrow column shrinks its neighbour until both labels truncate. */
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+.grid-actions .dx-button-text {
+  /* Text buttons in a grid cell should never ellipsis their own label — the column is sized for
+     them, not the other way round. */
+  overflow: visible;
+}
+
+.machine-list {
+  display: grid;
+  gap: 8px;
+}
+
+.machine-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.machine-row-main {
+  /* Takes the slack so the status and buttons sit against the far edge. */
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.machine-row-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.machine-row-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.machine-row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* The inline connection editor. Baseline-aligned on the INPUTS, not the labels, so the IP box,
+   the port box, the switch and Save sit on one line however tall their labels wrap. */
+.machine-row-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.machine-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A save's validation message belongs to the ROW, so it takes the full width and pushes nothing
+   sideways — a message squeezed in beside the buttons would either truncate or reflow the row. */
+.machine-row-error {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .machine-row-actions {
+    /* On a phone the buttons get their own line rather than squeezing the name to nothing. */
+    flex: 1 1 100%;
+  }
+  .machine-row-edit {
+    flex: 1 1 100%;
+  }
+}
+
+/* Two-column form grid (popups) */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+.form-grid .full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 560px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tabs / detail sections */
+.tab-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.tab-toolbar > .page-head-actions,
+.tab-toolbar > *:last-child {
+  margin-inline-start: auto;
+}
+.tab-section-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.profile-tabs {
+  margin-top: 20px;
+}
+
+/* Reporting line under the "Reports to" field — the chain of command upward. */
+.wf-reporting-line {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.wf-reporting-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.wf-reporting-arrow {
+  color: var(--ink-muted);
+}
+/* A superior with no login — a line-manager step resolving to them would skip, so flag it red. */
+.wf-reporting-nologin {
+  color: #b91c1c;
+}
+
+/* Org chart — an indented tree, one row per employee, nesting by reporting depth. */
+.wf-org-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  /* Read-only, but every row opens that employee — so it has to look reachable. */
+  cursor: pointer;
+}
+.wf-org-row:first-child {
+  border-top: 0;
+}
+.wf-org-row:hover {
+  background: var(--accent-tint);
+}
+.wf-org-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.wf-org-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.wf-org-branch {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+/* The indent guide at each depth level. */
+.wf-org-indent {
+  flex: 0 0 auto;
+  width: 22px;
+  align-self: stretch;
+  border-inline-start: 1px solid var(--border);
+}
+/* Collapse control. The leaf variant is the same box with nothing in it, so names line up whether
+   or not the person has reports. */
+.wf-org-toggle {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.wf-org-toggle:hover {
+  background: var(--brand-stone);
+  color: var(--ink);
+}
+.wf-org-toggle--leaf {
+  cursor: inherit;
+}
+.wf-org-chevron {
+  font-size: 14px !important;
+  transition: transform 0.15s ease;
+}
+/* A collapsed node points the way the tree would open — INTO the page, so towards the reading
+   direction. Rotation is physical, so the sign flips with the direction. */
+.wf-org-chevron--closed {
+  transform: rotate(-90deg);
+}
+[dir='rtl'] .wf-org-chevron--closed {
+  transform: rotate(90deg);
+}
+/* The quiet nudge under "Not placed in the hierarchy". */
+.wf-org-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 80ch;
+}
+
+/* Danger zone — the reset. Set apart from the settings above it with real distance and a red edge,
+   because it is a different kind of act, not a more important setting. */
+.danger-zone {
+  margin-top: 40px;
+  padding: 20px 24px;
+  border: 1px solid #e0b4b4;
+  border-inline-start: 4px solid #b91c1c;
+  border-radius: 12px;
+  background: #fdf5f5;
+}
+.danger-zone-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.danger-zone-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+.danger-zone-text {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 78ch;
+}
+.danger-zone-arm {
+  margin-bottom: 16px;
+}
+/* The "what survived" table. Counts right-aligned so they read as a column of figures. */
+.danger-summary {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+  min-width: 260px;
+}
+.danger-summary td {
+  padding-block: 5px;
+  padding-inline: 0 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+}
+/* FIGURES STAY PHYSICALLY RIGHT-ALIGNED IN BOTH DIRECTIONS — not mirrored to `end`.
+   Two reasons, and they agree: digits line up under digits only when the units digit is on a fixed
+   edge, and DevExtreme aligns every number column `right` regardless of rtlEnabled
+   (`getAlignmentByDataType` mirrors text and leaves numbers alone). A hand-built table that
+   mirrored would disagree with the grid next to it on the same Arabic page. */
+.danger-summary-count {
+  text-align: right;
+  font-weight: 600;
+  padding-inline-end: 0;
+}
+
+/* Leave policy — master list beside an edit panel. Collapses to one column when there is no room
+   for two, because the list is a navigation aid and the panel is the work. */
+.wf-policy-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .wf-policy-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.wf-policy-list {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wf-policy-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+.wf-policy-row:hover {
+  background: var(--brand-offwhite);
+}
+.wf-policy-row--active {
+  background: var(--accent-tint);
+}
+.wf-policy-row-name {
+  font-weight: 600;
+}
+.wf-policy-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.wf-policy-panel {
+  min-width: 0;
+}
+.wf-policy-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+/* The statutory caution. Deliberately quiet rather than alarming — it is standing context for the
+   whole page, not a warning about anything the user has just done. */
+.wf-policy-caution {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 90ch;
+}
+
+/* Roles page — the workflow-behaviour detail panel under an expanded role. */
+.wf-role-behaviour {
+  padding: 4px 4px 8px;
+  max-width: 640px;
+}
+.wf-rb-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.wf-rb-row {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.wf-rb-help {
+  margin-top: 4px;
+  padding-inline-start: 26px;
+}
+.wf-rb-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a463f;
+  margin-bottom: 8px;
+}
+.wf-rb-disabled {
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+/* The brief per-control "Saved" acknowledgement — green, quiet, beside the control it confirms. */
+.wf-rb-saved {
+  margin-inline-start: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b6b3a;
+}
+
+/* Rejection-behaviour rows: role name at left, the toggle and its meaning at right. Each role is a
+   ruled row rather than its own card — they are one list of the same choice, not separate policies. */
+.wf-reject-list {
+  display: flex;
+  flex-direction: column;
+}
+.wf-reject-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+.wf-reject-row:first-child {
+  border-top: 0;
+}
+.wf-reject-role {
+  flex: 0 0 200px;
+  font-weight: 600;
+  color: var(--ink);
+  padding-top: 4px;
+}
+.wf-reject-control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .wf-reject-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .wf-reject-role {
+    flex-basis: auto;
+    padding-top: 0;
+  }
+}
+
+/* Employee profile header */
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0 4px;
+}
+.profile-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--brand-graphite);
+  color: var(--brand-offwhite);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.profile-head-main {
+  flex: 1;
+  min-width: 0;
+}
+.profile-subline {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+.profile-head-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Definition-list details */
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px 24px;
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.detail-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.detail-value {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+/* ── Dashboard ──
+   An OPERATIONAL page: a headline for what waits on the reader, then a grid of things to act on.
+   The visual weight is deliberately lopsided — the "waiting on me" block is bigger than everything
+   under it, because on a page where every card competes equally nothing is the answer to "what
+   should I do now". */
+
+/* The small facts about the company, kept as quiet links above the work. */
+.dash-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.dash-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 13px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.dash-chip:hover {
+  border-color: var(--accent);
+  background: var(--brand-offwhite);
+}
+.dash-chip-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.dash-chip-label {
+  color: var(--ink-muted);
+}
+.dash-chip--wide {
+  border-radius: 10px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.dash-chip-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-chip-muted {
+  color: var(--ink-muted);
+}
+/* A missing rate is not cosmetic: an expense in any currency but USD is REFUSED without one. */
+.dash-chip--warn {
+  color: #8a5a00;
+  background: #fdf6e3;
+  border-color: #e6c98a;
+}
+.dash-chip--warn:hover {
+  background: #fbeeca;
+  border-color: #d9b45f;
+}
+.dash-chip--warn .dash-chip-label {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+/* The headline block. */
+.dash-hero {
+  margin-bottom: 16px;
+}
+.dash-hero--active {
+  border-inline-start: 4px solid var(--accent);
+}
+.dash-hero-headline {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.dash-hero-count {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-muted);
+}
+.dash-hero--active .dash-hero-count {
+  color: var(--accent-strong);
+}
+.dash-hero-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.dash-card {
+  min-height: 0;
+}
+.dash-card--red {
+  border-inline-start: 4px solid #b91c1c;
+}
+
+/* Card heading with its own way through to the full screen behind it. */
+.dash-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.dash-card-head .card-title {
+  margin-bottom: 0;
+}
+.dash-card-link {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+  text-decoration: none;
+  white-space: nowrap;
+  padding-top: 3px;
+}
+.dash-card-link:hover {
+  text-decoration: underline;
+}
+
+/* An empty state inside a card is a short line, not the 40px void the standalone one is. */
+.dash-card .empty-state,
+.dash-hero .empty-state {
+  padding: 14px 0;
+  text-align: start;
+  font-size: 14px;
+}
+
+/* Rows. Every one of them is a link — a number on this page that cannot be clicked through to the
+   thing it counts is a number nobody can act on. */
+.dash-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--ink);
+}
+.dash-row:last-child {
+  border-bottom: none;
+}
+.dash-row:hover {
+  background: var(--brand-offwhite);
+}
+.dash-row--amber {
+  background: #fdf6e3;
+}
+.dash-row--amber:hover {
+  background: #fbeeca;
+}
+.dash-row--amber .dash-row-trailing {
+  color: #8a5a00;
+  font-weight: 600;
+}
+
+.dash-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.dash-row-title {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-row-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-row-trailing {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.dash-balance {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.dash-more {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+.dash-more:hover {
+  text-decoration: underline;
+}
+
+/* Needs attention. Red, and only ever on screen when there is genuinely something wrong. */
+.dash-alarm {
+  margin: 0;
+  font-size: 14px;
+  color: #b91c1c;
+}
+.dash-alarm a {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.dash-strip {
+  display: block;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fdf2ef;
+  border: 1px solid #f3c9bd;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dash-strip:hover {
+  background: #fbe6e0;
+}
+
+.dash-money {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.dash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dash-action {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--brand-offwhite);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+.dash-action:hover {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+/* ── Popups must never outgrow the screen ──
+   DevExtreme sizes a popup to its content when height="auto". That is fine until the content
+   grows — a result panel appearing after a save, a stack of validation messages, a long list —
+   and then the box runs off the bottom of the viewport taking its Save and Cancel buttons with
+   it, with nothing to scroll. Capping the box to the viewport and letting its CONTENT scroll
+   keeps the actions reachable at any screen size.
+
+   Global on purpose: every popup in the app has this failure mode, not just the one that
+   surfaced it. */
+.dx-popup-wrapper .dx-overlay-content {
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+}
+
+/* The title and the content are siblings in a flex column; only the content should scroll, so the
+   title stays put and the box cannot grow past its cap. */
+.dx-popup-wrapper .dx-popup-content {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

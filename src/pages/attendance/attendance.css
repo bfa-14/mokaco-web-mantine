@@ -1,0 +1,939 @@
+/* ── Attendance ──
+   Imported once from attendanceShared.tsx, which every Attendance page uses.
+
+   Colour is semantic here and nowhere else: green = complete, amber = a human has to
+   decide something, red = this blocks payroll. Nothing is coloured red merely for being
+   a number. Desert (the brand accent) is reserved for the one primary action on a page.
+*/
+
+/* The "What is this page for?" panel, on every screen. */
+.page-help {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+.page-help-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: start;
+}
+
+.page-help-toggle .dx-icon-info {
+  color: var(--accent);
+}
+
+.page-help-chevron {
+  margin-inline-start: auto;
+  transition: transform 0.15s ease;
+}
+
+.page-help-chevron--open {
+  transform: rotate(180deg);
+}
+
+.page-help-body {
+  margin: 0;
+  padding-block: 0 14px;
+  padding-inline: 36px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 80ch;
+}
+
+/* Payroll readiness: the verdict first, then the six things that can block it. */
+.readiness {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  border-radius: 12px;
+  margin-bottom: 18px;
+  border: 1px solid transparent;
+}
+
+.readiness--ready {
+  background: #edf7f0;
+  border-color: #bfe3cb;
+}
+
+.readiness--blocked {
+  background: #fdf0ee;
+  border-color: #f2c9c2;
+}
+
+.readiness-icon {
+  font-size: 26px;
+}
+
+.readiness--ready .readiness-icon {
+  color: #2e7d4f;
+}
+
+.readiness--blocked .readiness-icon {
+  color: #b4442f;
+}
+
+.readiness-verdict {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.readiness-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* Every counter is a LINK to the page that fixes it. A number with no way to act on it
+   is just an accusation. */
+.readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.readiness-tile {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.readiness-tile:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(23, 29, 26, 0.07);
+}
+
+.readiness-tile--clear {
+  opacity: 0.62;
+}
+
+.readiness-tile-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.readiness-tile--open .readiness-tile-value {
+  color: #b4442f;
+}
+
+.readiness-tile-label {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.readiness-tile-hint {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+/* Day fraction as a bar, because "0.89" really means "nearly a full day". */
+.frac {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.frac-track {
+  flex: 1;
+  min-width: 46px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--brand-stone);
+  overflow: hidden;
+}
+
+.frac-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.frac-fill--full {
+  background: #2e7d4f;
+}
+
+.frac-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-muted);
+  min-width: 30px;
+}
+
+/* A warning icon, NOT a red row: a screen where a quarter of the rows are red stops
+   meaning anything, and people learn to scroll past it. */
+.anomaly-icon {
+  color: #c9821f;
+  font-size: 16px;
+}
+
+/* Day detail — the punches drawn as they actually happened. */
+.timeline {
+  padding: 4px 0 2px;
+}
+
+.timeline-track {
+  display: flex;
+  align-items: stretch;
+  height: 34px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--brand-stone);
+}
+
+.timeline-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.timeline-seg--worked {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* The gap is hatched, not solid: it is time NOT worked, and it should not look like a
+   second kind of work. */
+.timeline-seg--gap {
+  background: repeating-linear-gradient(
+    45deg,
+    #ece9e3,
+    #ece9e3 5px,
+    #e0dcd4 5px,
+    #e0dcd4 10px
+  );
+  color: var(--ink-muted);
+}
+
+.timeline-labels {
+  display: flex;
+  margin-top: 6px;
+}
+
+.timeline-label {
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timeline-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.timeline-summary .sep {
+  color: #cfcbc3;
+}
+
+/* A number the user is allowed not to understand: hovering says which rule produced it. */
+.metric {
+  cursor: help;
+  border-bottom: 1px dotted #c6c1b8;
+}
+
+/* ── The day-detail drawer ──
+   A right-side panel rather than a centred dialog: the day belongs beside the list it came from,
+   so the user keeps their place instead of having the grid covered over. */
+.day-drawer .dx-overlay-content {
+  /* Overrides the app-wide popup cap (100vh - 24px), which would leave a strip of page showing
+     above and below and stop it reading as a panel attached to the edge. */
+  max-height: 100vh;
+  height: 100vh;
+  border-radius: 0;
+  border: 0;
+  border-inline-start: 1px solid var(--border);
+  /* The one place a direction selector is unavoidable: box-shadow offsets are physical and CSS has
+     no logical form of them. The shadow must fall INTO the page, away from the edge the panel is
+     attached to, so its sign flips with the direction. */
+  box-shadow: -8px 0 28px rgba(23, 29, 26, 0.14);
+}
+[dir='rtl'] .day-drawer .dx-overlay-content {
+  box-shadow: 8px 0 28px rgba(23, 29, 26, 0.14);
+}
+
+.day-drawer .dx-popup-content {
+  padding: 0 22px 22px;
+}
+
+/* Sticky: the header is the only thing saying WHOSE day this is, and every number below it is
+   meaningless without that. It must not scroll away. */
+.day-drawer-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -22px 16px;
+  padding-block: 18px 14px;
+  padding-inline: 22px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.day-drawer-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.day-drawer-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* The record's figures. Two columns at this width — nine metrics in one column would push the
+   actions below the fold, and these are what the user opened the drawer to read. */
+.day-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px 18px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* The day drawer's HR actions.
+   Deliberately NOT .grid-actions — that class is for tiny text buttons inside a table cell, and
+   borrowing it here crammed five full outlined buttons into a non-wrapping row until every label
+   truncated to "Edit / override this d…". These are five separate decisions about somebody's pay;
+   they need room to say what they are, and to wrap when there is not enough of it. */
+.day-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* Says what the row of buttons IS, so it reads as a set of choices rather than a toolbar that
+   happened to land at the bottom of the panel. */
+.day-actions-title {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+/* The drawer's own empty state — a day with no readable punches. Left-aligned and roomy: the
+   centred, tightly-stacked version read as an error message rather than an explanation. */
+.day-empty {
+  padding: 18px 16px;
+  border: 1px dashed #ddd8ce;
+  border-radius: 10px;
+  background: var(--brand-offwhite);
+  text-align: start;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+
+.day-empty-main {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+/* Roster matrix: employees down the side, days across the top. */
+.roster-scroll {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  max-height: 62vh;
+}
+
+.roster-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.roster-table th,
+.roster-table td {
+  border-inline-end: 1px solid #f0eee9;
+  border-bottom: 1px solid #f0eee9;
+  padding: 0;
+}
+
+.roster-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--brand-offwhite);
+  padding: 5px 0;
+  font-weight: 600;
+  color: var(--ink-muted);
+  min-width: 32px;
+  text-align: center;
+}
+
+.roster-emp {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding: 0 12px !important;
+  min-width: 168px;
+  text-align: start;
+  font-weight: 500;
+  color: var(--ink);
+  border-inline-end: 1px solid var(--border) !important;
+  white-space: nowrap;
+}
+
+.roster-table thead .roster-emp {
+  z-index: 3;
+  background: var(--brand-offwhite);
+}
+
+.roster-dow {
+  font-size: 10px;
+  color: #a29d93;
+  font-weight: 400;
+}
+
+.roster-table th.roster-weekend,
+.roster-table td.roster-weekend {
+  background: #faf9f7;
+}
+
+/* One cell = one employee-day. Click sets it; dragging across sets many. */
+.roster-cell {
+  width: 100%;
+  height: 30px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  display: block;
+  user-select: none;
+}
+
+.roster-cell--rest {
+  background: #e6e3dc;
+  color: var(--ink-muted);
+}
+
+/* Approved leave. It OUTRANKS the rostered shift on purpose: the point of drawing it is that a
+   shift wrongly assigned over somebody's holiday should be obvious at a glance, not hidden behind
+   an innocent-looking shift chip. Green because it is a legitimate, settled state — not a problem. */
+.roster-cell--leave {
+  background: #dfeee4;
+  color: #2e7d4f;
+}
+
+/* Leave AND a working shift on the same day. A real contradiction that a human has to settle, so
+   it is marked rather than silently resolved. Amber = needs a decision. */
+.roster-cell--conflict {
+  outline: 2px solid #c9821f;
+  outline-offset: -2px;
+}
+
+/* An EMPTY cell is NOT a rest day — it is a day the system cannot judge at all. It has
+   to look like a hole, because that is exactly what it is. */
+.roster-cell--empty {
+  background: repeating-linear-gradient(
+    45deg,
+    #fff,
+    #fff 4px,
+    #f4e6d6 4px,
+    #f4e6d6 8px
+  );
+  color: transparent;
+}
+
+.roster-cell--selected {
+  outline: 2px solid var(--brand-black);
+  outline-offset: -2px;
+}
+
+.roster-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.roster-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* Import wizard */
+.wizard-steps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--ink-muted);
+  background: var(--surface);
+}
+
+.wizard-step--active {
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.wizard-step--done {
+  border-color: #bfe3cb;
+  background: #edf7f0;
+  color: #2e7d4f;
+}
+
+.wizard-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--brand-stone);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.wizard-step--active .wizard-step-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px 20px;
+  border: 2px dashed #d6d1c8;
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.dropzone:hover,
+.dropzone--over {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.dropzone-icon {
+  font-size: 30px;
+  color: var(--accent);
+}
+
+.dropzone-main {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dropzone-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Import results are OUTCOMES, not failures: a duplicate is the system working. */
+.result-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.result-tile {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.result-tile-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.result-tile-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 3px;
+}
+
+/* Exit variances.
+   AMBER = a human has to decide something that costs money: they were away LONGER than approved.
+   An early return stays NEUTRAL — it costs the company nothing, and colouring it red would tell
+   the reader something alarming and untrue. Colour is a claim; only make it where it is one. */
+.variance--over {
+  background: #fdf3e6;
+  color: #8a5a1f;
+  border: 1px solid #edd6b4;
+}
+
+/* Exit variances: the choices, each stating its consequence in one line. */
+.disposition-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.disposition-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+
+.disposition-choice:hover {
+  border-color: var(--accent);
+}
+
+.disposition-choice-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.disposition-choice-consequence {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+/* Old vs new side by side, so a correction can be judged rather than trusted. */
+.diff-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.diff-col {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--brand-offwhite);
+}
+
+.diff-col--new {
+  background: var(--accent-tint);
+  border-color: #e2cbae;
+}
+
+.diff-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.diff-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.diff-line-label {
+  color: var(--ink-muted);
+}
+
+/* An empty grid must say what to do NEXT. "No data" tells nobody anything. */
+.empty-hint {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.empty-hint-main {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+/* The one-off secret: shown once, at issue, never recoverable afterwards. */
+.secret-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  padding: 12px 14px;
+  background: var(--brand-black);
+  color: #f6f5f3;
+  border-radius: 8px;
+  word-break: break-all;
+  user-select: all;
+}
+
+/* A filter bar above a grid. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.filter-spacer {
+  margin-inline-start: auto;
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Today's punch pipeline ────────────────────────────────────────────────────────────────────
+   A row of figures that wraps rather than scrolls: this sits at the top of a page somebody opens
+   to check on a machine, often on a phone in a back office, and a horizontally-scrolling strip of
+   numbers hides the very one they came for.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+.pipeline-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pipeline-stat {
+  flex: 1 1 150px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+/* Only the linked ones lift — a hover that promises a click the tile does not have is a small lie
+   repeated every time somebody passes the cursor over a zero. */
+a.pipeline-stat:hover {
+  border-color: var(--accent, #b0824a);
+}
+
+.pipeline-value {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Amber, and ONLY when the number is above zero. A red-tinted 0 trains people to ignore the colour
+   exactly where it is later going to matter. */
+.pipeline-value--warn {
+  color: #b7791f;
+}
+
+.pipeline-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+.pipeline-machines {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.pipeline-machine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.pipeline-machine-name {
+  font-weight: 600;
+}
+
+/* ── the pairs sub-table, under an expanded day row ── */
+
+/* Inset and tinted so it reads as belonging TO the row above it rather than as another row in
+   the grid — an expansion that looks like a sibling row makes the grid unreadable. */
+.pairs-panel {
+  padding: 10px 14px 14px;
+  background: var(--brand-stone);
+  border-inline-start: 3px solid var(--accent);
+}
+
+.pairs-panel--busy {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+
+.pairs-table {
+  background: transparent;
+  font-size: 13px;
+}
+
+.pairs-table th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pairs-table td,
+.pairs-table th {
+  padding: 4px 8px;
+}
+
+.pairs-seq {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Time NOT worked. Dimmed so it can never be mistaken for part of the day's total. */
+.pairs-gap {
+  color: var(--ink-muted);
+}
+
+.pairs-summary {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pairs-unpaired,
+.pairs-empty {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* The chevron cell: a hit target big enough to press, with no button chrome competing with the
+   named actions at the other end of the row. */
+.pairs-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.pairs-toggle:hover {
+  background: var(--border);
+  color: var(--ink);
+}
+
+/* Inline pair times in the Pairs column — compact, and never wrapping mid-pair. */
+.pairs-inline {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pairs-inline .sep {
+  color: #cfcbc3;
+  margin: 0 4px;
+}

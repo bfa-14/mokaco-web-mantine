@@ -1,0 +1,195 @@
+/* ── Reports ──
+   Imported once from ReportShell. Two audiences: the screen, and the printer. The print half is
+   the point — a report has to come out looking like a DOCUMENT, not a screenshot of an app. */
+
+.report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.report-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-filter-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.report-filter-actions {
+  margin-inline-start: auto;
+  display: flex;
+  gap: 8px;
+  align-self: flex-end;
+}
+
+/* The document itself: a sheet of paper, on screen and on the printer. */
+.report-doc {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 26px 30px;
+}
+
+.report-doc-head {
+  border-bottom: 2px solid var(--brand-graphite);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+/* Graphite for the title only — everything else stays black-on-white so it prints cleanly. */
+.report-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--brand-graphite);
+}
+
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.report-meta strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The table reads as a printed ledger: visible borders, a shaded head, a ruled totals row. */
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.report-table th,
+.report-table td {
+  border: 1px solid #d9d5cc;
+  padding: 6px 9px;
+  text-align: start;
+  vertical-align: top;
+}
+
+.report-table thead th {
+  background: var(--brand-offwhite);
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* FIGURES STAY PHYSICALLY RIGHT-ALIGNED IN BOTH DIRECTIONS — not mirrored to `end`.
+   Two reasons, and they agree: digits line up under digits only when the units digit is on a fixed
+   edge, and DevExtreme aligns every number column `right` regardless of rtlEnabled
+   (`getAlignmentByDataType` mirrors text and leaves numbers alone). A hand-built table that
+   mirrored would disagree with the grid next to it on the same Arabic page. */
+.report-table td.num,
+.report-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.report-table tbody tr:nth-child(even) td {
+  background: #fbfaf8;
+}
+
+/* A branch break inside the daily sheet — a labelled band so the groups read at a glance. */
+.report-group-row td {
+  background: var(--brand-stone);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* The footer totals row: ruled off from the body so the eye stops at it. */
+.report-table tfoot td {
+  border-top: 2px solid var(--brand-graphite);
+  font-weight: 600;
+  background: var(--brand-offwhite);
+}
+
+/* Remaining balance — the number people open the leave report to read. */
+.report-strong-cell {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.report-anomaly {
+  color: #c9821f;
+}
+
+.report-negative {
+  color: #b4442f;
+}
+
+/* ================= PRINT =================
+   The report, and ONLY the report. Everything that is app — the nav, the header bar, the filter
+   bar, every button — is removed, so what comes out of the printer is the document and nothing
+   that says it came from a screen. */
+@media print {
+  /* Kill the whole app shell. .report-print-root is lifted out and shown on its own. */
+  body * {
+    visibility: hidden;
+  }
+  .report-print-root,
+  .report-print-root * {
+    visibility: visible;
+  }
+  .report-print-root {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Belt-and-braces: anything explicitly marked no-print is gone even if it sits inside the doc. */
+  .report-no-print {
+    display: none !important;
+  }
+
+  /* On paper the document is the page — no card chrome, no rounded corners, no shadow. */
+  .report-doc {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .report-table thead {
+    /* Repeat the column heads on every printed page of a long report. */
+    display: table-header-group;
+  }
+
+  .report-table th,
+  .report-table td {
+    /* Force the borders and background bands to actually ink. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
+
+/* The two orientations, chosen per report. A wide sheet in portrait would spill off the page. */
+@media print {
+  .report-landscape {
+    page: landscape;
+  }
+}
+@page landscape {
+  size: landscape;
+}

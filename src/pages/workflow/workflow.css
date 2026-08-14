@@ -1,0 +1,2062 @@
+/* ── Workflow ──
+   Imported once from workflowShared. ONE colour system, used identically on every page: a status
+   means the same thing wherever it appears. Skipped is deliberately slate, never red — a skipped
+   step is healthy, and colouring it red teaches people to panic at correct data. */
+
+/* Status chips — the five request states. */
+.wf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.wf-amount-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.wf-amount-row .dx-numberbox { flex: 1; }
+/* ── Shared by BOTH hub views ──
+   Status colour comes from .wf-chip--* above and is never re-declared here: one status, one
+   appearance, whether it is drawn on a card or in a grid row. */
+
+/* The current step. Used by the card AND the grid — the card used to render this as plain text
+   ("Current step · HR"), which meant the same fact looked like two different things depending on
+   the view somebody happened to be in. */
+.wf-chip-step {
+  background: var(--brand-stone);
+  color: var(--ink);
+}
+.wf-muted {
+  color: var(--ink-muted);
+}
+
+/* Waiting time — a READING AID, not a verdict, so it colours text and never fills anything.
+   The two hexes are the SAME amber and red the status chips use, deliberately: an overdue row and
+   a rejected chip should not be two different reds on one screen. */
+.wf-wait {
+  font-variant-numeric: tabular-nums;
+}
+.wf-wait-amber {
+  color: #b7791f;
+  font-weight: 600;
+}
+.wf-wait-red {
+  color: #c53030;
+  font-weight: 700;
+}
+
+/* ── Grid rows: a light status fill across the whole row ──
+   Was a 3px rail on the left edge. On a wide row that marker sits where nobody is looking and
+   scrolls out of the viewport with the first column; a wash of colour is readable from anywhere in
+   the row. These are TINTS, not the chips' foreground hues — each is a few per cent off white, so
+   #2E2E2A text over them stays at better than 12:1 and the chip inside the row remains the
+   saturated thing the eye lands on.
+
+   Each status declares its own pair as variables and the two rules below consume them. That is what
+   keeps the DevExtreme-shaped hover selector to ONE rule instead of five copies of a nine-class
+   monster, and it puts the whole palette in one readable block. */
+.wf-row-status--pending   { --wf-row-fill: #fbf6ec; --wf-row-fill-hover: #f4ebd9; }
+.wf-row-status--approved  { --wf-row-fill: #eff6ef; --wf-row-fill-hover: #e3efe3; }
+.wf-row-status--rejected  { --wf-row-fill: #faf0ee; --wf-row-fill-hover: #f3e3df; }
+.wf-row-status--onhold    { --wf-row-fill: #eef1f4; --wf-row-fill-hover: #e2e8ee; }
+/* Withdrawn shares this grey: statusRowClass falls through to 'cancelled' for both, because they
+   are the same fact to a reader scanning a queue — this one is over and nobody acted on it. */
+.wf-row-status--cancelled { --wf-row-fill: #f3f3f1; --wf-row-fill-hover: #e9e9e5; }
+
+.dx-datagrid-table .dx-data-row.wf-row-status > td {
+  background-color: var(--wf-row-fill);
+  color: #2e2e2a;
+}
+
+/* The hover tint. DevExtreme's own hover rule carries nine classes, so beating it means matching
+   its shape and adding one more — anything shorter loses the cascade and the row flashes back to
+   the theme grey on mouseover. The :not() list is DevExtreme's, kept verbatim: it is what leaves a
+   SELECTED row's own background (and its outline) to the theme, which is where selection belongs. */
+.dx-datagrid-table
+  .dx-data-row.wf-row-status.dx-state-hover:not(.dx-selection):not(.dx-row-inserted):not(.dx-row-removed):not(.dx-edit-row):not(.dx-row-focused)
+  > td:not(.dx-focused) {
+  background-color: var(--wf-row-fill-hover);
+  color: #2e2e2a;
+}
+
+/* A rejected request is struck through as well as red — colour alone is not a message somebody
+   with a colour-vision deficiency can read, and "rejected" is the one status where mistaking it
+   for its opposite matters most. */
+.wf-chip--rejected {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* ── Request-type group dot ──
+   The same marker the type picker groups by, so a type reads as the same "kind of thing" wherever
+   it appears. See TYPE_GROUP_DOT in workflowShared for why these are brand neutrals rather than a
+   five-colour code. */
+.wf-type-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-inline-end: 7px;
+  flex: 0 0 auto;
+  vertical-align: baseline;
+}
+.wf-type-dot--money    { background: var(--brand-desert); }
+.wf-type-dot--schedule { background: var(--brand-desert-strong); }
+.wf-type-dot--people   { background: var(--ink); }
+.wf-type-dot--time     { background: var(--ink-muted); }
+.wf-type-dot--other    { background: var(--brand-stone); }
+
+.wf-chip--pending {
+  color: #b7791f;
+  background: #fef5e7;
+}
+/* On hold — BLUE, deliberately not amber (would read as overdue) or red (as broken). A hold is careful, not failing. */
+.wf-chip--onhold {
+  color: #2b6cb0;
+  background: #ebf8ff;
+}
+.wf-chip--approved {
+  color: #2f855a;
+  background: #f0fdf4;
+}
+.wf-chip--rejected {
+  color: #c53030;
+  background: #fef2f2;
+}
+.wf-chip--cancelled {
+  color: #718096;
+  background: #f7fafc;
+}
+.wf-chip--skipped {
+  color: #4a5568;
+  background: #edf2f7;
+}
+
+/* ── The vertical stepper on request detail ── */
+.wf-stepper {
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-step {
+  display: flex;
+  gap: 18px;
+  padding-bottom: 4px;
+}
+
+/* The chain is the RECORD of the request, not a sidebar to it — every step's decision, note, signer
+   and timestamp lives here, so it gets the room to be read rather than glanced at. */
+.wf-chain-card {
+  padding: 22px 24px;
+}
+
+.wf-chain-card .card-title {
+  font-size: 17px;
+}
+
+/* The rail down the left, drawn behind the markers. */
+.wf-step-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.wf-step-marker {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex: 0 0 auto;
+  z-index: 1;
+}
+
+/* The connector between markers grows to fill, so steps of different text heights still connect. */
+.wf-step-line {
+  width: 2px;
+  flex: 1 1 auto;
+  background: var(--border);
+  min-height: 14px;
+}
+
+.wf-step:last-child .wf-step-line {
+  display: none;
+}
+
+.wf-step-body {
+  padding-bottom: 22px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* A rule between steps, so each one reads as its own record rather than a run-on list. */
+.wf-step:not(:last-child) .wf-step-body {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.wf-step-title {
+  font-weight: 600;
+  font-size: 15.5px;
+  color: var(--ink);
+}
+
+/* Stays inline, not flex: the row is built from text and chips separated by literal " · ", and a
+   flex container would turn each fragment into its own item and space them apart. */
+.wf-step-sub {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+  line-height: 1.9;
+}
+
+/* done — green filled, tick */
+.wf-step-marker--done {
+  background: #2f855a;
+  color: #fff;
+}
+/* current — amber filled, with the only animation on the page */
+.wf-step-marker--current {
+  background: #b7791f;
+  color: #fff;
+  box-shadow: 0 0 0 0 rgba(183, 121, 31, 0.5);
+  animation: wf-pulse 1.8s ease-out infinite;
+}
+@keyframes wf-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(183, 121, 31, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(183, 121, 31, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(183, 121, 31, 0);
+  }
+}
+/* waiting — hollow grey */
+.wf-step-marker--waiting {
+  background: #fff;
+  border: 2px solid #cbd5e0;
+  color: #a0aec0;
+}
+/* not reached — a step on a CLOSED request that nobody ever had to act on. Fainter than waiting:
+   waiting still expects someone, this never will. */
+.wf-step-marker--notreached {
+  background: #fff;
+  border: 2px solid #edf2f7;
+  color: #cbd5e0;
+}
+
+.wf-notreached {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* skipped — hollow slate, dashed */
+.wf-step-marker--skipped {
+  background: #fff;
+  border: 2px dashed #4a5568;
+  color: #4a5568;
+}
+/* rejected — red filled, cross (a rejection that ended the request) */
+.wf-step-marker--rejected {
+  background: #c53030;
+  color: #fff;
+}
+/* on hold — blue filled, pause. A deliberate pause, never amber (overdue) or red (broken). */
+.wf-step-marker--onhold {
+  background: #2b6cb0;
+  color: #fff;
+}
+/* did not recommend — HOLLOW red, cross. An advisory rejection that was overruled: the request is
+   still alive, so it must NOT look dead like a solid-red rejection. */
+.wf-step-marker--advisory {
+  background: #fff;
+  border: 2px solid #c53030;
+  color: #c53030;
+}
+
+/* The hold reason sits beside the blue marker, like the skip reason — a paused step is never blank. */
+.wf-hold-reason {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #2b6cb0;
+}
+
+/* "did not recommend" sub-label + its muted comment. */
+.wf-advisory-label {
+  font-size: 12px;
+  color: #c53030;
+  font-weight: 600;
+}
+
+.wf-step-deputy-note {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* "Signed as deputy" — a small label above the comment, so a deputy signature is never mistaken
+   for the named approver's. */
+.wf-deputy-badge {
+  display: inline-block;
+  margin-bottom: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #ebf8ff;
+  color: #2b6cb0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* The "↩ Withdraw" action on a signed step — a correction, so it is quiet text, right-aligned,
+   never filled or coloured like a primary decision. */
+.wf-step-withdraw {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.wf-withdraw-btn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.wf-withdraw-btn:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* A "Withdrawn" line in the history — slate with the ↩ glyph, NOT coloured like a decision. */
+.wf-history-withdrawn {
+  color: #4a5568;
+}
+
+/* ── The decision control: a split button whose menu is generated from the API ── */
+.wf-split {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* Click-away catcher, so the menu closes without a document listener. */
+.wf-split-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+}
+
+.wf-split-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 901;
+  min-width: 300px;
+  max-width: 380px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(23, 29, 26, 0.14);
+}
+
+.wf-split-item {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wf-split-item:hover {
+  background: var(--brand-offwhite);
+}
+
+.wf-split-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.wf-split-glyph {
+  display: inline-flex;
+  justify-content: center;
+  width: 16px;
+}
+
+/* Tone colours the icon and label ONLY — never the whole row. */
+.wf-tone-positive {
+  color: #2f855a;
+}
+.wf-tone-negative {
+  color: #c53030;
+}
+.wf-tone-neutral {
+  color: var(--ink);
+}
+
+/* Description as help text under each menu item. */
+.wf-split-desc {
+  display: block;
+  margin-top: 2px;
+  padding-inline-start: 24px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+/* What is being decided, at the top of the dialog — nobody signs blind. */
+.wf-decide-summary {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--brand-offwhite);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ── The shared password panel ── */
+.wf-sign-summary {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wf-sign-note {
+  margin-top: 6px;
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.wf-sign-divider {
+  margin: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+/* The API's own sentence explaining WHY a signature is needed. */
+.wf-sign-explain {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.wf-sign-error {
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #c53030;
+}
+
+/* The caller's own signature, shown beside the password field as they sign. Framed and small: it is
+   a convention alongside the act, never the thing that signs — the password is. */
+.wf-my-sig {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.wf-my-sig-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* A step whose decision was password-signed — a small lock, nothing louder. */
+.wf-signed-mark {
+  margin-inline-start: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* A delegated step: who it was handed to, and by whom. */
+.wf-delegated {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: #2b6cb0;
+}
+
+/* ── Notes: a conversation, oldest first — never a log, never beside a decision button ── */
+.wf-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.wf-note {
+  max-width: 78%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+/* The requester's side — tinted and pushed across, so two sides are visible at a glance. */
+.wf-note--requester {
+  align-self: flex-end;
+  background: var(--brand-offwhite);
+  border-color: #e2cbae;
+}
+
+.wf-note-head {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 3px;
+}
+
+.wf-note-answer {
+  margin-inline-start: 8px;
+  color: #2b6cb0;
+  font-weight: 600;
+}
+
+.wf-note-text {
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.wf-note-compose {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.wf-note-compose > :first-child {
+  flex: 1;
+}
+
+@media (max-width: 480px) {
+  .wf-note {
+    max-width: 100%;
+  }
+}
+
+/* The skip reason sits where a signature would — never a blank. */
+.wf-skip-reason {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: #4a5568;
+  font-style: italic;
+}
+
+/* A signed step's signature image, always beside the name and time — never instead of them. */
+.wf-sig-block {
+  margin-top: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Reserves the image's height before the lazy bytes arrive, so a row never jumps when they do, and
+   gives the IntersectionObserver a stable slot to watch. */
+.wf-sig-img-holder {
+  min-height: 50px;
+}
+
+.wf-sig-img {
+  max-height: 48px;
+  max-width: 200px;
+  object-fit: contain;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+}
+
+.wf-sig-meta {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/**
+ * The note written WITH the decision. Quoted, ruled on the left, sitting under the signer it belongs
+ * to — this is the whole reason the page has no separate notes section: a note is evidence for a
+ * decision, and it reads as evidence only when it sits against the decision.
+ */
+.wf-step-note {
+  margin-top: 6px;
+  padding-block: 6px;
+  padding-inline: 12px 0;
+  border-inline-start: 3px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* The recorded decision where it says more than the status — "Approved with changes". */
+.wf-step-decision {
+  margin-inline-start: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* The Decide button, on the row of the step it acts on — never at the foot of the page. */
+.wf-step-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+/* ── The horizontal chain flow (chains page, new-request preview) ── */
+.wf-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 13px;
+}
+
+.wf-flow-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--brand-offwhite);
+  border: 1px solid var(--border);
+}
+
+.wf-flow-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--brand-graphite);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wf-flow-node--skip {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+/* The actual person a LineManager step resolves to, on a per-employee preview — a small pill inside
+   the flow node so the requester sees exactly who will sign. */
+.wf-flow-resolved {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.wf-flow-arrow {
+  color: #cbd5e0;
+  font-weight: 700;
+}
+
+/* ── Inbox cards — the decision queue ── */
+.wf-cards {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.wf-card {
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 16px;
+  cursor: pointer;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.wf-card:hover {
+  box-shadow: 0 2px 12px rgba(23, 29, 26, 0.08);
+}
+
+/* Ageing — the one place colour should nag. The extra .wf-card raises specificity above the status
+   wash below, so the amber/red LEFT accent keeps winning even though the wash sets border-color. */
+.wf-card.wf-card--age-amber {
+  border-inline-start-color: #d69e2e;
+}
+.wf-card.wf-card--age-red {
+  border-inline-start-color: #c53030;
+}
+
+/* A completed request: reference, not work. Slightly quieter so "needs me" and "already done" are
+   obvious when both are on screen — but NOT so dimmed that the status wash washes out (the closed
+   tints are already calm greens/reds/greys). The background is left to the wash below. */
+.wf-card--done {
+  opacity: 0.9;
+  border-inline-start-color: var(--border);
+}
+
+/* ── Status wash — the whole card body tinted by request STATUS, so a mixed list reads at a glance.
+      Background AND a matching 1px border (the border stops adjacent same-status cards merging into
+      one blob). Light enough that text contrast is untouched; the status chip still carries the
+      status, this only reinforces it. Keyed to STATUS alone — never the NeedsMyAnswer/HasMyDraft
+      badges — so there is one source of truth. Placed AFTER --done so the tint owns the background. */
+.wf-card--tint-pending {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.wf-card--tint-onhold {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.wf-card--tint-approved {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.wf-card--tint-rejected {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.wf-card--tint-cancelled {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+/* On the pale-amber Pending wash the Desert Decide button can look muddy — deepen the BUTTON, never
+   the wash, so its contrast against the tint is restored. */
+.wf-card--tint-pending .dx-button-mode-contained.dx-button-default {
+  background-color: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+.wf-card--tint-pending .dx-button-mode-contained.dx-button-default.dx-state-hover {
+  background-color: #8f6231;
+  border-color: #8f6231;
+}
+
+/* "✓ You approved this on 3 Aug" — what the user themselves did, on a closed request. */
+.wf-card-acted {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.wf-card-acted--approved {
+  color: #2f855a;
+}
+.wf-card-acted--rejected {
+  color: #c53030;
+}
+
+.wf-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.wf-card-type {
+  font-weight: 600;
+  color: var(--ink);
+  /* Holds the group dot on the text baseline rather than letting it sit on the line box. */
+  display: inline-flex;
+  align-items: center;
+}
+
+.wf-card-age {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.wf-card-age--red {
+  color: #c53030;
+  font-weight: 600;
+}
+
+.wf-card-who {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+.wf-card-payload {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.wf-card-step {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  /* The label and its chip on one baseline — the chip is a child now, not plain text. */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* A small speech-bubble note count on a card — present only when there is a conversation. */
+.wf-note-bubble {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* A held card's inline reason — blue, quiet, with how long it has been paused. */
+.wf-card-hold {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: #2b6cb0;
+}
+.wf-card-hold-days {
+  color: var(--ink-muted);
+}
+
+/* "N need your answer" — the employee's one actionable number. Blue, prominent, clickable. */
+.wf-answer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 7px 14px;
+  border: 1px solid #90cdf4;
+  border-radius: 999px;
+  background: #ebf8ff;
+  color: #2b6cb0;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wf-answer-chip:hover {
+  background: #bee3f8;
+}
+
+/* The hub's tab row. The global `.tab-toolbar > *:last-child { margin-inline-start: auto }` exists to push a
+   trailing ACTIONS block to the right edge; this toolbar's last child is usually just the third tab
+   ("Involved"), which the rule tore off the row and stranded on the right. Reset it, then put the
+   push back on the on-hold note alone — the one child that really does belong at the far end. */
+.tab-toolbar.wf-tab-toolbar > *:last-child {
+  margin-inline-start: 0;
+}
+.tab-toolbar.wf-tab-toolbar > .wf-onhold-note {
+  margin-inline-start: auto;
+}
+
+/* "N on hold with you" — a quiet secondary count beside the tabs, never its own tab. */
+.wf-onhold-note {
+  align-self: center;
+  margin-inline-start: 4px;
+  font-size: 12.5px;
+  color: #2b6cb0;
+}
+
+/* ── Requests hub filter bar ── */
+.wf-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.wf-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wf-filter-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* Active-filter chips — each removable, with a clear-all that only shows when something is set. */
+.wf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.wf-chip-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 3px;
+  padding-inline: 11px 6px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.wf-chip-filter button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-muted);
+  padding: 0 2px;
+}
+
+.wf-chip-filter button:hover {
+  color: #c53030;
+}
+
+.wf-filter-clear {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.wf-filter-clear:hover {
+  text-decoration: underline;
+}
+
+/* Tab count badge — prominent when non-zero, gone when zero. */
+.wf-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-inline-start: 6px;
+}
+
+/* An empty tab must say what is normal or what to do next — never a bare "No data". Defined here so
+   the workflow module owns its own empty state and does not depend on attendance.css being in the
+   same route chunk. */
+/* Asking for more leave than is left. AMBER, never red and never a blocker: the request is legal,
+   the approver decides, and they may grant fewer days than were asked for. */
+.wf-balance-warn {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #e6c88a;
+  border-inline-start: 3px solid #b7791f;
+  border-radius: 8px;
+  background: #fdf6e7;
+  color: #7c5a12;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* A document this request needs before it can be approved. Informational blue, not amber: nothing
+   is wrong yet — the requester simply has one more thing to do. */
+.wf-cert-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #bcd3e6;
+  border-inline-start: 3px solid #2f6f9f;
+  border-radius: 8px;
+  background: #eef5fb;
+  color: #21506f;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* The tip split, previewed. Quiet but not a hint — it is the figure being agreed to. */
+.wf-tip-preview {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--brand-offwhite);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+/* The odd cent the last participant absorbs. Muted: it is a fact, not a warning. */
+.wf-tip-remainder {
+  color: var(--ink-muted);
+}
+
+/* One row of the copy-source picker: the chain's label, its steps beneath. */
+.wf-copy-source-item {
+  padding: 2px 0;
+  line-height: 1.4;
+}
+.wf-copy-source-item .hint {
+  margin: 2px 0 0;
+}
+
+/* ── New request: type picker beside the form ──
+   The radio-card grid did not survive past about six types — every new one pushed the form further
+   down the page. A fixed list column scales instead: adding a type lengthens a list that scrolls,
+   rather than reflowing the thing you came to fill in. */
+.wf-raise-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.wf-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  position: sticky;
+  top: 12px;
+}
+/* The list scrolls on its OWN, so the form never moves because the catalogue grew. */
+.wf-type-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.wf-type-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.wf-type-group-head {
+  padding: 2px 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  display: flex;
+  align-items: center;
+}
+.wf-type-row {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: start;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.wf-type-row:hover {
+  background: var(--brand-offwhite);
+}
+.wf-type-row--selected {
+  background: var(--accent-tint);
+  font-weight: 600;
+}
+.wf-type-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The compact header that replaced the cards: what this type is, and who will sign it — kept beside
+   the form so the who-signs answer stays where the raising happens. */
+.wf-type-header {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.wf-type-header-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wf-type-header-desc {
+  margin: 3px 0 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 80ch;
+}
+
+.wf-raise-main {
+  min-width: 0;
+}
+
+/* One control or the other, never both. */
+.wf-type-list--narrow {
+  display: none;
+}
+@media (max-width: 800px) {
+  .wf-raise-layout {
+    grid-template-columns: 1fr;
+  }
+  .wf-type-list--wide {
+    display: none;
+  }
+  .wf-type-list--narrow {
+    display: block;
+    margin-bottom: 4px;
+  }
+}
+
+.empty-hint {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.empty-hint-main {
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+/* Type picker on new-request — cards so adding a type later is one more card. */
+.wf-type-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.wf-type-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  background: var(--surface);
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.wf-type-card:hover {
+  border-color: var(--accent);
+}
+
+/* The chosen type — accent border + tint, and a filled radio, so the selection is unmistakable
+   even when only one card exists. */
+.wf-type-card--selected {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.wf-type-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wf-type-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e0;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.wf-type-card--selected .wf-type-radio {
+  border-color: var(--accent);
+}
+
+.wf-type-card--selected .wf-type-radio::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.wf-type-card-chain {
+  margin-top: 10px;
+}
+
+.wf-type-card-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+/* The live "this request will be listed as" preview under the form fields. */
+.wf-title-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--brand-offwhite);
+}
+
+.wf-title-preview-label {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+
+.wf-title-preview-value {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.form-optional {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.wf-type-card-desc {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 6px;
+}
+
+/* A short explanatory panel at the top of each setup page. */
+.wf-setup-note {
+  border: 1px solid #e2cbae;
+  background: var(--accent-tint);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink);
+  margin-bottom: 18px;
+}
+
+/* "Applies to" — the draft's population selector, sitting at the right of the builder header. */
+.wf-applies-to {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Why the value just jumped back. Sits under the control it reverted, and stays there — a toast
+   would be gone before the user finished wondering what happened. */
+.wf-applies-to-error {
+  max-width: 260px;
+  color: #b91c1c;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Chains list — one block per active chain, so a default + a management chain read as two clear
+   populations rather than a merged blob or a flagged conflict. */
+.wf-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wf-active-chain + .wf-active-chain {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.wf-active-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+/* The population tag: which requesters a chain serves (Everyone / Management+ / Executive). */
+.wf-pop-tag {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+/* A deputy role with no members is a hard stop, not a note — red, so it reads as the blocker it is. */
+.wf-setup-note--warn {
+  border-color: #f3c9bd;
+  background: #fdf2ef;
+  color: #b91c1c;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+/* A step option: the checkbox, then its explanation indented under it. */
+.wf-step-option .hint {
+  margin-top: 4px;
+  padding-inline-start: 26px;
+}
+
+/* "The chain so far" — a numbered list of steps, each with its options as tags. */
+.wf-build-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.wf-build-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.wf-build-num {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-stone);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wf-build-body {
+  min-width: 0;
+  flex: 1;
+}
+.wf-build-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.wf-build-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+.wf-build-approver {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.wf-build-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+.wf-build-tag {
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-stone);
+  color: #4a5568;
+}
+
+/* Comparison figure (approved vs actual vs variance) — one line, not loose numbers. */
+.wf-compare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+.wf-compare .sep {
+  color: #cfcbc3;
+}
+
+/* Responsive: the operations pages must work at 375px. */
+@media (max-width: 480px) {
+  .wf-cards {
+    grid-template-columns: 1fr;
+  }
+  .wf-card-actions {
+    flex-direction: column-reverse;
+  }
+  .wf-card-actions > * {
+    width: 100%;
+  }
+}
+
+/* Print-only blocks are invisible on screen; the @media print block turns them on. */
+.wf-print-only {
+  display: none;
+}
+
+/* ── PRINT — the request as a document: one compact header, the payload line, the chain. Nothing
+      else. A4 assumed, ~15mm margins. ── */
+@media print {
+  /* Isolate the printable document: hide everything, show only it, pull it to the top-left. This
+     removes the sidebar, the app header and the screen page-head in one move. */
+  body * {
+    visibility: hidden;
+  }
+  .wf-print-root,
+  .wf-print-root * {
+    visibility: visible;
+  }
+  .wf-print-root {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Anything screen-only is gone from the page entirely (display:none, not just hidden), so it
+     leaves no blank space and cannot push the chain onto a second page. */
+  .wf-no-print,
+  .wf-print-hide {
+    display: none !important;
+  }
+
+  /* The compact print header + one-line payload, in place of the screen's full grids. */
+  .wf-print-only {
+    display: block;
+  }
+  .wf-print-head {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #000;
+  }
+  .wf-print-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #000;
+  }
+  .wf-print-sub,
+  .wf-print-payload {
+    font-size: 11px;
+    color: #000;
+    margin-top: 3px;
+  }
+
+  /* The chain is the document's substance. Prefer to keep the whole thing together, but never at the
+     cost of splitting a step across a page. */
+  .wf-chain-card {
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    break-before: auto;
+  }
+  .wf-chain-card .card-title {
+    font-size: 14px;
+    /* Never orphan the "Approval chain" heading at the foot of a page, away from its first step. */
+    break-after: avoid;
+  }
+  /* Never cut a step in half — each prints whole or moves to the next page. This is the rule that
+     keeps a role and its signature together. */
+  .wf-step {
+    break-inside: avoid;
+  }
+
+  /* The current-step pulse must not animate on paper. */
+  .wf-step-marker--current {
+    animation: none;
+    box-shadow: none;
+  }
+  .wf-card,
+  .card {
+    border: 0;
+    box-shadow: none;
+  }
+
+  /* Colour is REINFORCEMENT — the decision reads from the text ("Approved") regardless — but force
+     it to survive a grayscale printer so chips and signatures do not wash out to nothing. */
+  .wf-sig-img,
+  .wf-sig-img-holder,
+  .wf-step-marker,
+  .wf-chip {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Signature images print at the same ~48px as on screen. */
+  .wf-sig-img {
+    max-height: 48px;
+  }
+
+  /* ── The payload block: the substance of the request, between its header and the chain that
+        approved it. Without this a printed tip distribution states a pool and never says who was
+        paid out of it. ── */
+  .wf-print-block {
+    margin: 10px 0 12px;
+  }
+  .wf-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    color: #000;
+  }
+  .wf-print-table th,
+  .wf-print-table td {
+    padding: 3px 6px;
+    border-bottom: 1px solid #999;
+    text-align: start;
+  }
+  .wf-print-table thead th {
+    border-bottom: 1px solid #000;
+    font-weight: 700;
+  }
+  /* A row is one person's whole share — split across a page break it reads as two half-payments. */
+  .wf-print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  /* Repeat the column headings on the second page; a bare column of figures names nothing. */
+  .wf-print-table thead {
+    display: table-header-group;
+  }
+  .wf-print-num {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .wf-print-total td {
+    border-top: 1px solid #000;
+    border-bottom: none;
+    font-weight: 700;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}
+
+/* ── documents & decision proof ── */
+.wf-doc-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wf-doc {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.wf-doc-icon {
+  font-size: 18px;
+  line-height: 1.2;
+}
+.wf-doc-body {
+  flex: 1;
+  min-width: 0;
+}
+.wf-doc-name {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent, #2b6cb0);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: start;
+  word-break: break-word;
+}
+.wf-doc-name:hover {
+  text-decoration: underline;
+}
+.wf-doc-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+.wf-doc-caption {
+  font-size: 13px;
+  margin-top: 3px;
+}
+.wf-doc-remove {
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.wf-doc-remove:hover:not(:disabled) {
+  color: #c53030;
+  background: #fff5f5;
+}
+.wf-doc-add {
+  margin-top: 10px;
+}
+.wf-doc-add-btn {
+  display: inline-block;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #2b6cb0);
+  padding: 6px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+.wf-doc-add-btn:hover {
+  background: var(--surface-muted, #f7fafc);
+}
+
+/* Oversight panel header — title on the left, the age-threshold control on the right. */
+.wf-oversight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.wf-oversight-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A draft-waiting badge on an inbox card — "yours to finish", warm, distinct from the blue hold. */
+.wf-card-draft {
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #8a5a00;
+  background: #fffaf0;
+  border: 1px solid #f6e0b8;
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: inline-block;
+}
+
+/* Decision proof, folded inside a step. */
+.wf-step-proof {
+  margin-top: 6px;
+}
+.wf-proof-toggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.wf-proof-toggle:hover {
+  color: var(--accent, #2b6cb0);
+}
+.wf-doc-list--proof {
+  margin-top: 6px;
+}
+.wf-doc-list--proof .wf-doc {
+  padding: 6px 8px;
+}
+
+/* A caught render error, shown where the form was. Monospace and wrapped: this text gets copied
+   into bug reports, so it must survive the trip intact. */
+.wf-crash-detail {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #e0b4b4;
+  border-radius: 8px;
+  background: #fdf5f5;
+  color: #7a1c1c;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+/* The currency beside a money input — a label, not a field. */
+.wf-amount-ccy {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* The type card a link named — /workflow/chains?type=OVERTIME, from the dashboard's coverage-gap
+   card. The page scrolls to it; this is what says "this one" once you are looking at it. */
+.wf-type-card--focus {
+  border-inline-start: 4px solid var(--accent);
+}
+
+/* WHAT THE ENTERED FIGURE WILL DO — an expense grant routes the request, so the consequence is
+   stated beside the field while it is being typed. Neither state is an error: closing it here and
+   sending it on are both legitimate outcomes of a legitimate figure, so this is informational
+   colour, never red. */
+.wf-routing {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.wf-routing--closes {
+  color: #2f5d3a;
+  background: #e9f2e6;
+  border: 1px solid #c3ddbb;
+}
+.wf-routing--owner {
+  color: #1f4b6b;
+  background: #e8f1f7;
+  border: 1px solid #bcd6e6;
+}
+.wf-routing-usd {
+  opacity: 0.85;
+}
+
+/* ── restating a tip split ──
+   The default is to approve what was calculated, so this whole panel is behind a toggle and reads as
+   a departure from the norm rather than a form to fill in. */
+.wf-split-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.wf-split-toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+.wf-split-toggle:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.wf-split-toggle:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+}
+
+.wf-split-summary {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.wf-split-grid {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.wf-split-row {
+  display: grid;
+  /* name | currency | amount | remove — the amount column is the one that must not shrink. */
+  grid-template-columns: minmax(0, 1fr) 52px 116px 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.wf-split-row:last-child {
+  border-bottom: none;
+}
+.wf-split-row--head {
+  background: var(--brand-offwhite);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.wf-split-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-split-ccy {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.wf-split-remove {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.wf-split-remove:hover:not(:disabled) {
+  color: #b91c1c;
+}
+
+/* The running total per currency. RED until it is exact — an approver watching this come right is
+   the whole point of showing it while typing rather than refusing afterwards. */
+.wf-split-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.wf-split-total {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #2f5d3a;
+  background: #e9f2e6;
+  border: 1px solid #c3ddbb;
+}
+.wf-split-total--off {
+  color: #b91c1c;
+  background: #fdf2ef;
+  border-color: #f3c9bd;
+  font-weight: 600;
+}
+
+.wf-split-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.wf-split-add > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The same rows, READ-ONLY, on the request detail panel — no editor and no remove button, so the
+   grid gives that fourth column back to the figure. */
+.wf-split-row--read {
+  grid-template-columns: minmax(0, 1fr) 52px auto;
+  padding: 7px 10px;
+}
+.wf-split-read-amount {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ── The seven-row weekly availability editor (availability change). ── */
+.wf-avail-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.wf-avail-day {
+  width: 96px;
+  font-weight: 500;
+}
+/* A row that DIFFERS from the employee's current pattern — the only rows that will be sent. */
+.wf-avail-changed {
+  background: rgba(189, 134, 72, 0.08);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+/* ── The onboarding checklist: the panel that decides whether the request may close at all. ── */
+.wf-onb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.wf-onb-created {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e9f2e6;
+  border: 1px solid #c3ddbb;
+  color: #2f5d3a;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.wf-onb-created:hover {
+  background: #dcebd6;
+}
+.wf-onb-pending {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.wf-onb-ids {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-bottom: 14px;
+}
+
+.wf-onb-progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+/* AMBER while required work is outstanding, green when none is. The colour is the fastest way to
+   read whether this request can be closed today. */
+.wf-onb-progress {
+  font-size: 13px;
+  font-weight: 600;
+}
+.wf-onb-progress--amber {
+  color: #8a5a00;
+}
+.wf-onb-progress--green {
+  color: #2f5d3a;
+}
+
+.wf-onb-list {
+  display: flex;
+  flex-direction: column;
+}
+.wf-onb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.wf-onb-row:last-child {
+  border-bottom: none;
+}
+.wf-onb-main {
+  flex: 1;
+  min-width: 0;
+}
+.wf-onb-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+/* Struck through, not hidden — a completed item is still part of the record. */
+.wf-onb-done {
+  text-decoration: line-through;
+  color: var(--ink-muted);
+}
+.wf-onb-required {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fdf6e3;
+  border: 1px solid #e6c98a;
+  color: #8a5a00;
+  font-size: 11px;
+  font-weight: 600;
+}
+.wf-onb-meta {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+  padding-top: 3px;
+}
+
+/* The sentence above the chain. Amber, not red: nothing has gone wrong — there is simply work left,
+   and the Approve button stays live so the API can name exactly which. */
+.wf-onb-gate {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fdf6e3;
+  border: 1px solid #e6c98a;
+  color: #8a5a00;
+  font-size: 14px;
+}
+
+/* ── The tip payload panel: a money document, pivoted one row per person. ── */
+.wf-tip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.wf-tip-final {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e9f2e6;
+  border: 1px solid #c3ddbb;
+  color: #2f5d3a;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.wf-tip-pool {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  background: var(--brand-offwhite);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.wf-tip-pool-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.wf-tip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.wf-tip-table th,
+.wf-tip-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+}
+.wf-tip-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+/* The figures column: right-aligned and tabular, so shares line up digit under digit. */
+/* FIGURES STAY PHYSICALLY RIGHT-ALIGNED IN BOTH DIRECTIONS — not mirrored to `end`.
+   Two reasons, and they agree: digits line up under digits only when the units digit is on a fixed
+   edge, and DevExtreme aligns every number column `right` regardless of rtlEnabled
+   (`getAlignmentByDataType` mirrors text and leaves numbers alone). A hand-built table that
+   mirrored would disagree with the grid next to it on the same Arabic page. */
+.wf-tip-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* THE PROOF ROW. Green when the shares add up to the pool, red when they do not — which can only
+   happen if the lines were changed outside the app, and is exactly what this row is here to catch. */
+.wf-tip-total td {
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  font-weight: 600;
+  color: #2f5d3a;
+}
+.wf-tip-total--off td {
+  color: #b91c1c;
+}
+.wf-tip-mismatch {
+  font-weight: 400;
+  font-size: 12px;
+}

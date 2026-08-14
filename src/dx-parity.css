@@ -1,0 +1,329 @@
+/* ── DevExtreme generic-light density parity ──────────────────────────────────────────────────
+   The original app's widgets were DevExtreme, which ships its own typography: a 12px base with
+   compact paddings, in its own font stack (set on the Mantine theme, not here). Mantine's defaults
+   are 14–16px with roomier padding, so a straight port renders every control noticeably larger
+   than the screen it replaces. These rules put the Mantine components back on DX's metrics.
+
+   Loaded AFTER @mantine/core/styles.css so plain class selectors win on specificity ties — no
+   !important is needed and none is used. Page chrome (index.css) is untouched: it is Poppins at
+   its own sizes in both apps.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* ---- Editors: DX texteditor = 12px text, ~34px tall ---- */
+.mantine-Input-input {
+  font-size: 12px;
+}
+input.mantine-Input-input {
+  height: 34px;
+  min-height: 34px;
+}
+textarea.mantine-Input-input {
+  font-size: 12px;
+} /* height stays content-driven */
+.mantine-InputWrapper-label {
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.mantine-InputWrapper-error,
+.mantine-InputWrapper-description {
+  font-size: 11px;
+}
+.mantine-Select-option,
+.mantine-Combobox-option,
+.mantine-Autocomplete-option,
+.mantine-MultiSelect-option {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.mantine-Combobox-empty {
+  font-size: 12px;
+}
+
+/* ---- Date & time pickers: the same 34px editors, plus a 12px calendar ----
+   The four @mantine/dates inputs stand in for DevExtreme's DateBox, so they have to sit on the
+   editor line above rather than beside it. DatePickerInput and MonthPickerInput render a BUTTON,
+   not an <input>, so the `input.mantine-Input-input` height rule above does not reach them;
+   TimePicker renders a group of tiny inputs inside one wrapper, so it is sized on the wrapper. */
+.mantine-DatePickerInput-input,
+.mantine-MonthPickerInput-input,
+.mantine-DateTimePicker-input,
+.mantine-TimePicker-input {
+  font-size: 12px;
+  min-height: 34px;
+  height: 34px;
+}
+/* The dropdown itself — a 14px calendar next to a 12px grid reads as a different application. */
+.mantine-DatePickerInput-calendarHeaderLevel,
+.mantine-MonthPickerInput-calendarHeaderLevel,
+.mantine-DateTimePicker-calendarHeaderLevel {
+  font-size: 12.5px;
+}
+.mantine-DatePickerInput-day,
+.mantine-DatePickerInput-weekday,
+.mantine-DatePickerInput-monthsListControl,
+.mantine-DatePickerInput-yearsListControl,
+.mantine-MonthPickerInput-monthsListControl,
+.mantine-MonthPickerInput-yearsListControl,
+.mantine-DateTimePicker-day,
+.mantine-DateTimePicker-weekday,
+.mantine-DateTimePicker-monthsListControl,
+.mantine-DateTimePicker-yearsListControl,
+.mantine-TimePicker-control {
+  font-size: 12px;
+}
+
+/* ---- Buttons: DX contained button = 12px text, ~34px tall ---- */
+.mantine-Button-root {
+  font-size: 12px;
+  height: 34px;
+  padding-inline: 14px;
+}
+.mantine-Button-root[data-size='compact-sm'],
+.mantine-Button-root[data-size='compact-xs'] {
+  height: 26px;
+  font-size: 12px;
+}
+.mantine-ActionIcon-root {
+  --ai-size: 28px;
+}
+
+/* ---- Grids: DX DataGrid = 12px cells, 7px vertical padding ---- */
+.mantine-Table-table {
+  font-size: 12px;
+}
+.mantine-Table-table th {
+  font-size: 12px;
+  font-weight: 600;
+}
+.mantine-Table-table td,
+.mantine-Table-table th {
+  padding: 7px 10px;
+}
+.mantine-Pagination-control {
+  min-width: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+/* ---- Everything else that shows text ---- */
+.mantine-Tabs-tab {
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+.mantine-Modal-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.mantine-Modal-body {
+  font-size: 12.5px;
+}
+.mantine-Checkbox-label,
+.mantine-Radio-label,
+.mantine-Switch-label {
+  font-size: 12.5px;
+}
+.mantine-SegmentedControl-label {
+  font-size: 12px;
+}
+.mantine-Badge-label {
+  font-size: 11px;
+}
+.mantine-Notification-title {
+  font-size: 13px;
+}
+.mantine-Notification-description {
+  font-size: 12.5px;
+}
+.mantine-Loader-root {
+  --loader-size: 28px;
+}
+
+/* ---- The per-column filter strip (DX FilterRow) ----
+   A tighter, tinted band under the header so it reads as part of the header rather than as the
+   first row of data. Logical padding only — it has to sit correctly in Arabic too. */
+.grid-filter-row th {
+  padding: 4px 6px;
+  background: #faf7f2;
+  border-bottom: 1px solid #eee3d3;
+}
+/* The header cells above are nowrap and sort-on-click; the filter cells are neither, and their
+   inputs should fill the column rather than size to their content. */
+.grid-filter-row th > * {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ---- Header cells: caption, sort arrow, and the DX HeaderFilter funnel ----
+   The funnel sits at the column's TRAILING edge, which is what makes it findable in a wide grid.
+   Logical by construction: a flex row with space-between mirrors itself in Arabic, so there is no
+   left/right anywhere here and none is needed. */
+.grid-header-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+  width: 100%;
+}
+.grid-header-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* The funnel popup: 12px tick labels to match the grid, and a list that scrolls rather than
+   growing a 400-name column's popup past the bottom of the screen. */
+.mantine-Popover-dropdown .mantine-Checkbox-label {
+  font-size: 12px;
+}
+.grid-header-filter-list {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* ── Narrow-width guards ──────────────────────────────────────────────────────────────────────
+   Shared rules only — no page knows about these, and no page should. The originals in index.css
+   (.form-grid at 560px and friends) are untouched; these sit alongside them.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* A card inside a flex or grid parent defaults to min-width:auto — its CONTENT — so one wide
+   table makes the whole page horizontally scrollable. Zero lets the card shrink and the table
+   scroll inside it, which keeps the page chrome where the reader left it. */
+.card {
+  min-width: 0;
+}
+.card:has(table) {
+  overflow-x: auto;
+}
+
+/* Toolbars and filter bars stack rather than overflow once their controls stop fitting. */
+.tab-toolbar,
+.filter-bar,
+.wf-filter-bar,
+.page-head,
+.page-head-actions {
+  flex-wrap: wrap;
+}
+
+/* A dialog on a phone is the screen. Done in CSS rather than a Modal defaultProps wrapper so it
+   reaches every modal in the app, including the ones mounted conditionally. dvh, not vh, so the
+   mobile browser's collapsing address bar does not leave the actions off-screen. */
+@media (max-width: 560px) {
+  .mantine-Modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .mantine-Modal-inner {
+    padding: 0;
+  }
+}
+
+/* ---- U6: compact hub cards (deliberate delta vs DX) ────────────────────────────────────────
+   NOT a parity fix. The hub's card view in workflow.css is byte-identical to the DevExtreme
+   app; these rules deliberately make the NEW app's cards smaller than that shared design, so
+   more of the decision queue is on screen at once. They live here, never in workflow.css, so a
+   future re-sync from the old app cannot clobber them (and cannot silently revert them either).
+
+   Every rule is a size, a gap or a font-size. Nothing here touches the 4px status accent, the
+   status tints, the amber/red ageing accents or the hover shadow — the card is the same card.
+
+   SPECIFICITY. workflow.css is imported from workflowFormat.ts, i.e. from the routed tree, so
+   it lands AFTER this file and wins every tie. Each rule is therefore scoped through the grid
+   (`.wf-cards > .wf-card ...`, and the doubled `.wf-cards.wf-cards` for the grid itself), which
+   both outranks the originals and confines the change to the hub's card view — `.wf-cards` is
+   rendered in exactly one place, RequestsHubPage. No !important, in keeping with the rest of
+   this file.
+
+   RTL. Symmetric padding and `padding-inline` only; no physical left/right anywhere, so the
+   accents and the layout mirror in Arabic exactly as they did before.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* The grid. 260px (not the original 320px) is what puts FOUR cards on a 1400px window: the nav
+   takes a non-negotiable 240px, .app-content another 48px of padding, and its own scrollbar
+   ~15px more, leaving ~1097px — and 4 × 260 + 3 × 10 = 1070 fits with room to spare, where
+   4 × 270 + 30 = 1110 does not. Five never fit at this width (5 × 260 + 40 = 1340). */
+.wf-cards.wf-cards {
+  gap: 10px;
+}
+/* Below 480px workflow.css drops the grid to a single column; that rule is lower-specificity
+   than this one, so this override starts one pixel above it rather than fighting it. */
+@media (min-width: 481px) {
+  .wf-cards.wf-cards {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+
+.wf-cards > .wf-card {
+  padding: 11px 13px;
+  border-radius: 8px;
+}
+
+/* Type. The head line inherited Mantine's 16px body size, which is most of why the card was
+   tall; 12.5px keeps it clearly the title against the 11.5px lines under it. The 1.35 line-height
+   is applied to the text blocks rather than to .wf-card, so it cannot reach the Button's own
+   label metrics. */
+.wf-cards > .wf-card > .wf-card-head,
+.wf-cards > .wf-card > .wf-card-who,
+.wf-cards > .wf-card > .wf-card-payload,
+.wf-cards > .wf-card > .wf-card-step,
+.wf-cards > .wf-card > .wf-card-acted,
+.wf-cards > .wf-card > .wf-card-hold,
+.wf-cards > .wf-card > .wf-card-draft {
+  line-height: 1.35;
+}
+
+/* The head keeps its own 6px, which collapses with .wf-card-who's existing 4px top margin — one
+   6px gap, not ten. */
+.wf-cards > .wf-card > .wf-card-head {
+  margin-bottom: 6px;
+}
+.wf-cards > .wf-card .wf-card-type {
+  font-size: 12.5px;
+}
+
+/* Secondary lines: one size, one rhythm. */
+.wf-cards > .wf-card .wf-card-age,
+.wf-cards > .wf-card .wf-note-bubble,
+.wf-cards > .wf-card > .wf-card-who,
+.wf-cards > .wf-card > .wf-card-payload,
+.wf-cards > .wf-card > .wf-card-step,
+.wf-cards > .wf-card > .wf-card-acted,
+.wf-cards > .wf-card > .wf-card-hold,
+.wf-cards > .wf-card > .wf-card-draft,
+.wf-cards > .wf-card .wf-withdraw-btn {
+  font-size: 11.5px;
+}
+.wf-cards > .wf-card > .wf-card-who,
+.wf-cards > .wf-card > .wf-card-payload,
+.wf-cards > .wf-card > .wf-card-step,
+.wf-cards > .wf-card > .wf-card-acted,
+.wf-cards > .wf-card > .wf-card-hold,
+.wf-cards > .wf-card > .wf-card-draft {
+  margin-top: 4px;
+}
+.wf-cards > .wf-card > .wf-card-draft {
+  padding: 3px 7px;
+}
+
+/* The chips inside a card are .wf-chip (status, and the .wf-chip-step in the current-step line) —
+   `.badge` in index.css belongs to the page chrome and never renders in here. Scoped to the grid
+   so the same chip is untouched in the grid view and on the request page. */
+.wf-cards > .wf-card .wf-chip {
+  font-size: 10.5px;
+  padding: 2px 8px;
+}
+
+/* Actions. The 34px DX-parity button height above is right everywhere else in the app; inside a
+   card at this density it is the single tallest thing on the card. */
+.wf-cards > .wf-card .wf-card-actions {
+  margin-top: 6px;
+  gap: 6px;
+}
+.wf-cards > .wf-card .mantine-Button-root {
+  height: 26px;
+  font-size: 11.5px;
+  padding-inline: 10px;
+}

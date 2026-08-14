@@ -1,0 +1,312 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 58px;
+  padding: 0 14px;
+  background: var(--brand-graphite);
+  color: var(--brand-offwhite);
+  flex: 0 0 auto;
+  box-shadow: 0 1px 4px rgba(23, 29, 26, 0.25);
+  z-index: 1;
+}
+
+.app-header-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-brand-mark {
+  height: 22px;
+}
+
+.app-brand-tag {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  color: var(--brand-desert);
+  text-transform: uppercase;
+}
+
+.app-user {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+/* Make the dark header's text-mode buttons legible. */
+.app-header .dx-button-mode-text .dx-button-text,
+.app-header .dx-button-mode-text .dx-icon {
+  color: var(--brand-offwhite);
+}
+
+.app-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+/**
+ * THE NAV IS 240px AND DOES NOT NEGOTIATE.
+ *
+ * The original app hung this off DevExtreme's Drawer, whose panel enforced the width. The port
+ * replaced the Drawer with a plain flex row, and a flex item with only `width` set is still
+ * free to SHRINK — so a page with wide content (Daily attendance, the roster) squeezed the nav,
+ * and inside each link the only shrinkable item was the SVG icon, sitting next to a nowrap label
+ * that gets bolder (wider) when active. The icons absorbed the whole squeeze and appeared to
+ * shrink or vanish on exactly the pages that were widest. `flex: 0 0 240px` is the drawer's
+ * guarantee, restored.
+ */
+.side-nav {
+  flex: 0 0 240px;
+  width: 240px;
+  height: 100%;
+  padding: 12px 8px;
+  background: #ffffff;
+  border-inline-end: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  /* With several groups expanded at once the nav is taller than the drawer, so it has to
+     scroll on its own rather than be clipped by the drawer panel. */
+  overflow-y: auto;
+  /* Stop a scroll that reaches the end of the nav from carrying on into the page behind it. */
+  overscroll-behavior: contain;
+}
+
+/* Without this the flex column would rather COMPRESS the items than overflow, so the nav
+   would never scroll — it would just squash. Items keep their height; the nav scrolls. */
+.side-nav > * {
+  flex-shrink: 0;
+}
+
+/* A slim scrollbar, so a nav that happens to overflow does not shout about it. */
+.side-nav::-webkit-scrollbar {
+  width: 8px;
+}
+
+.side-nav::-webkit-scrollbar-thumb {
+  background: #dcd8d0;
+  border-radius: 4px;
+}
+
+.side-nav::-webkit-scrollbar-thumb:hover {
+  background: #c6c1b8;
+}
+
+.side-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.side-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #374151;
+  text-decoration: none;
+  font-size: 15px;
+  /* A flex item's default min-width is `auto`, i.e. its content — so the row refuses to be
+     narrower than its label and pushes the overflow onto its siblings. Zero lets the LABEL take
+     the pressure, which is what the ellipsis below is for. */
+  min-width: 0;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+/* Belt and braces with the flex-basis above: whatever else gives, the glyph does not. */
+.side-nav-icon,
+.side-nav-chevron {
+  flex-shrink: 0;
+}
+
+.side-nav-link:hover {
+  background: var(--brand-offwhite);
+}
+
+.side-nav-link--active {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.side-nav-link .dx-icon {
+  font-size: 18px;
+}
+
+/* Long labels — Arabic runs longer than English for most of these — ellipsize inside the nav
+   rather than shouldering the icon out of the row. */
+.side-nav-label {
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: start;
+}
+
+/* Collapsible group */
+.side-nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.side-nav-group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 15px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.side-nav-group-header:hover {
+  background: var(--brand-offwhite);
+}
+
+.side-nav-group-header--active {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.side-nav-group-header .dx-icon {
+  font-size: 18px;
+}
+
+.side-nav-chevron {
+  font-size: 14px !important;
+  transition: transform 0.15s ease;
+}
+
+.side-nav-chevron--open {
+  transform: rotate(180deg);
+}
+
+.side-nav-children {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block: 2px;
+  margin-inline: 14px 0;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid #e5e7eb;
+}
+
+.side-nav-children .side-nav-link {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 24px;
+  overflow: auto;
+  box-sizing: border-box;
+  background: var(--page-bg);
+}
+
+/* ── Narrow: the nav overlays the content instead of squeezing it ──────────────────────────────
+   Shrinking is the right trade when there is room to give. Below this width there is not: the
+   nav and the grid were both unusable at once, so the nav becomes a drawer over the page.
+
+   Everything here is LOGICAL except the translate, which cannot be — there is no
+   `translate-inline`. That one physical value is mirrored explicitly by the [dir='rtl'] rule,
+   which is why the drawer leaves from the correct edge in Arabic.
+
+   The breakpoint is duplicated in AppLayout.tsx (NARROW); they must stay in step. */
+@media (max-width: 1000px) {
+  .side-nav {
+    position: fixed;
+    top: 58px; /* the header's height — the drawer hangs below it, never over it */
+    inset-block-end: 0;
+    inset-inline-start: 0;
+    z-index: 200;
+    height: auto;
+    box-shadow: 2px 0 12px rgba(23, 29, 26, 0.18);
+    /* Transform ONLY. Animating width would relayout the grid behind it on every frame. */
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  [dir='rtl'] .side-nav {
+    box-shadow: -2px 0 12px rgba(23, 29, 26, 0.18);
+    transform: translateX(100%);
+  }
+
+  .side-nav--open,
+  [dir='rtl'] .side-nav--open {
+    transform: none;
+  }
+
+  .app-content {
+    padding: 16px;
+  }
+}
+
+/* Dismisses the drawer by click; Escape does the same from AppLayout. Sits under the nav's
+   z-index and over everything else. */
+.app-nav-backdrop {
+  position: fixed;
+  inset-block: 58px 0;
+  inset-inline: 0;
+  z-index: 199;
+  background: rgba(23, 29, 26, 0.35);
+}
+
+/* ── Compact: the header sheds what it can spare ──
+   The wordmark stays at every width — it is the only thing identifying the application. The tag
+   beside it and the username are the parts a phone can do without. */
+@media (max-width: 560px) {
+  .app-brand-tag,
+  .app-user {
+    display: none;
+  }
+
+  .app-header {
+    padding: 0 8px;
+    /* Never two lines: the brand truncates before the header grows. */
+    flex-wrap: nowrap;
+  }
+
+  .app-brand {
+    min-width: 0;
+  }
+
+  .app-brand-mark {
+    height: 18px;
+  }
+
+  .app-content {
+    padding: 10px;
+  }
+}
+
+/* The header is a single row at every width, and its two sides may shrink to keep it that way. */
+.app-header-side {
+  min-width: 0;
+}
