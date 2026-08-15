@@ -7,7 +7,8 @@ import { DirectionalIcon } from '../../components/dxIcons'
 import { PageHelp } from '../../components/PageHelp'
 import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
-import { getErrorMessage } from '../../api/errorMessage'
+import { getErrorMessage, isForbidden } from '../../api/errorMessage'
+import { AccessDenied } from '../AccessDenied'
 import { useAuth } from '../../auth/useAuth'
 import {
   exitPermissionsService,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
+import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { ActionIcon, Burger, Button } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { IconLogout } from '@tabler/icons-react'
@@ -33,6 +34,8 @@ const COMPACT = '(max-width: 560px)'
  */
 export function AppLayout() {
   const { t } = useTranslation()
+  // Only for the route error boundary's reset key — navigating away clears a caught crash.
+  const location = useLocation()
   const { user, logout } = useAuth()
 
   // getInitialValueInEffect off: this is a client-only app, so the true width is knowable on the
@@ -140,8 +143,14 @@ export function AppLayout() {
           />
         )}
 
+        {/* Wrapping the OUTLET, not the whole layout, is the point: a page that throws is replaced
+            in place while the nav and header around it keep working, so the reader can navigate
+            away rather than reload into the same crash. Keyed on the pathname so moving to another
+            page clears a caught error. */}
         <main className="app-content">
-          <Outlet />
+          <RouteErrorBoundary resetKey={location.pathname}>
+            <Outlet />
+          </RouteErrorBoundary>
         </main>
       </div>
     </div>
