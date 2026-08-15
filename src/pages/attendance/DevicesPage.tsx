@@ -4,7 +4,7 @@ import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, g
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Loader, Modal, NumberInput, Pagination, Select, Switch, Table, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconCopy, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { PageHelp } from '../../components/PageHelp'
@@ -19,7 +19,6 @@ import {
 import { DEVICE_PULL_DEFAULTS, PERMISSIONS } from '../../types/attendance'
 import type {
   Device,
-  DeviceApiKeyResult,
   EmployeeDevice,
 } from '../../types/attendance'
 import type { Branch, Department, EmployeeListItem } from '../../types/hr'
@@ -203,7 +202,6 @@ function DevicesGrid({
   devices,
   canManage,
   onEdit,
-  onIssueKey,
   onTest,
   onPull,
   onClearLog,
@@ -213,7 +211,6 @@ function DevicesGrid({
   devices: Device[]
   canManage: boolean
   onEdit: (device: Device) => void
-  onIssueKey: (device: Device) => void
   onTest: (device: Device) => void
   onPull: (device: Device) => void
   onClearLog: (device: Device) => void
@@ -366,13 +363,11 @@ function DevicesGrid({
                         Clear machine log
                       </Button>
                     )}
-                    <Button
-                      variant="subtle"
-                      size="compact-sm"
-                      onClick={() => onIssueKey(device)}
-                    >
-                      Issue key
-                    </Button>
+                    {/* NO "Issue key" HERE. The device API key authenticates a terminal that
+                        PUSHES to /api — a path this deployment does not use, since the server
+                        calls the machines itself. The endpoint and its service call are kept
+                        (devicesService.issueApiKey), so re-exposing it is one button; what is
+                        gone is a control that hands out a credential nothing consumes. */}
                   </div>
                 )
               },
@@ -383,7 +378,6 @@ function DevicesGrid({
     [
       canManage,
       onEdit,
-      onIssueKey,
       onTest,
       onPull,
       onClearLog,
@@ -715,10 +709,6 @@ export default function DevicesPage() {
   const [savingEnrollment, setSavingEnrollment] = useState(false)
   const [enrollmentFormError, setEnrollmentFormError] = useState<string | null>(null)
 
-  // The plaintext key lives in this state and nowhere else — not in storage, not in a URL.
-  // When the popup closes it is gone, which is exactly the guarantee the server makes.
-  const [issuedKey, setIssuedKey] = useState<DeviceApiKeyResult | null>(null)
-
   /** The confirm dialog currently on screen, if any — see ConfirmState. */
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
 
@@ -1038,37 +1028,13 @@ export default function DevicesPage() {
     }
   }
 
-  async function issueKey(device: Device) {
-    // We cannot tell from the list whether this terminal already holds a key, and issuing
-    // silently revokes whatever it had. Ask every time — a terminal that has stopped
-    // authenticating stops recording pay.
-    const proceed = await askConfirm(
-      `Issue a new key for ${device.serialNumber}? The current key will stop working immediately.`,
-      'Issue device key',
-    )
-    if (!proceed) return
-
-    try {
-      const result = await devicesService.issueApiKey(device.deviceId)
-      setIssuedKey(result)
-    } catch (err) {
-      notify(getErrorMessage(err), 'error', 4000)
-    }
-  }
-
-  async function copyKey() {
-    if (!issuedKey) return
-    try {
-      await navigator.clipboard.writeText(issuedKey.apiKey)
-      notify('Key copied to the clipboard.', 'success', 2000)
-    } catch {
-      notify(
-        'The browser refused clipboard access. Select the key and copy it by hand.',
-        'error',
-        4000,
-      )
-    }
-  }
+  /* ISSUING A DEVICE API KEY IS NO LONGER OFFERED FROM THIS PAGE.
+     The key authenticates a terminal POSTING to /api/punches — the push path. This deployment
+     pulls: the server opens a TCP connection to each machine and reads its log, which is
+     authenticated by the device's comm key, not by an API key. So the button handed out a
+     credential nothing would ever present, and issuing one silently revoked the previous key.
+     `devicesService.issueApiKey` and the DeviceApiKeyResult type are deliberately KEPT, so a
+     site that switches to pushing needs a button and no new plumbing. */
 
   function openCreateEnrollment() {
     setEnrollmentForm(EMPTY_ENROLLMENT_FORM)
@@ -1210,16 +1176,17 @@ export default function DevicesPage() {
               </div>
             </div>
             <p className="hint">
-              A fingerprint terminal has no user and no password. It authenticates as
-              itself with an API key, so that not just anyone on the network can post
-              punches — a forged punch is forged pay.
+              A fingerprint terminal has no user and no password. The server reaches each
+              machine at its own address and reads the log itself, so a terminal is known by
+              its serial number and its connection — register it here, then give it an address
+              under Edit → Connection.
             </p>
 
             {devices.length === 0 ? (
               <div className="empty-hint">
                 <div className="empty-hint-main">No terminals are registered.</div>
                 {canManageDevices
-                  ? 'Nothing can send a punch until its serial number is registered here. Add the device, then issue it a key and enter that key into the terminal.'
+                  ? 'No punches can arrive until a terminal is registered here. Add the device, then give it an address under Edit → Connection so the server can read it.'
                   : 'Nothing can send a punch until its serial number is registered here. Until somebody with device rights registers a terminal, no punches can arrive at all.'}
               </div>
             ) : (
@@ -1227,7 +1194,6 @@ export default function DevicesPage() {
                 devices={devices}
                 canManage={canManageDevices}
                 onEdit={openEditDevice}
-                onIssueKey={(device) => void issueKey(device)}
                 onTest={(device) => void testConnection(device)}
                 onPull={(device) => void pullNow(device)}
                 onClearLog={(device) => {
@@ -1717,44 +1683,8 @@ export default function DevicesPage() {
         </div>
       </Modal>
 
-      {/* Mounted conditionally, exactly as the original was. (Under DevExtreme that dodged a
-          template-capture bug — children behind a `{issuedKey && …}` guard were not registered
-          as the popup's content and spilled into the page. Mantine has no such capture, but the
-          shape is kept for the same underlying reason: the key is displayed exactly once and
-          cannot be recovered, so it must only ever render inside a dialog the user is looking
-          at.) */}
-      {issuedKey && (
-        <Modal
-          opened
-          onClose={() => setIssuedKey(null)}
-          title="Device API key"
-          size={560}
-          centered
-        >
-          <div>
-            <p>
-              New key for <strong>{issuedKey.serialNumber}</strong>.
-            </p>
-
-            <div className="secret-key">{issuedKey.apiKey}</div>
-
-            <p className="hint">
-              This is the only time this key will ever be shown. It is stored as a hash and
-              cannot be looked up again. Copy it into the terminal now. Issuing a new key
-              immediately stops the old one from working.
-            </p>
-
-            <div className="form-actions">
-              <Button leftSection={<IconCopy size={16} />} onClick={() => void copyKey()}>
-                Copy
-              </Button>
-              <Button variant="default" onClick={() => setIssuedKey(null)}>
-                I have copied it
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* The "Device API key" dialog is gone with the button that opened it — it existed only to
+          show a freshly issued key once, and nothing issues one from this page any more. */}
 
       {/* The confirm dialog — devextreme/ui/dialog's confirm(), as a Mantine Modal. */}
       {confirmState && (

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader, SegmentedControl } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { SettingRow, SettingRows, SettingsCard } from './SettingsCard'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
 import { rolesService } from '../../services/securityService'
@@ -15,12 +16,17 @@ const OPTIONS = [
 ]
 
 /**
- * One role's row: its name, the two-way toggle, and the database's plain-language meaning beneath.
+ * One role's row: its name, the database's plain-language meaning beneath, and the two-way toggle
+ * at the end.
  *
  * The toggle writes on change — there is no separate Save, because a single flip is the whole edit
  * and a Save button would only invite someone to leave it half-done. The row disables itself while
  * the write is in flight, and the Meaning it shows is the API's OWN wording returned by the write,
  * never a sentence recomputed here.
+ *
+ * It now uses the page's shared row anatomy rather than its own `.wf-reject-*` layout: the meaning
+ * reads as the row's hint, under the role it describes, and the control sits at the trailing edge
+ * where every other control on the page sits.
  */
 function RoleRow({
   role,
@@ -54,22 +60,20 @@ function RoleRow({
   }
 
   return (
-    <div className="wf-reject-row">
-      <div className="wf-reject-role">{role.name}</div>
-      <div className="wf-reject-control">
-        {/* SegmentedControl is Mantine's ButtonGroup — same two exclusive positions. */}
+    <SettingRow
+      label={role.name}
+      // The database's own reading of the flag — verbatim, never re-worded here.
+      hint={role.meaning}
+      control={
+        /* SegmentedControl is Mantine's ButtonGroup — same two exclusive positions. */
         <SegmentedControl
           data={OPTIONS}
           value={selected}
           disabled={saving}
           onChange={(v) => void choose(v)}
         />
-        {/* The database's own reading of the flag — verbatim, never re-worded here. */}
-        <div className="hint" style={{ marginTop: 6 }}>
-          {role.meaning}
-        </div>
-      </div>
-    </div>
+      }
+    />
   )
 }
 
@@ -80,7 +84,8 @@ function RoleRow({
  * SETTING_MANAGE, but rejection behaviour is role administration and answers to a DIFFERENT
  * permission. So this section decides its own visibility rather than borrowing the page's — a
  * role administrator without SETTING_MANAGE still sees it, and a settings administrator without
- * ROLE_MANAGE does not (and is never sent a request that would 403).
+ * ROLE_MANAGE does not (and is never sent a request that would 403). The Workflow TAB is hidden on
+ * the same permission, so a settings administrator never reaches an empty tab either.
  */
 export function RejectionBehaviourSection() {
   const { hasPermission } = useAuth()
@@ -116,44 +121,37 @@ export function RejectionBehaviourSection() {
   if (!canManageRoles) return null
 
   return (
-    <div style={{ marginBottom: 24 }}>
-      <h2 className="tab-section-title">When a role rejects a request</h2>
+    <SettingsCard
+      title="When a role rejects a request"
+      description="By default a rejection is a recommendation — the next approver still decides. Turn this on for a role whose rejection should stop the request immediately. The final step always ends the request regardless."
+    >
+      {error && (
+        <div className="alert alert--error" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="card">
-        <p className="hint" style={{ marginTop: 0 }}>
-          By default a rejection is a recommendation — the next approver still decides. Turn this on
-          for a role whose rejection should stop the request immediately. The final step always ends
-          the request regardless.
-        </p>
-
-        {error && (
-          <div className="alert alert--error" role="alert">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="page-loading">
-            <Loader size={32} />
-          </div>
-        ) : roles.length === 0 ? (
-          <p className="hint">No approver roles are configured yet.</p>
-        ) : (
-          <div className="wf-reject-list">
-            {roles.map((role) => (
-              <RoleRow
-                key={role.roleId}
-                role={role}
-                onChanged={(updated) =>
-                  setRoles((current) =>
-                    current.map((r) => (r.roleId === updated.roleId ? updated : r)),
-                  )
-                }
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      {loading ? (
+        <div className="page-loading">
+          <Loader size={32} />
+        </div>
+      ) : roles.length === 0 ? (
+        <p className="hint">No approver roles are configured yet.</p>
+      ) : (
+        <SettingRows>
+          {roles.map((role) => (
+            <RoleRow
+              key={role.roleId}
+              role={role}
+              onChanged={(updated) =>
+                setRoles((current) =>
+                  current.map((r) => (r.roleId === updated.roleId ? updated : r)),
+                )
+              }
+            />
+          ))}
+        </SettingRows>
+      )}
+    </SettingsCard>
   )
 }

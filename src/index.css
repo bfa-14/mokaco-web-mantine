@@ -553,6 +553,13 @@ code {
   max-width: 80ch;
 }
 
+/* "No access" — a refused route, and a refused primary load inside a page that DID open.
+   Narrow on purpose: the panel is three short lines and a button, and letting it run the full width
+   of a wide screen made a small, calm refusal look like a system failure. */
+.page-denied {
+  max-width: 640px;
+}
+
 /* Danger zone — the reset. Set apart from the settings above it with real distance and a red edge,
    because it is a different kind of act, not a more important setting. */
 .danger-zone {

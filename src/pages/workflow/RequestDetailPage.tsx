@@ -1086,6 +1086,8 @@ export default function RequestDetailPage() {
   const [signature, setSignature] = useState<SignatureRequirement | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  /** Set when the primary load came back 403 — a deep link to a request that is not this user's. */
+  const [forbidden, setForbidden] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // The available decisions at the current step, and the caller's own saved draft (both read on load).
@@ -1175,6 +1177,11 @@ export default function RequestDetailPage() {
       }
 
     } catch (err) {
+      // A 403 on the PRIMARY load is its own outcome, not an error message: this route is open to
+      // every signed-in user (anyone may read their own requests), so the only way to reach a
+      // refusal here is a deep link to somebody else's. That is a permission answer, and it reads
+      // as one — see the No access panel below.
+      setForbidden(isForbidden(err))
       setError(getErrorMessage(err))
     } finally {
       setLoading(false)
@@ -1378,9 +1385,13 @@ export default function RequestDetailPage() {
             <DirectionalIcon name="back" size={18} />
           </ActionIcon>
         </div>
-        <div className="alert alert--error" role="alert">
-          {error ?? 'Request not found.'}
-        </div>
+        {forbidden ? (
+          <AccessDenied inline />
+        ) : (
+          <div className="alert alert--error" role="alert">
+            {error ?? 'Request not found.'}
+          </div>
+        )}
       </div>
     )
   }

@@ -3,6 +3,7 @@ import { Trans, useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { Button, NumberInput, Select } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { SettingGroup, SettingRow, SettingRows } from './SettingsCard'
 import { getErrorMessage } from '../../api/errorMessage'
 import { settingsService } from '../../services/settingsService'
 import {
@@ -26,8 +27,14 @@ function find(settings: Setting[], key: string): Setting | undefined {
  * switching modes safe, and it is also why switching does nothing to days already processed —
  * they were derived under the old reading and nothing revisits them on its own. Re-process day, on
  * the Daily page, is how a past day catches up.
+ *
+ * A GROUP OF ROWS inside Attendance rules rather than a card of its own. It sat as a separate card
+ * because it is separately titled, but it is the same kind of thing as the standard day and the
+ * full-day threshold — a rule the whole system is measured against — and somebody checking how a
+ * day is built should not have to remember which card each half of the answer was on. Every
+ * translation key it renders, and both saves, are exactly as they were.
  */
-export function PunchDirectionSection({
+export function PunchDirectionRows({
   settings,
   onSaved,
 }: {
@@ -69,8 +76,7 @@ export function PunchDirectionSection({
 
   if (!modeSetting && !debounceSetting) {
     return (
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-title">{t('settings.punchDirection.title')}</div>
+      <SettingGroup title={t('settings.punchDirection.title')}>
         <div className="empty-hint">
           <div className="empty-hint-main">{t('settings.punchDirection.missingMain')}</div>
           <Trans
@@ -78,7 +84,7 @@ export function PunchDirectionSection({
             components={{ code: <code /> }}
           />
         </div>
-      </div>
+      </SettingGroup>
     )
   }
 
@@ -102,75 +108,85 @@ export function PunchDirectionSection({
   const mode = modeSetting?.settingValue === 'Device' ? 'Device' : 'Alternate'
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <div className="card-title">{t('settings.punchDirection.title')}</div>
-      <p className="hint">{t('settings.punchDirection.intro')}</p>
-
-      {modeSetting && (
-        <div className="form-field" style={{ marginTop: 16 }}>
-          <label className="form-label" htmlFor="punch-direction-mode">
-            {t('settings.punchDirection.modeLabel')}
-          </label>
-          <Select
-            id="punch-direction-mode"
-            data={modes}
-            value={mode}
-            allowDeselect={false}
-            disabled={savingKey === modeSetting.settingKey}
-            onChange={(value) => {
-              if (value) void save(modeSetting, value)
-            }}
+    <SettingGroup
+      title={t('settings.punchDirection.title')}
+      hint={t('settings.punchDirection.intro')}
+    >
+      <SettingRows>
+        {modeSetting && (
+          <SettingRow
+            htmlFor="punch-direction-mode"
+            label={t('settings.punchDirection.modeLabel')}
+            hint={
+              mode === 'Alternate'
+                ? t('settings.punchDirection.modeHintAlternate')
+                : t('settings.punchDirection.modeHintDevice')
+            }
+            control={
+              <Select
+                id="punch-direction-mode"
+                data={modes}
+                value={mode}
+                allowDeselect={false}
+                disabled={savingKey === modeSetting.settingKey}
+                // Saves on change, exactly as before — the choice IS the edit.
+                onChange={(value) => {
+                  if (value) void save(modeSetting, value)
+                }}
+                // The two labels are whole sentences, so the box needs room to be read at the end
+                // of a row rather than at the full width of a card.
+                w={380}
+              />
+            }
           />
-          <p className="hint" style={{ marginTop: 6 }}>
-            {mode === 'Alternate'
-              ? t('settings.punchDirection.modeHintAlternate')
-              : t('settings.punchDirection.modeHintDevice')}
-          </p>
-        </div>
-      )}
+        )}
 
-      {debounceSetting && (
-        <div className="form-field">
-          <label className="form-label" htmlFor="punch-debounce-minutes">
-            {t('settings.punchDirection.debounceLabel')}
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <NumberInput
-              id="punch-debounce-minutes"
-              value={debounce}
-              // Mantine emits a string while typing and '' for a cleared box; neither may reach the
-              // request as NaN, and an empty box means "no debounce" rather than "unknown".
-              onChange={(value) =>
-                setDebounceDraft(typeof value === 'number' ? value : Number(value) || DEBOUNCE_MIN)
-              }
-              min={DEBOUNCE_MIN}
-              max={DEBOUNCE_MAX}
-              step={1}
-              allowDecimal={false}
-              w={140}
-              disabled={savingKey === debounceSetting.settingKey}
-            />
-            <Button
-              disabled={savingKey === debounceSetting.settingKey || !debounceDirty}
-              onClick={() => void save(debounceSetting, String(debounce))}
-            >
-              {savingKey === debounceSetting.settingKey ? t('common.saving') : t('common.save')}
-            </Button>
-          </div>
-          <p className="hint" style={{ marginTop: 6 }}>
-            {t('settings.punchDirection.debounceHint')}
-          </p>
-        </div>
-      )}
+        {debounceSetting && (
+          <SettingRow
+            htmlFor="punch-debounce-minutes"
+            label={t('settings.punchDirection.debounceLabel')}
+            hint={t('settings.punchDirection.debounceHint')}
+            control={
+              <>
+                <NumberInput
+                  id="punch-debounce-minutes"
+                  value={debounce}
+                  // Mantine emits a string while typing and '' for a cleared box; neither may reach
+                  // the request as NaN, and an empty box means "no debounce" rather than "unknown".
+                  onChange={(value) =>
+                    setDebounceDraft(
+                      typeof value === 'number' ? value : Number(value) || DEBOUNCE_MIN,
+                    )
+                  }
+                  min={DEBOUNCE_MIN}
+                  max={DEBOUNCE_MAX}
+                  step={1}
+                  allowDecimal={false}
+                  w={140}
+                  disabled={savingKey === debounceSetting.settingKey}
+                />
+                <Button
+                  disabled={savingKey === debounceSetting.settingKey || !debounceDirty}
+                  onClick={() => void save(debounceSetting, String(debounce))}
+                >
+                  {savingKey === debounceSetting.settingKey
+                    ? t('common.saving')
+                    : t('common.save')}
+                </Button>
+              </>
+            }
+          />
+        )}
+      </SettingRows>
 
       {/* Trans rather than t(): the sentence carries a link to the page that acts on it, and the
           Arabic puts that link in a different place in the sentence than the English does. */}
-      <p className="hint" style={{ marginTop: 12 }}>
+      <p className="set-card-foot">
         <Trans
           i18nKey="settings.punchDirection.footnote"
           components={{ daily: <Link to="/attendance/daily" /> }}
         />
       </p>
-    </div>
+    </SettingGroup>
   )
 }

@@ -489,3 +489,98 @@ export interface PayrollComponentType {
   sign: number
   isStanding: boolean
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   TIERS & CEILINGS — the rate tables payroll computes from.
+
+   THE API CONTRACT THESE MIRROR (hr.TAX_BRACKET / hr.NSSF_RATE, through
+   hr.usp_TaxBracket_* / hr.usp_NssfRate_*), named per this codebase's usual
+   PascalCase-column → camelCase-JSON mapping.
+
+   RATES ARE FRACTIONS, NOT PERCENTAGES. The procedures validate 0..1, so 0.08
+   is eight percent. The screens show percent because that is how the law and
+   every payroll conversation state it, and convert on the way in and out — the
+   wire value is never a percentage.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * One income-tax tier: the slice of annual income between a floor and a ceiling, and the rate
+ * that applies to it.
+ *
+ * `maxAnnual` null is the TOP tier — open-ended, everything above the last floor. Exactly one
+ * tier per currency and period should have it, which is what the gap/overlap check downstream
+ * is looking for.
+ */
+export interface TaxBracket {
+  taxBracketId: number
+  /** Annual income at which this tier starts. */
+  minAnnual: number
+  /** Annual income at which it stops. null = the top, open-ended tier ("and above"). */
+  maxAnnual: number | null
+  /** 0..1. Shown as a percentage; stored and sent as a fraction. */
+  rate: number
+  currencyCode: string
+  effectiveFrom: string
+  /** null = still in force. */
+  effectiveTo: string | null
+  note: string | null
+}
+
+/**
+ * One NSSF scheme version: its two contribution rates and, new here, its OWN salary ceiling.
+ *
+ * Rates change by decree, so a scheme is VERSIONED rather than overwritten — a new row with a
+ * later effectiveFrom, leaving the old one intact so a re-run of an old month still computes what
+ * it computed at the time. That is what the "New version" action exists for.
+ *
+ * `ceilingAmount` null on a ceilinged scheme means "use the global NssfCeilingUsd setting", which
+ * is what every scheme did before per-scheme ceilings existed. Leaving it empty is therefore the
+ * no-change answer, and the reason existing payroll behaviour is untouched until somebody types a
+ * value.
+ */
+export interface NssfRate {
+  nssfRateId: number
+  /** The scheme's name, as the NSSF states it. */
+  scheme: string
+  /** 0..1. The employee's share. */
+  employeeRate: number
+  /** 0..1. The employer's share. */
+  employerRate: number
+  /** Whether contributions stop above a salary ceiling at all. */
+  isCeilinged: boolean
+  /** This scheme's own ceiling. null on a ceilinged scheme = fall back to NssfCeilingUsd. */
+  ceilingAmount: number | null
+  effectiveFrom: string
+  /** null = still in force. */
+  effectiveTo: string | null
+  note: string | null
+}
+
+/** POST/PUT /api/payroll/tax-brackets — the id travels in the route, never the body. */
+export interface TaxBracketUpsertRequest {
+  minAnnual: number
+  maxAnnual: number | null
+  rate: number
+  currencyCode: string
+  effectiveFrom: string
+  effectiveTo: string | null
+  note: string | null
+}
+
+/** POST/PUT /api/payroll/nssf-rates. */
+export interface NssfRateUpsertRequest {
+  scheme: string
+  employeeRate: number
+  employerRate: number
+  isCeilinged: boolean
+  ceilingAmount: number | null
+  effectiveFrom: string
+  effectiveTo: string | null
+  note: string | null
+}
+
+/**
+ * The global fallback ceiling, in core.SETTING. Applies to any ceilinged scheme that has no
+ * ceiling of its own — see NssfRate.ceilingAmount.
+ */
+export const NSSF_CEILING_USD_KEY = 'NssfCeilingUsd'

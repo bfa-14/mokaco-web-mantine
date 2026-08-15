@@ -1,9 +1,10 @@
 /* src/services/payrollService.ts — every payroll endpoint, one object per area. */
 import { apiRequest } from '../api/client'
 import type {
-  AttendanceReadiness, EmployeePayslip, MyPayslip, PayrollAdjustment, PayrollComponentType,
+  AttendanceReadiness, EmployeePayslip, MyPayslip, NssfRate, NssfRateUpsertRequest,
+  PayrollAdjustment, PayrollComponentType,
   PayrollRunCreateRequest, PayrollRunDetail, PayrollRunListItem, PayslipDetail, PayslipLineLookup,
-  PayslipRow, SalaryAdvance, StatutoryReportRow,
+  PayslipRow, SalaryAdvance, StatutoryReportRow, TaxBracket, TaxBracketUpsertRequest,
 } from '../types/payroll'
 
 /** Payroll runs — the month lifecycle. All endpoints require PAYROLL_MANAGE. */
@@ -101,4 +102,44 @@ export const adjustmentsService = {
     apiRequest<{ deleted: number }>(`/api/payroll/adjustments/${id}`, { method: 'DELETE' }),
   componentTypes: () =>
     apiRequest<PayrollComponentType[]>('/api/payroll/component-types'),
+}
+
+/**
+ * INCOME TAX TIERS — hr.TAX_BRACKET, through hr.usp_TaxBracket_*. PAYROLL_RUN throughout.
+ *
+ * `rate` crosses the wire as a FRACTION (0..1), which is what the procedure validates. The screen
+ * shows percent; the conversion belongs at the edge, not here.
+ */
+export const taxBracketsService = {
+  getAll: () => apiRequest<TaxBracket[]>('/api/payroll/tax-brackets'),
+  create: (body: TaxBracketUpsertRequest) =>
+    apiRequest<TaxBracket>('/api/payroll/tax-brackets', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+  update: (id: number, body: TaxBracketUpsertRequest) =>
+    apiRequest<TaxBracket>(`/api/payroll/tax-brackets/${id}`, {
+      method: 'PUT', body: JSON.stringify(body),
+    }),
+  remove: (id: number) =>
+    apiRequest<void>(`/api/payroll/tax-brackets/${id}`, { method: 'DELETE' }),
+}
+
+/**
+ * NSSF SCHEMES — hr.NSSF_RATE, through hr.usp_NssfRate_*. PAYROLL_RUN throughout.
+ *
+ * NO remove, and that is the point: a scheme's rates are law at a date, and payslips already
+ * computed from a row are explained by it. A rate that changes gets a NEW row with a later
+ * effectiveFrom — which is what the page's "New version" action creates — so re-running an old
+ * month still computes what it computed at the time. The procedures offer no delete either.
+ */
+export const nssfRatesService = {
+  getAll: () => apiRequest<NssfRate[]>('/api/payroll/nssf-rates'),
+  create: (body: NssfRateUpsertRequest) =>
+    apiRequest<NssfRate>('/api/payroll/nssf-rates', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+  update: (id: number, body: NssfRateUpsertRequest) =>
+    apiRequest<NssfRate>(`/api/payroll/nssf-rates/${id}`, {
+      method: 'PUT', body: JSON.stringify(body),
+    }),
 }

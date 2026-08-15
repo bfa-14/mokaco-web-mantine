@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ActionIcon, Button, Checkbox, Loader, NumberInput, Select, TextInput } from '@mantine/core'
+import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
+import { ActionIcon, Loader, Tabs } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconRefresh } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
@@ -11,14 +13,18 @@ import {
   MACHINE_PULL_KEYS,
   PUNCH_DIRECTION_KEYS,
   SHOW_PAGE_HELP_KEY,
+  SYSTEM_RESET_PERMISSION,
   type Setting,
 } from '../../types/settings'
+import { SettingRows, SettingsCard } from './SettingsCard'
+import { SystemSettingRow, tabOf, titleOf } from './SystemSettingRow'
 import { AttendanceMachinesSection } from './AttendanceMachinesSection'
-import { PunchDirectionSection } from './PunchDirectionSection'
+import { PunchDirectionRows } from './PunchDirectionSection'
 import { RejectionBehaviourSection } from './RejectionBehaviourSection'
 import { DangerZone } from './DangerZone'
-import { LiveUpdatesSection } from './LiveUpdatesSection'
-import { LanguageSection } from './LanguageSection'
+import { LiveUpdatesRows } from './LiveUpdatesSection'
+import { LanguageRow } from './LanguageSection'
+import './settings.css'
 
 /** Only SETTING_MANAGE may read the full list or write any of it — these values decide what people are paid. */
 const SETTING_MANAGE = 'SETTING_MANAGE'
@@ -26,214 +32,38 @@ const SETTING_MANAGE = 'SETTING_MANAGE'
 const ROLE_MANAGE = 'ROLE_MANAGE'
 
 /**
- * Extra guidance for the keys we know about today.
- *
- * This map is an ENHANCEMENT, not a gate. A setting that is not listed here still renders, using
- * its own Description from the database as the explanation — which is what makes adding a new
- * setting a matter of inserting a row, with no frontend change at all. Only add an entry here when
- * a key needs more than its Description can say.
+ * The tab a `?tab=` value may name. Kept as a union so a URL somebody typed by hand cannot select
+ * a panel that does not exist.
  */
-const KNOWN: Record<
-  string,
-  { group: string; title: string; min?: number; max?: number; step?: number }
-> = {
-  StandardWorkDayHours: {
-    group: 'Attendance',
-    title: 'Standard work day',
-    min: 1,
-    max: 24,
-    step: 0.5,
-  },
-  ExitLeaveBasis: { group: 'Attendance', title: 'Exit leave basis' },
-  FullDayThreshold: {
-    group: 'Attendance',
-    title: 'Full day threshold',
-    min: 0,
-    max: 1,
-    step: 0.05,
-  },
-  [SHOW_PAGE_HELP_KEY]: { group: 'Appearance', title: 'Show page help' },
-}
-
-/** Values a setting of this key may take, when it is a fixed choice rather than free text. */
-const CHOICES: Record<string, string[]> = {
-  ExitLeaveBasis: ['Actual', 'Approved'],
-}
-
-/** The order groups appear in. Anything unrecognised falls to the end under 'Other'. */
-const GROUP_ORDER = ['Appearance', 'Attendance', 'Other']
-
-const OTHER = 'Other'
-
-function groupOf(key: string): string {
-  return KNOWN[key]?.group ?? OTHER
-}
-
-function titleOf(setting: Setting): string {
-  return KNOWN[setting.settingKey]?.title ?? setting.settingKey
-}
+const TAB_IDS = ['preferences', 'attendance', 'workflow', 'advanced', 'danger'] as const
+type TabId = (typeof TAB_IDS)[number]
 
 /**
- * Spells out what the value currently in the box actually MEANS, in real hours and minutes.
+ * SETTINGS — the rules the whole application is measured against, plus the choices a person makes
+ * about their own screen.
  *
- * This exists because FullDayThreshold is the one value here whose units are genuinely ambiguous:
- * it is a FRACTION of the day (1.00 = all of it, 0.90 = ninety per cent), NOT a percentage.
- * Somebody who reads "how much of the standard day" and types 90 has quietly broken payroll — the
- * day fraction it is compared against is capped at 1.00, so 90 can never be reached and NOBODY
- * would ever record a full day again. The number box refuses anything above 1, but the screen
- * should SAY what the number means rather than rely on being un-typeable.
- */
-function describeValue(
-  key: string,
-  value: string,
-  standardHours: number | undefined,
-): string | null {
-  const numeric = Number(value)
-  if (value === '' || Number.isNaN(numeric)) return null
-
-  if (key === 'StandardWorkDayHours') {
-    const hours = Math.floor(numeric)
-    const mins = Math.round((numeric - hours) * 60)
-    const label = mins === 0 ? `${hours}h` : `${hours}h ${mins}m`
-    return `A ${label} day. A 2-hour exit permission costs ${(2 / numeric).toFixed(2)} of a leave day.`
-  }
-
-  if (key === 'FullDayThreshold') {
-    const percent = Math.round(numeric * 100)
-    const base = `This is a fraction of the day, not a percentage: ${numeric.toFixed(2)} means ${percent}%.`
-    if (!standardHours) return base
-
-    const requiredHours = numeric * standardHours
-    const h = Math.floor(requiredHours)
-    const m = Math.round((requiredHours - h) * 60)
-    const label = m === 0 ? `${h}h` : `${h}h ${m}m`
-
-    return numeric >= 1
-      ? `${base} The whole ${standardHours}h day must be worked before it counts as full.`
-      : `${base} With a ${standardHours}h standard day, working ${label} is enough to count as a full day.`
-  }
-
-  return null
-}
-
-/**
- * One setting, one decision, one consequence. Rendered as a card rather than a grid row because
- * these are separate policy choices — a grid would invite somebody to skim them, and several of
- * them silently re-price everybody's pay.
- *
- * The control is chosen from the setting's DataType, so a key nobody has written any UI code for
- * still gets an appropriate editor.
- */
-function SettingCard({
-  setting,
-  draft,
-  saving,
-  standardHours,
-  onDraftChange,
-  onSave,
-}: {
-  setting: Setting
-  draft: string
-  saving: boolean
-  /** The configured standard day, so a fraction can be shown as real hours rather than a bare decimal. */
-  standardHours: number | undefined
-  onDraftChange: (value: string) => void
-  onSave: () => void
-}) {
-  const known = KNOWN[setting.settingKey]
-  const choices = CHOICES[setting.settingKey]
-  const dirty = draft !== setting.settingValue
-  const example = describeValue(setting.settingKey, draft, standardHours)
-  const inputId = `setting-${setting.settingKey}`
-
-  const isBool = setting.dataType === 'bool'
-  const isNumber = setting.dataType === 'int' || setting.dataType === 'decimal'
-
-  return (
-    <div className="card">
-      <div className="tab-toolbar">
-        <div>
-          <div className="card-title">{titleOf(setting)}</div>
-          <span className="hint">{setting.settingKey}</span>
-        </div>
-      </div>
-
-      <div className="form-field">
-        {isBool ? (
-          <Checkbox
-            checked={draft === 'true'}
-            onChange={(e) => onDraftChange(e.currentTarget.checked ? 'true' : 'false')}
-            label={draft === 'true' ? 'On' : 'Off'}
-            disabled={saving}
-          />
-        ) : choices ? (
-          <Select
-            id={inputId}
-            data={choices}
-            value={draft}
-            onChange={(v) => onDraftChange(v ?? '')}
-            allowDeselect={false}
-            w={220}
-            disabled={saving}
-          />
-        ) : isNumber ? (
-          <NumberInput
-            id={inputId}
-            value={draft === '' ? '' : Number(draft)}
-            onChange={(v) => onDraftChange(v == null || v === '' ? '' : String(v))}
-            w={220}
-            disabled={saving}
-            min={known?.min}
-            max={known?.max}
-            step={known?.step ?? 1}
-            // format '#0' / '#0.##' — whole numbers for int keys, up to two decimals otherwise.
-            allowDecimal={setting.dataType !== 'int'}
-            decimalScale={setting.dataType === 'int' ? 0 : 2}
-          />
-        ) : (
-          <TextInput
-            id={inputId}
-            value={draft}
-            onChange={(e) => onDraftChange(e.currentTarget.value)}
-            w={320}
-            disabled={saving}
-          />
-        )}
-      </div>
-
-      {/* The Description from the database IS the explanation. A setting nobody has written UI code
-          for is still fully usable, because this line always tells the user what it does. */}
-      {setting.description && <p className="hint">{setting.description}</p>}
-
-      {example && <p className="hint">{example}</p>}
-
-      <div className="form-actions">
-        {setting.modifiedAt && (
-          <span className="hint">
-            Last changed {setting.modifiedAt.slice(0, 10)}
-          </span>
-        )}
-        <Button onClick={onSave} disabled={saving || !dirty}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-/**
- * System settings — the rules the whole application is measured against.
+ * FIVE TABS, NOT ONE SCROLL. The page had accumulated a card per batch of work — language, live
+ * updates, a card per system setting, rejection behaviour, the punch pair, the machines, the danger
+ * zone — in the order they happened to be built, which is not an order anybody reads in. Grouping
+ * them by WHOSE settings they are (mine / attendance's / workflow's / rarely anyone's / the
+ * destructive one) puts every tab within a screen of its own top.
  *
  * Not an attendance page: core.SETTING is global, and payroll and workflow will add their own keys
- * here. The page is deliberately DATA-DRIVEN — it renders whatever the API returns and picks a
- * control from each setting's DataType — so a new setting is a database row, not a code change.
+ * here. The system-setting side stays deliberately DATA-DRIVEN — it renders whatever the API
+ * returns and picks a control from each setting's DataType — so a new setting is a database row,
+ * not a code change. An unrecognised key lands on Advanced rather than nowhere.
  */
 export default function SettingsPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = hasPermission(SETTING_MANAGE)
   // A SEPARATE trust: rejection behaviour is role administration, so someone may hold it WITHOUT
   // SETTING_MANAGE. The page must open for either permission, not only the settings one.
   const canManageRoles = hasPermission(ROLE_MANAGE)
+  // Read here as well as inside the Danger zone, which still gates itself: the TAB has to know
+  // whether it has anything to show before it renders a label somebody would click into an empty
+  // panel.
+  const canReset = hasPermission(SYSTEM_RESET_PERMISSION)
 
   // Changing the help flag must take effect everywhere immediately, not on the next reload.
   const { refresh: refreshUiSettings } = useSettings()
@@ -335,67 +165,91 @@ export default function SettingsPage() {
    */
   const armedSetting = settings.find((s) => s.settingKey === ALLOW_SYSTEM_RESET_KEY) ?? null
 
-  // Group for display, then order the groups. An unrecognised key still appears — under 'Other' —
-  // which is the whole point: a new setting shows up without anybody touching this file.
-  const groups = GROUP_ORDER.map((group) => ({
-    group,
-    items: settings.filter(
-      (s) =>
-        groupOf(s.settingKey) === group &&
-        s.settingKey !== ALLOW_SYSTEM_RESET_KEY &&
-        // The machine-pull keys are the schedule for the machines listed in their own section
-        // below; shown here as three loose cards they would say nothing about what they poll.
-        !MACHINE_PULL_KEYS.includes(s.settingKey) &&
-        // Same for the punch-direction pair: the mode and its debounce are one decision.
-        !PUNCH_DIRECTION_KEYS.includes(s.settingKey),
-    ),
-  })).filter((g) => g.items.length > 0)
-
   /**
-   * The choices a person makes about THEMSELVES — no permission, every signed-in user.
+   * The settings that render as ordinary rows, filed by tab.
    *
-   * Rendered in BOTH branches below on purpose. Somebody with neither system trust still reaches
-   * this page, and the language switch in particular has to be there for them: it is the only way
-   * to read the application in Arabic, and turning an employee away at the door would leave them
-   * no route to it at all.
-   *
-   * Language sits first because it is the choice that changes every other word on the screen.
+   * The three exclusions are unchanged and each has its own home elsewhere on the page: the arming
+   * flag belongs to the Danger zone, the machine-pull keys are the schedule for the machines they
+   * poll, and the punch pair is one decision rather than two loose values.
    */
-  const personalPreferences = (
-    <>
-      <LanguageSection />
-      <LiveUpdatesSection />
-    </>
+  const listed = settings.filter(
+    (s) =>
+      s.settingKey !== ALLOW_SYSTEM_RESET_KEY &&
+      !MACHINE_PULL_KEYS.includes(s.settingKey) &&
+      !PUNCH_DIRECTION_KEYS.includes(s.settingKey),
+  )
+  const preferenceSettings = listed.filter((s) => tabOf(s.settingKey) === 'preferences')
+  const attendanceSettings = listed.filter((s) => tabOf(s.settingKey) === 'attendance')
+  const advancedSettings = listed.filter((s) => tabOf(s.settingKey) === 'advanced')
+
+  /** One system setting as a row — the wiring is identical for every tab it appears on. */
+  function renderSetting(setting: Setting) {
+    return (
+      <SystemSettingRow
+        key={setting.settingKey}
+        setting={setting}
+        draft={drafts[setting.settingKey] ?? ''}
+        saving={savingKey === setting.settingKey}
+        standardHours={standardHours}
+        onDraftChange={(value) =>
+          setDrafts((current) => ({ ...current, [setting.settingKey]: value }))
+        }
+        onSave={() => void save(setting)}
+      />
+    )
+  }
+
+  /** The page-wide read failure, shown on whichever settings tab the user is looking at. */
+  const errorBanner = error && (
+    <div className="alert alert--error" role="alert">
+      {error}
+    </div>
   )
 
-  // Only turn someone away when they hold NEITHER trust. With ROLE_MANAGE alone they still get the
-  // page — just the rejection-behaviour section, which gates itself on that permission.
-  if (!canManage && !canManageRoles) {
-    return (
-      <div>
-        <div className="page-head">
-          <div>
-            <h1 className="page-title">Settings</h1>
-            <p className="page-subtitle">
-              The rules the whole system is measured against.
-            </p>
-          </div>
-        </div>
+  const spinner = (
+    <div className="page-loading">
+      <Loader size={40} />
+    </div>
+  )
 
-        {personalPreferences}
+  /**
+   * WHICH TABS EXIST FOR THIS USER.
+   *
+   * A tab whose whole content is permission-hidden is not rendered at all — an empty panel behind
+   * a label somebody clicked is worse than never offering it, because it reads as a page that
+   * failed to load rather than as a thing that is not theirs.
+   *
+   * Preferences is always present: language and live updates need no permission, and the language
+   * switch in particular MUST reach everybody — it is the only way to read the application in
+   * Arabic, and turning an employee away at the door would leave them no route to it at all.
+   */
+  const visible: { id: TabId; label: string; danger?: boolean }[] = [
+    { id: 'preferences', label: t('settings.tabs.preferences') },
+    ...(canManage ? [{ id: 'attendance' as TabId, label: t('settings.tabs.attendance') }] : []),
+    ...(canManageRoles ? [{ id: 'workflow' as TabId, label: t('settings.tabs.workflow') }] : []),
+    ...(canManage ? [{ id: 'advanced' as TabId, label: t('settings.tabs.advanced') }] : []),
+    // LAST, always — it belongs to a different kind of act than everything before it.
+    ...(canReset ? [{ id: 'danger' as TabId, label: t('settings.tabs.danger'), danger: true }] : []),
+  ]
 
-        <div className="card">
-          <div className="empty-hint">
-            <div className="empty-hint-main">
-              You do not have access to system settings.
-            </div>
-            These values decide what a working day is — and therefore what people are
-            paid — so they are owner-level rather than day-to-day. Ask whoever
-            administers the system if one of them needs to change.
-          </div>
-        </div>
-      </div>
-    )
+  /**
+   * The selected tab lives in the URL, so a refresh — and a link somebody pastes to a colleague —
+   * lands on the same panel rather than back at Preferences.
+   *
+   * A `?tab=` naming a panel this user cannot see falls back to the first one they can, which is
+   * what makes such a pasted link safe to follow: it opens the page rather than an empty frame.
+   */
+  const [params, setParams] = useSearchParams()
+  const requested = params.get('tab')
+  const active = visible.find((tab) => tab.id === requested)?.id ?? visible[0].id
+
+  function selectTab(value: string | null) {
+    if (!value) return
+    const next = new URLSearchParams(params)
+    next.set('tab', value)
+    // Replace rather than push: flicking between tabs is reading, not navigating, and Back should
+    // return to the page the user came from rather than to the tab they just left.
+    setParams(next, { replace: true })
   }
 
   return (
@@ -422,95 +276,166 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Role administration, not a system setting — it self-gates on ROLE_MANAGE and shows above the
-          pay-affecting values, since it is the more day-to-day of the two. */}
-      <RejectionBehaviourSection />
+      {/* keepMounted={false} — a panel's contents mount when it is first opened, so the machines
+          list does not fetch for somebody who never opens the Attendance tab. */}
+      <Tabs
+        value={active}
+        onChange={selectTab}
+        keepMounted={false}
+        className="set-tabs"
+      >
+        <Tabs.List>
+          {visible.map((tab) => (
+            <Tabs.Tab
+              key={tab.id}
+              value={tab.id}
+              className={tab.danger ? 'set-tab-danger' : undefined}
+            >
+              {tab.label}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
 
-      {/* Personal preferences, not system settings — so they sit outside the SETTING_MANAGE gate
-          below and show for every signed-in user. */}
-      {personalPreferences}
+        {/* ── PREFERENCES — the choices a person makes about THEMSELVES ───────────────────────
+            One card, one row per setting. These were three separate cards, which said they were
+            three separate kinds of decision; they are not, they are all "how this screen behaves
+            for me". Language first, because it is the choice that changes every other word. */}
+        <Tabs.Panel value="preferences" className="set-panel">
+          <div className="set-stack">
+            <SettingsCard
+              title={t('settings.tabs.preferences')}
+              description="Yours alone — remembered per person on this browser, and never changed for anyone else."
+            >
+              <SettingRows>
+                <LanguageRow />
+                <LiveUpdatesRows />
+                {/* Page help is a core.SETTING row, so it only appears for a user who may read
+                    the settings list — but it is a choice about this screen, so it belongs here
+                    rather than among the values that decide what people are paid. */}
+                {preferenceSettings.map(renderSetting)}
+              </SettingRows>
+            </SettingsCard>
 
-      {/* Everything below is the pay-affecting settings, behind SETTING_MANAGE. A ROLE_MANAGE-only
-          user has already seen the one section that is theirs; nothing here renders for them. */}
-      {canManage && (
-        <>
-          <div className="card">
-            <div className="card-title">Change these rarely</div>
-            <p className="hint">
-              These values decide what a working day IS. Changing one silently re-prices
-              every part-day and every exit permission from now on. It does not
-              re-calculate days that have already been processed — so a change made today
-              leaves last month exactly as it was.
-            </p>
+            {/* The one thing a user with neither system trust needs to be told, kept exactly as
+                it read before: not an error, an explanation of whose settings those are. */}
+            {!canManage && !canManageRoles && (
+              <SettingsCard title="System settings">
+                <div className="empty-hint">
+                  <div className="empty-hint-main">
+                    You do not have access to system settings.
+                  </div>
+                  These values decide what a working day is — and therefore what people are
+                  paid — so they are owner-level rather than day-to-day. Ask whoever
+                  administers the system if one of them needs to change.
+                </div>
+              </SettingsCard>
+            )}
           </div>
+        </Tabs.Panel>
 
-          {error && (
-            <div className="alert alert--error" role="alert">
-              {error}
+        {/* ── ATTENDANCE — how a day is built, and what builds it ─────────────────────────────
+            Two cards. The rules that decide what a day IS, and the machines the punches come off.
+            Punch direction is part of the first: it is the same kind of thing as the standard day,
+            and it used to sit two cards away from it. */}
+        {canManage && (
+          <Tabs.Panel value="attendance" className="set-panel">
+            <div className="set-stack">
+              {errorBanner}
+
+              {loading ? (
+                spinner
+              ) : (
+                <>
+                  <SettingsCard
+                    title="Attendance rules"
+                    description="How a working day is measured, and how the punches behind it are read. A change applies from now on — it does not re-calculate days that have already been processed."
+                  >
+                    {attendanceSettings.length > 0 && (
+                      <SettingRows>{attendanceSettings.map(renderSetting)}</SettingRows>
+                    )}
+
+                    {/* Directly under the rules it belongs to: the order on the page follows the
+                        punch's own journey — off the terminal, then read. */}
+                    <PunchDirectionRows settings={settings} onSaved={load} />
+                  </SettingsCard>
+
+                  {/* Its own card rather than three loose values: the schedule only means something
+                      next to the machines it polls, and one of those machines being unreachable is
+                      the thing somebody came to this page to find out.
+
+                      Inside the SETTING_MANAGE gate because the values it writes are ordinary
+                      core.SETTING rows — a DEVICE_MANAGE-only user cannot read them at all. The
+                      Test / Pull now buttons inside gate separately on DEVICE_MANAGE. */}
+                  <AttendanceMachinesSection settings={settings} onSaved={load} />
+                </>
+              )}
             </div>
-          )}
+          </Tabs.Panel>
+        )}
 
-          {loading ? (
-            <div className="page-loading">
-              <Loader size={40} />
+        {/* ── WORKFLOW — how requests behave ──────────────────────────────────────────────────
+            Role administration, on ROLE_MANAGE rather than SETTING_MANAGE. The section still
+            self-gates; this tab exists only when it would render something. */}
+        {canManageRoles && (
+          <Tabs.Panel value="workflow" className="set-panel">
+            <div className="set-stack">
+              <RejectionBehaviourSection />
             </div>
-          ) : settings.length === 0 ? (
-            <div className="card">
-              <div className="empty-hint">
-                <div className="empty-hint-main">
-                  No settings are configured on the server.
-                </div>
-                The system is running on its built-in defaults, so every part-day and every
-                exit permission is being priced by values nobody chose. Run the settings
-                seed script, then press Refresh.
-              </div>
+          </Tabs.Panel>
+        )}
+
+        {/* ── ADVANCED — the rarely-touched, and whatever nobody has filed yet ─────────────────
+            An unrecognised key lands here, which is what keeps "a new setting is a database row"
+            true: it appears, with its own Description as the explanation, without this file
+            changing at all. */}
+        {canManage && (
+          <Tabs.Panel value="advanced" className="set-panel">
+            <div className="set-stack">
+              {errorBanner}
+
+              {loading ? (
+                spinner
+              ) : (
+                <>
+                  <SettingsCard
+                    title="Change these rarely"
+                    description="These values decide what a working day IS. Changing one silently re-prices every part-day and every exit permission from now on. It does not re-calculate days that have already been processed — so a change made today leaves last month exactly as it was."
+                  />
+
+                  <SettingsCard
+                    title="Other settings"
+                    description="Anything on the server that has no dedicated home on this page. Each is described by the database's own wording."
+                  >
+                    {settings.length === 0 ? (
+                      <div className="empty-hint">
+                        <div className="empty-hint-main">
+                          No settings are configured on the server.
+                        </div>
+                        The system is running on its built-in defaults, so every part-day and every
+                        exit permission is being priced by values nobody chose. Run the settings
+                        seed script, then press Refresh.
+                      </div>
+                    ) : advancedSettings.length === 0 ? (
+                      <p className="hint">Every setting on the server has a home of its own.</p>
+                    ) : (
+                      <SettingRows>{advancedSettings.map(renderSetting)}</SettingRows>
+                    )}
+                  </SettingsCard>
+                </>
+              )}
             </div>
-          ) : (
-            groups.map(({ group, items }) => (
-              <div key={group} style={{ marginBottom: 24 }}>
-                <h2 className="tab-section-title">{group}</h2>
-                <div style={{ display: 'grid', gap: 16 }}>
-                  {items.map((setting) => (
-                    <SettingCard
-                      key={setting.settingKey}
-                      setting={setting}
-                      draft={drafts[setting.settingKey] ?? ''}
-                      saving={savingKey === setting.settingKey}
-                      standardHours={standardHours}
-                      onDraftChange={(value) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [setting.settingKey]: value,
-                        }))
-                      }
-                      onSave={() => void save(setting)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
+          </Tabs.Panel>
+        )}
 
-          {/* Its own section rather than three cards in the list above: the schedule only means
-              something next to the machines it polls, and one of those machines being unreachable
-              is the thing somebody came to this page to find out.
-
-              Inside the SETTING_MANAGE gate because the values it writes are ordinary core.SETTING
-              rows — a DEVICE_MANAGE-only user cannot read them at all, so there is nothing to show
-              them here. The Test / Pull now buttons inside gate separately on DEVICE_MANAGE. */}
-          {/* Directly above the machines that produce the punches it interprets: the order on the
-              page follows the punch's own journey — off the terminal, then read. */}
-          {!loading && <PunchDirectionSection settings={settings} onSaved={load} />}
-
-          {!loading && (
-            <AttendanceMachinesSection settings={settings} onSaved={load} />
-          )}
-        </>
-      )}
-
-      {/* Last on the page and visually apart, because it belongs to a different kind of act than
-          everything above it. Renders nothing without SYSTEM_RESET. */}
-      <DangerZone armedSetting={armedSetting} onArmedChanged={load} />
+        {/* ── DANGER ZONE — a different kind of act, and the last tab there is ────────────────
+            Content untouched. It still renders nothing without SYSTEM_RESET, so the two gates
+            agree even if one is ever changed without the other. */}
+        {canReset && (
+          <Tabs.Panel value="danger" className="set-panel">
+            <DangerZone armedSetting={armedSetting} onArmedChanged={load} />
+          </Tabs.Panel>
+        )}
+      </Tabs>
     </div>
   )
 }

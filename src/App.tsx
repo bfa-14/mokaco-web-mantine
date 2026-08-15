@@ -1,6 +1,9 @@
+import type { ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthProvider'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { RequirePermission } from './auth/RequirePermission'
+import { accessFor } from './auth/routeAccess'
 import { SettingsProvider } from './settings/SettingsProvider'
 import { LiveSettingsProvider } from './live/LiveSettingsProvider'
 import { LanguageProvider } from './i18n/LanguageProvider'
@@ -46,6 +49,7 @@ import PayrollRunDetailPage from './pages/payroll/PayrollRunDetailPage'
 import PayslipPage from './pages/payroll/PayslipPage'
 import AdvancesPage from './pages/payroll/AdvancesPage'
 import AdjustmentsPage from './pages/payroll/AdjustmentsPage'
+import TiersCeilingsPage from './pages/payroll/TiersCeilingsPage'
 import MonthlyAttendanceReportPage from './pages/reports/MonthlyAttendanceReportPage'
 import DailyAttendanceReportPage from './pages/reports/DailyAttendanceReportPage'
 import LeaveBalanceReportPage from './pages/reports/LeaveBalanceReportPage'
@@ -53,8 +57,23 @@ import SettingsPage from './pages/settings/SettingsPage'
 import MyProfilePage from './pages/profile/MyProfilePage'
 
 /**
- * Full route table — identical to the original app's App.tsx. Every page is now the real
- * Mantine port.
+ * Wraps a route's element in its guard, IF the shared map says the route needs one.
+ *
+ * The requirement is never written here — it is looked up from src/auth/routeAccess.ts by the same
+ * path string the Route uses, which is the same lookup the side nav performs to decide whether to
+ * show the link. One table, two readers, no way for them to disagree.
+ *
+ * A path absent from the map returns the element untouched, which is how the open routes (the
+ * dashboard, the requests hub, raising a request, one's own profile, settings) stay open.
+ */
+function guard(path: string, element: ReactNode): ReactNode {
+  const rule = accessFor(path)
+  if (!rule) return element
+  return <RequirePermission anyOf={rule.anyOf}>{element}</RequirePermission>
+}
+
+/**
+ * Full route table.
  *
  * The provider nesting is UNCHANGED from the original, and load-bearing: LiveSettingsProvider
  * inside AuthProvider (the socket authenticates with this tab's token), LanguageProvider outside
@@ -74,45 +93,144 @@ export default function App() {
                   <Route element={<AppLayout />}>
                     <Route path="/" element={<DashboardPage />} />
 
+                    {/* The section landing routes are plain redirects that render no page and fetch
+                        nothing, so they are deliberately NOT guarded — the route they land on is,
+                        and denying twice would only mean a No access panel at an address the user
+                        never typed. */}
                     <Route path="/security" element={<Navigate to="/security/users" replace />} />
-                    <Route path="/security/users" element={<UsersPage />} />
-                    <Route path="/security/roles" element={<RolesPage />} />
-                    <Route path="/security/role-permissions" element={<RolePermissionsPage />} />
+                    <Route
+                      path="/security/users"
+                      element={guard('/security/users', <UsersPage />)}
+                    />
+                    <Route
+                      path="/security/roles"
+                      element={guard('/security/roles', <RolesPage />)}
+                    />
+                    <Route
+                      path="/security/role-permissions"
+                      element={guard('/security/role-permissions', <RolePermissionsPage />)}
+                    />
 
                     <Route path="/hr" element={<Navigate to="/hr/employees" replace />} />
-                    <Route path="/hr/employees" element={<EmployeesPage />} />
-                    <Route path="/hr/org-chart" element={<OrgChartPage />} />
-                    <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
-                    <Route path="/hr/employee-accounts" element={<EmployeeAccountsPage />} />
-                    <Route path="/hr/branches" element={<BranchesPage />} />
-                    <Route path="/hr/departments" element={<DepartmentsPage />} />
-                    <Route path="/hr/positions" element={<PositionsPage />} />
-                    <Route path="/hr/component-types" element={<ComponentTypesPage />} />
-                    <Route path="/hr/leave-types" element={<LeaveTypesPage />} />
-                    <Route path="/hr/leave-policy" element={<LeavePolicyPage />} />
+                    <Route
+                      path="/hr/employees"
+                      element={guard('/hr/employees', <EmployeesPage />)}
+                    />
+                    <Route
+                      path="/hr/org-chart"
+                      element={guard('/hr/org-chart', <OrgChartPage />)}
+                    />
+                    <Route
+                      path="/hr/employees/:id"
+                      element={guard('/hr/employees/:id', <EmployeeProfilePage />)}
+                    />
+                    <Route
+                      path="/hr/employee-accounts"
+                      element={guard('/hr/employee-accounts', <EmployeeAccountsPage />)}
+                    />
+                    <Route
+                      path="/hr/branches"
+                      element={guard('/hr/branches', <BranchesPage />)}
+                    />
+                    <Route
+                      path="/hr/departments"
+                      element={guard('/hr/departments', <DepartmentsPage />)}
+                    />
+                    <Route
+                      path="/hr/positions"
+                      element={guard('/hr/positions', <PositionsPage />)}
+                    />
+                    <Route
+                      path="/hr/component-types"
+                      element={guard('/hr/component-types', <ComponentTypesPage />)}
+                    />
+                    <Route
+                      path="/hr/leave-types"
+                      element={guard('/hr/leave-types', <LeaveTypesPage />)}
+                    />
+                    <Route
+                      path="/hr/leave-policy"
+                      element={guard('/hr/leave-policy', <LeavePolicyPage />)}
+                    />
 
                     <Route path="/core" element={<Navigate to="/core/currencies" replace />} />
-                    <Route path="/core/currencies" element={<CurrenciesPage />} />
-                    <Route path="/core/exchange-rates" element={<ExchangeRatesPage />} />
+                    <Route
+                      path="/core/currencies"
+                      element={guard('/core/currencies', <CurrenciesPage />)}
+                    />
+                    <Route
+                      path="/core/exchange-rates"
+                      element={guard('/core/exchange-rates', <ExchangeRatesPage />)}
+                    />
 
-                    <Route path="/attendance" element={<AttendanceHomePage />} />
-                    <Route path="/attendance/daily" element={<DailyAttendancePage />} />
-                    <Route path="/attendance/roster" element={<RosterPage />} />
-                    <Route path="/attendance/import" element={<ImportPage />} />
-                    <Route path="/attendance/unresolved" element={<UnresolvedPinsPage />} />
-                    <Route path="/attendance/anomalies" element={<AnomaliesPage />} />
-                    <Route path="/attendance/exit-variances" element={<ExitVariancesPage />} />
-                    <Route path="/attendance/corrections" element={<CorrectionsPage />} />
-                    <Route path="/attendance/shifts" element={<ShiftsPage />} />
-                    <Route path="/attendance/devices" element={<DevicesPage />} />
+                    <Route
+                      path="/attendance"
+                      element={guard('/attendance', <AttendanceHomePage />)}
+                    />
+                    <Route
+                      path="/attendance/daily"
+                      element={guard('/attendance/daily', <DailyAttendancePage />)}
+                    />
+                    <Route
+                      path="/attendance/roster"
+                      element={guard('/attendance/roster', <RosterPage />)}
+                    />
+                    <Route
+                      path="/attendance/import"
+                      element={guard('/attendance/import', <ImportPage />)}
+                    />
+                    <Route
+                      path="/attendance/unresolved"
+                      element={guard('/attendance/unresolved', <UnresolvedPinsPage />)}
+                    />
+                    <Route
+                      path="/attendance/anomalies"
+                      element={guard('/attendance/anomalies', <AnomaliesPage />)}
+                    />
+                    <Route
+                      path="/attendance/exit-variances"
+                      element={guard('/attendance/exit-variances', <ExitVariancesPage />)}
+                    />
+                    <Route
+                      path="/attendance/corrections"
+                      element={guard('/attendance/corrections', <CorrectionsPage />)}
+                    />
+                    <Route
+                      path="/attendance/shifts"
+                      element={guard('/attendance/shifts', <ShiftsPage />)}
+                    />
+                    <Route
+                      path="/attendance/devices"
+                      element={guard('/attendance/devices', <DevicesPage />)}
+                    />
 
-                    {/* Payroll — the nav hides this without PAYROLL_RUN; the API 403 is the gate. */}
+                    {/* Payroll — PayrollController gates its whole class on PAYROLL_RUN, so every
+                        one of these needs it, deep links to a run or a payslip included. */}
                     <Route path="/payroll" element={<Navigate to="/payroll/runs" replace />} />
-                    <Route path="/payroll/runs" element={<PayrollRunsPage />} />
-                    <Route path="/payroll/runs/:id" element={<PayrollRunDetailPage />} />
-                    <Route path="/payroll/payslips/:id" element={<PayslipPage />} />
-                    <Route path="/payroll/advances" element={<AdvancesPage />} />
-                    <Route path="/payroll/adjustments" element={<AdjustmentsPage />} />
+                    <Route
+                      path="/payroll/runs"
+                      element={guard('/payroll/runs', <PayrollRunsPage />)}
+                    />
+                    <Route
+                      path="/payroll/runs/:id"
+                      element={guard('/payroll/runs/:id', <PayrollRunDetailPage />)}
+                    />
+                    <Route
+                      path="/payroll/payslips/:id"
+                      element={guard('/payroll/payslips/:id', <PayslipPage />)}
+                    />
+                    <Route
+                      path="/payroll/advances"
+                      element={guard('/payroll/advances', <AdvancesPage />)}
+                    />
+                    <Route
+                      path="/payroll/adjustments"
+                      element={guard('/payroll/adjustments', <AdjustmentsPage />)}
+                    />
+                    <Route
+                      path="/payroll/tiers"
+                      element={guard('/payroll/tiers', <TiersCeilingsPage />)}
+                    />
 
                     <Route
                       path="/reports"
@@ -120,24 +238,46 @@ export default function App() {
                     />
                     <Route
                       path="/reports/monthly-attendance"
-                      element={<MonthlyAttendanceReportPage />}
+                      element={guard('/reports/monthly-attendance', <MonthlyAttendanceReportPage />)}
                     />
                     <Route
                       path="/reports/daily-attendance"
-                      element={<DailyAttendanceReportPage />}
+                      element={guard('/reports/daily-attendance', <DailyAttendanceReportPage />)}
                     />
-                    <Route path="/reports/leave-balance" element={<LeaveBalanceReportPage />} />
+                    <Route
+                      path="/reports/leave-balance"
+                      element={guard('/reports/leave-balance', <LeaveBalanceReportPage />)}
+                    />
 
-                    {/* Workflow — operations (any authenticated user) and setup (gated in the nav). */}
+                    {/* Workflow — operations are open to any authenticated user; setup is guarded
+                        leaf by leaf, because the four setup pages answer to three different codes. */}
                     <Route path="/requests" element={<RequestsHubPage />} />
-                    <Route path="/requests/oversight" element={<WorkflowOversightPage />} />
+                    <Route
+                      path="/requests/oversight"
+                      element={guard('/requests/oversight', <WorkflowOversightPage />)}
+                    />
                     <Route path="/requests/new" element={<NewRequestPage />} />
                     <Route path="/requests/:id" element={<RequestDetailPage />} />
-                    <Route path="/workflow/chains" element={<ChainsPage />} />
-                    <Route path="/workflow/chains/:definitionId" element={<ChainBuilderPage />} />
-                    <Route path="/workflow/old-versions" element={<OldVersionsPage />} />
-                    <Route path="/workflow/branch-managers" element={<BranchManagersPage />} />
-                    <Route path="/workflow/signatures" element={<WorkflowSignaturesPage />} />
+                    <Route
+                      path="/workflow/chains"
+                      element={guard('/workflow/chains', <ChainsPage />)}
+                    />
+                    <Route
+                      path="/workflow/chains/:definitionId"
+                      element={guard('/workflow/chains/:definitionId', <ChainBuilderPage />)}
+                    />
+                    <Route
+                      path="/workflow/old-versions"
+                      element={guard('/workflow/old-versions', <OldVersionsPage />)}
+                    />
+                    <Route
+                      path="/workflow/branch-managers"
+                      element={guard('/workflow/branch-managers', <BranchManagersPage />)}
+                    />
+                    <Route
+                      path="/workflow/signatures"
+                      element={guard('/workflow/signatures', <WorkflowSignaturesPage />)}
+                    />
 
                     <Route path="/profile" element={<MyProfilePage />} />
                     <Route path="/settings" element={<SettingsPage />} />

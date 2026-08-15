@@ -9,6 +9,53 @@
    its own sizes in both apps.
    ──────────────────────────────────────────────────────────────────────────────────────────── */
 
+/* ── The DX widget FACE ────────────────────────────────────────────────────────────────────────
+   Setting theme.fontFamily is NOT enough, and this is the whole reason why.
+
+   Mantine's reset applies the theme font at the document root and nowhere else:
+
+       body, :host { font-family: var(--mantine-font-family) }   @mantine/core/styles.css
+
+   index.css then re-declares `body` (and `:root`) as Poppins. Same specificity, later in the
+   cascade, so index.css wins and `body` is Poppins — which is CORRECT and must stay: the page
+   chrome inherits from there, and index.css is the original app's file. But only three rules in
+   the whole of Mantine set a font-family of their own (Input, and two Typography selectors), so
+   every other component — Button, Table, Modal, Badge, Switch, Pagination, the dropdowns — has
+   none and inherits Poppins straight through the theme.
+
+   The original app did not have this problem because DevExtreme's stylesheet put the DX stack on
+   its own widgets while body stayed Poppins. That is exactly what these rules restore. They are
+   the class-level half of the split the theme describes, not a second opinion about the font:
+   every one reads var(--mantine-font-family), so theme.ts remains the only place the face is
+   named. Class selectors outrank `body`, so load order against index.css does not matter.
+
+   Containers first — a dropdown, modal or notification passes the face to everything inside it,
+   including components not listed here and any added later. Code and Kbd are deliberately absent:
+   they carry Mantine's monospace and must keep it.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+.mantine-Modal-content,
+.mantine-Drawer-content,
+.mantine-Popover-dropdown,
+.mantine-Menu-dropdown,
+.mantine-Tooltip-tooltip,
+.mantine-Notification-root,
+.mantine-Table-table,
+.mantine-Button-root,
+.mantine-ActionIcon-root,
+.mantine-Badge-root,
+.mantine-SegmentedControl-root,
+.mantine-Pagination-root,
+.mantine-Tabs-tab,
+.mantine-Checkbox-label,
+.mantine-Radio-label,
+.mantine-Switch-label,
+.mantine-InputWrapper-label,
+.mantine-InputWrapper-error,
+.mantine-InputWrapper-description,
+.mantine-Loader-root {
+  font-family: var(--mantine-font-family);
+}
+
 /* ---- Editors: DX texteditor = 12px text, ~34px tall ---- */
 .mantine-Input-input {
   font-size: 12px;

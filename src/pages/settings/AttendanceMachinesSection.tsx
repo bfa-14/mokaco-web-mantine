@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Loader, NumberInput, Switch, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
+import { SettingRow, SettingRows, SettingsCard } from './SettingsCard'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
 import { devicesService } from '../../services/attendanceService'
@@ -446,8 +447,7 @@ export function AttendanceMachinesSection({
   // rendering an empty card that looks like a broken page.
   if (!enabledSetting && !minutesSetting && !autoProcessSetting) {
     return (
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-title">Attendance machines</div>
+      <SettingsCard title="Attendance machines">
         <div className="empty-hint">
           <div className="empty-hint-main">
             Machine pulling is not configured on the server.
@@ -455,7 +455,7 @@ export function AttendanceMachinesSection({
           The MachinePull settings are missing from core.SETTING. Run
           <code> 10_device_pull.sql</code>, then press Refresh.
         </div>
-      </div>
+      </SettingsCard>
     )
   }
 
@@ -484,86 +484,92 @@ export function AttendanceMachinesSection({
   const failing = configured.filter((d) => d.lastPullError)
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <div className="card-title">Attendance machines</div>
-      <p className="hint">
-        Instead of waiting for a terminal to send its punches, the server can call the machine
-        and read its log. This is the only way to collect from firmware that has no cloud-server
-        menu — and it is safe to run alongside pushing, because a punch that arrives both ways is
-        recognised as one punch.
-      </p>
-
-      {/* -- the schedule -- */}
-      {enabledSetting && (
-        <div className="form-field" style={{ marginTop: 16 }}>
-          <Switch
-            checked={pullEnabled}
-            disabled={savingKey === enabledSetting.settingKey}
+    <SettingsCard
+      title="Attendance machines"
+      description="Instead of waiting for a terminal to send its punches, the server can call the machine and read its log. This is the only way to collect from firmware that has no cloud-server menu — and it is safe to run alongside pushing, because a punch that arrives both ways is recognised as one punch."
+    >
+      {/* -- the schedule --
+          The three pull keys as three rows of one control block, rather than three stacked
+          form-fields each as tall as a card. They are one schedule and they read as one now. */}
+      <SettingRows>
+        {enabledSetting && (
+          <SettingRow
             label="Pull punches from machines automatically"
-            onChange={(event) => {
-              const checked = event.currentTarget.checked
-              void save(enabledSetting, checked ? 'true' : 'false')
-            }}
+            hint={
+              pullEnabled
+                ? 'On — every machine below with pulling switched on is called on the interval.'
+                : 'Off — no machine is called on a timer. Pull now still works by hand.'
+            }
+            control={
+              <Switch
+                checked={pullEnabled}
+                disabled={savingKey === enabledSetting.settingKey}
+                aria-label="Pull punches from machines automatically"
+                onChange={(event) => {
+                  const checked = event.currentTarget.checked
+                  void save(enabledSetting, checked ? 'true' : 'false')
+                }}
+              />
+            }
           />
-          <p className="hint" style={{ marginTop: 6 }}>
-            {pullEnabled
-              ? 'On — every machine below with pulling switched on is called on the interval.'
-              : 'Off — no machine is called on a timer. Pull now still works by hand.'}
-          </p>
-        </div>
-      )}
+        )}
 
-      {minutesSetting && (
-        <div className="form-field">
-          <label className="form-label" htmlFor="machine-pull-minutes">
-            Every N minutes
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <NumberInput
-              id="machine-pull-minutes"
-              value={minutes}
-              // Mantine hands back '' for a cleared box and a string while typing — never let
-              // either reach the request as NaN; an empty box means "back to the minimum".
-              onChange={(value) =>
-                setMinutesDraft(typeof value === 'number' ? value : Number(value) || MINUTES_MIN)
-              }
-              min={MINUTES_MIN}
-              max={MINUTES_MAX}
-              step={1}
-              allowDecimal={false}
-              w={140}
-              disabled={!pullEnabled || savingKey === minutesSetting.settingKey}
-            />
-            <Button
-              disabled={
-                !pullEnabled || savingKey === minutesSetting.settingKey || !minutesDirty
-              }
-              onClick={() => void save(minutesSetting, String(minutes))}
-            >
-              {savingKey === minutesSetting.settingKey ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-          <p className="hint" style={{ marginTop: 6 }}>
-            How often each machine is called, between {MINUTES_MIN} and {MINUTES_MAX} minutes.
-            A pull re-reads the machine's whole buffer, so a short interval costs network traffic
-            rather than duplicate punches.
-          </p>
-        </div>
-      )}
+        {minutesSetting && (
+          <SettingRow
+            htmlFor="machine-pull-minutes"
+            label="Every N minutes"
+            hint={`How often each machine is called, between ${MINUTES_MIN} and ${MINUTES_MAX} minutes. A pull re-reads the machine's whole buffer, so a short interval costs network traffic rather than duplicate punches.`}
+            control={
+              <>
+                <NumberInput
+                  id="machine-pull-minutes"
+                  value={minutes}
+                  // Mantine hands back '' for a cleared box and a string while typing — never let
+                  // either reach the request as NaN; an empty box means "back to the minimum".
+                  onChange={(value) =>
+                    setMinutesDraft(
+                      typeof value === 'number' ? value : Number(value) || MINUTES_MIN,
+                    )
+                  }
+                  min={MINUTES_MIN}
+                  max={MINUTES_MAX}
+                  step={1}
+                  allowDecimal={false}
+                  w={140}
+                  disabled={!pullEnabled || savingKey === minutesSetting.settingKey}
+                />
+                <Button
+                  disabled={
+                    !pullEnabled || savingKey === minutesSetting.settingKey || !minutesDirty
+                  }
+                  onClick={() => void save(minutesSetting, String(minutes))}
+                >
+                  {savingKey === minutesSetting.settingKey ? 'Saving…' : 'Save'}
+                </Button>
+              </>
+            }
+          />
+        )}
 
-      {autoProcessSetting && (
-        <div className="form-field">
-          {/* Disabled rather than removed: the setting exists in the database and somebody
-              looking for it deserves to find it, together with the reason it does nothing. */}
-          <Switch checked={false} disabled label="Process into attendance immediately" />
-          <p className="hint" style={{ marginTop: 6 }}>{AUTO_PROCESS_UNAVAILABLE}</p>
-        </div>
-      )}
+        {autoProcessSetting && (
+          <SettingRow
+            label="Process into attendance immediately"
+            hint={AUTO_PROCESS_UNAVAILABLE}
+            control={
+              /* Disabled rather than removed: the setting exists in the database and somebody
+                 looking for it deserves to find it, together with the reason it does nothing. */
+              <Switch
+                checked={false}
+                disabled
+                aria-label="Process into attendance immediately"
+              />
+            }
+          />
+        )}
+      </SettingRows>
 
       {/* -- the worklist -- */}
-      <h3 className="form-section-title" style={{ marginTop: 24 }}>
-        Machines
-      </h3>
+      <h3 className="set-subhead">Machines</h3>
       <p className="hint" style={{ marginBottom: 12 }}>
         Changes apply on the next pull cycle automatically — press Pull now to apply immediately.
         A machine that moves networks needs only its address changed here.{' '}
@@ -612,6 +618,6 @@ export function AttendanceMachinesSection({
           </div>
         </>
       )}
-    </div>
+    </SettingsCard>
   )
 }

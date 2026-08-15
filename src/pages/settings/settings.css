@@ -1,0 +1,244 @@
+/* ── Settings page: tabs, cards, rows ─────────────────────────────────────────────────────────
+   ONE anatomy for the whole page, replacing the flat scroll of cards that each batch of work
+   left behind in its own shape. Three primitives and nothing else:
+
+     tab    → a stack of cards
+     card   → title (14px semibold), optional one-line description, body
+     row    → label + muted hint, control aligned to the END, thin rule between rows
+
+   Imported from SettingsPage.tsx — i.e. from the routed tree — so it lands after index.css and
+   wins specificity ties without !important, exactly as workflow.css does.
+
+   RTL. LOGICAL PROPERTIES ONLY — padding-block, border-block-start, margin-inline-start. There is
+   no left or right anywhere in this file, so the whole page mirrors in Arabic by construction.
+   ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+.set-tabs {
+  margin-block-start: 4px;
+}
+
+/* The tab strip sits on DX's density (12.5px) from dx-parity.css; only the wrap guard is added
+   here, so a narrow window stacks the five tabs rather than clipping the last of them. */
+.set-tabs .mantine-Tabs-list {
+  flex-wrap: wrap;
+}
+
+/* THE DANGER TAB IS RED IN THE STRIP ITSELF. The panel behind it already announces itself, but by
+   then the tab has been clicked — the warning belongs on the thing you press, not behind it. */
+.mantine-Tabs-tab.set-tab-danger {
+  color: #b91c1c;
+}
+.mantine-Tabs-tab.set-tab-danger:hover {
+  background: #fdf5f5;
+}
+.mantine-Tabs-tab.set-tab-danger[data-active] {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+/* ---- Panel + card stack ----
+   ONE gap between cards, owned here. This is what kills the leftover per-section margins: no
+   section sets its own marginTop any more, so two cards from two different batches of work sit
+   exactly as far apart as any other two. */
+.set-panel {
+  padding-block-start: 20px;
+}
+
+.set-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.set-card {
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(46, 46, 42, 0.05);
+  /* A card in a grid parent defaults to min-width:auto — its content — so one wide row would make
+     the page scroll sideways. Zero lets the card shrink and the row wrap inside it. */
+  min-width: 0;
+}
+
+.set-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.set-card-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Trailing chrome in a card head (a count, a link) rides to the far edge. */
+.set-card-head > *:last-child:not(.set-card-title) {
+  margin-inline-start: auto;
+}
+
+.set-card-desc {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 84ch;
+}
+
+.set-card-body {
+  margin-block-start: 12px;
+}
+
+/* A closing note that belongs to the card rather than to any one row — the punch-direction
+   footnote and its link to the Daily page. */
+.set-card-foot {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 84ch;
+}
+
+/* ---- The row ----
+   THE VISIBILITY WIN. Every setting on the page renders exactly like this, whatever it writes to
+   and whichever batch of work added it: what it is on the reading edge, what it is set to on the
+   trailing edge, one hairline between.
+
+   `margin-inline-start: auto` on the control is what puts it at the END — the logical end, so in
+   Arabic the control sits on the left and the label on the right with no rule of its own. */
+.set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 20px;
+  padding-block: 12px;
+  border-block-start: 1px solid var(--border);
+}
+
+/* The first row butts against the card's own head, which already provides the separation. */
+.set-rows > .set-row:first-child {
+  border-block-start: none;
+  padding-block-start: 4px;
+}
+
+.set-row-main {
+  /* Takes the slack, so the control sits against the far edge however short the label is. */
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.set-row-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #4a463f;
+}
+
+.set-row-hint {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  max-width: 78ch;
+}
+
+/* A hint that is a CONSEQUENCE rather than a description — "working 7h 12m is enough to count as
+   a full day". Accent-coloured because it changes as you type and should be seen to. */
+.set-row-note {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--accent-strong);
+  max-width: 78ch;
+}
+
+/* The provenance line: the database key, and when it last changed. Smallest thing on the row. */
+.set-row-meta {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.set-row-control {
+  margin-inline-start: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+  flex: 0 1 auto;
+}
+
+/* An error raised by one row's own save belongs to that row and takes the full width, so it
+   pushes nothing sideways. */
+.set-row-error {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  /* On a phone the control drops under its label rather than squeezing it to nothing. The auto
+     margin still holds it at the logical end of its own line. */
+  .set-row-control {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---- A named group of rows inside a card ----
+   Used once: Punch direction, which is two settings that are one decision and carries its own
+   title and explanation in the translation files. A card-within-a-card would have re-introduced
+   exactly the nesting this pass removes, so it is a labelled band of rows instead. */
+.set-group {
+  margin-block-start: 4px;
+  padding-block-start: 14px;
+  border-block-start: 1px solid var(--border);
+}
+
+.set-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+.set-group-hint {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+  max-width: 84ch;
+}
+
+.set-group .set-rows {
+  margin-block-start: 4px;
+}
+
+/* A group that opens the card has the card's own head above it, so its rule would be a second
+   line under a line. Happens when the settings list is empty but the punch keys are deployed. */
+.set-card-body > .set-group:first-child {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: none;
+}
+
+/* ---- Guests of the card ----
+   The machine list and the Danger zone keep their own styling; only the spacing that used to come
+   from a page-level margin is re-homed here. */
+.set-subhead {
+  margin: 20px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+
+/* The Danger zone's 40px top margin separated it from the settings above it on the old flat page.
+   It is a tab of its own now, so the distance has nothing left to separate it from. */
+.set-panel .danger-zone {
+  margin-block-start: 0;
+}

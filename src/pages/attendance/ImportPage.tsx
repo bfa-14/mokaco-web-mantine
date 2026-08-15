@@ -146,7 +146,6 @@ const deviceColumnHelper = createColumnHelper<Device>()
 /** The pixel widths the original grid pinned; unlisted columns auto-size, as columnAutoWidth did. */
 const DEVICE_WIDTHS: Record<string, number | undefined> = {
   lastSyncUtc: 150,
-  lastPushUtc: 150,
   punchesToday: 140,
 }
 
@@ -190,22 +189,12 @@ function DevicesGrid({ devices }: { devices: Device[] }) {
           )
         },
       }),
-      deviceColumnHelper.accessor('lastPushUtc', {
-        header: () => (
-          <span title="The last time punches actually arrived. A device seen seconds ago whose last punch was yesterday is online and reading nobody — a different fault from one that is unplugged.">
-            Last punch
-          </span>
-        ),
-        meta: { filterText: seenText },
-        cell: (info) => {
-          const device = info.row.original
-          return device.lastPushUtc ? (
-            <span>{relativeTime(device.lastPushUtc)}</span>
-          ) : (
-            <span className="badge badge--muted">Never</span>
-          )
-        },
-      }),
+      /* NO "Last punch" COLUMN HERE. It was bound to lastPushUtc — the PUSH heartbeat, which only
+         moves when a terminal delivers punches to us itself. This deployment pulls, so that field
+         is null on every machine forever and the column read "Never" down its whole length: not a
+         health signal, an alarm that is always on and therefore ignored. "Punches today" beside it
+         answers the same question from data that actually arrives. The genuine per-machine last
+         punch (lastPunchUtc) is on Attendance → Devices, which is where a fault is diagnosed. */
       deviceColumnHelper.accessor('punchesToday', {
         header: 'Punches today',
         meta: { filterText: (v) => (v === 0 ? 'None yet' : String(v)) },

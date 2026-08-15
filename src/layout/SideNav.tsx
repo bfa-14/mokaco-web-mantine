@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
+import { canOpen } from '../auth/routeAccess'
 import { dxIcon } from '../components/dxIcons'
 
 /** The group expander, resolved through the same map as everything else. */
@@ -23,13 +24,20 @@ function NavIcon({ name }: { name: string }) {
   return <Cmp size={18} stroke={1.75} className="side-nav-icon" aria-hidden="true" />
 }
 
+/**
+ * A leaf carries NO permission of its own any more.
+ *
+ * Whether it is visible is decided by `canOpen(leaf.to)` against src/auth/routeAccess.ts — the same
+ * table the route guards read. That is the whole point of this refactor: a link used to be hidden by
+ * one list and the page behind it guarded by another (or, until now, by nothing at all), so the two
+ * could drift and did. There is now exactly one place a requirement is written down, and a link is
+ * visible precisely when the page behind it will open.
+ */
 interface NavLeaf {
   to: string
   labelKey: string
   icon: string
   end?: boolean
-  /** If set, this leaf is hidden unless the user holds this permission — leaf-level gating within an otherwise-visible group. */
-  requirePermission?: string
 }
 
 interface NavGroup {
@@ -37,11 +45,6 @@ interface NavGroup {
   icon: string
   basePath: string
   children: NavLeaf[]
-  /**
-   * If set, the whole group is hidden unless the user holds AT LEAST ONE of these permissions.
-   * A setup section nobody can use is noise, so it does not render at all rather than greying out.
-   */
-  requireAnyPermission?: string[]
 }
 
 const DASHBOARD: NavLeaf = { to: '/', labelKey: 'nav.dashboard', icon: 'home', end: true }
@@ -59,19 +62,18 @@ const GROUPS: NavGroup[] = [
     children: [
       { to: '/requests', labelKey: 'nav.requests.hub', icon: 'home', end: true },
       { to: '/requests/new', labelKey: 'nav.requests.new', icon: 'plus' },
-      {
-        to: '/requests/oversight',
-        labelKey: 'nav.requests.oversight',
-        icon: 'clock',
-        requirePermission: 'REQUEST_VIEW_ALL',
-      },
+      { to: '/requests/oversight', labelKey: 'nav.requests.oversight', icon: 'clock' },
     ],
   },
   {
+    /* No group-level requirement any more. The four leaves below answer to THREE different codes
+       (chains and branch managers to WORKFLOW_CONFIGURE, old versions to WORKFLOW_VERSION_MOVE,
+       signatures to USER_MANAGE), so a single gate over all of them was always going to show
+       somebody a link they could not use. Each leaf now gates itself and the group disappears when
+       none survive. */
     labelKey: 'nav.workflowSetup.group',
     icon: 'preferences',
     basePath: '/workflow',
-    requireAnyPermission: ['WORKFLOW_CONFIGURE', 'WORKFLOW_VERSION_MOVE'],
     children: [
       { to: '/workflow/chains', labelKey: 'nav.workflowSetup.chains', icon: 'orderedlist' },
       { to: '/workflow/old-versions', labelKey: 'nav.workflowSetup.oldVersions', icon: 'clock' },
@@ -97,16 +99,17 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
-    // PAYROLL_RUN is held by Owner, GM, OperationsManager, HR and Admin. Hiding the group is a
-    // courtesy; the 403 is the gate.
+    // Every leaf here is PAYROLL_RUN, because PayrollController gates the whole class on it. The
+    // group therefore vanishes as a whole for anyone without it — same outcome as the old
+    // group-level flag, now derived from the endpoints rather than restated here.
     labelKey: 'nav.payroll.group',
     icon: 'money',
     basePath: '/payroll',
-    requireAnyPermission: ['PAYROLL_RUN'],
     children: [
       { to: '/payroll/runs', labelKey: 'nav.payroll.runs', icon: 'event' },
       { to: '/payroll/advances', labelKey: 'nav.payroll.advances', icon: 'card' },
       { to: '/payroll/adjustments', labelKey: 'nav.payroll.adjustments', icon: 'edit' },
+      { to: '/payroll/tiers', labelKey: 'nav.payroll.tiers', icon: 'money' },
     ],
   },
   {
@@ -116,12 +119,7 @@ const GROUPS: NavGroup[] = [
     children: [
       { to: '/hr/employees', labelKey: 'nav.hr.employees', icon: 'user' },
       { to: '/hr/org-chart', labelKey: 'nav.hr.orgChart', icon: 'hierarchy' },
-      {
-        to: '/hr/employee-accounts',
-        labelKey: 'nav.hr.employeeAccounts',
-        icon: 'key',
-        requirePermission: 'USER_MANAGE',
-      },
+      { to: '/hr/employee-accounts', labelKey: 'nav.hr.employeeAccounts', icon: 'key' },
       { to: '/hr/branches', labelKey: 'nav.hr.branches', icon: 'home' },
       { to: '/hr/departments', labelKey: 'nav.hr.departments', icon: 'hierarchy' },
       { to: '/hr/positions', labelKey: 'nav.hr.positions', icon: 'taskhelpneeded' },
@@ -246,20 +244,19 @@ export function SideNav({
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
 
-  // A group with a permission requirement is shown only if the user holds one of them; leaves can
-  // gate themselves too. A group that empties out entirely disappears. (Unchanged.)
-  const visibleGroups = GROUPS.filter(
-    (group) =>
-      !group.requireAnyPermission ||
-      group.requireAnyPermission.some((code) => hasPermission(code)),
-  )
-    .map((group) => ({
-      ...group,
-      children: group.children.filter(
-        (leaf) => !leaf.requirePermission || hasPermission(leaf.requirePermission),
-      ),
-    }))
-    .filter((group) => group.children.length > 0)
+  /**
+   * Every leaf is filtered through the SAME predicate the route guard uses, then a group that has
+   * emptied out disappears — the existing behaviour, now applied over the full map rather than the
+   * three leaves that happened to be gated by hand.
+   *
+   * There is no group-level check left. A group is exactly the sum of the leaves this user can
+   * open, which is the only definition that cannot disagree with the routes: the old version could
+   * pass a group gate and then show four links to a user who could open one of them.
+   */
+  const visibleGroups = GROUPS.map((group) => ({
+    ...group,
+    children: group.children.filter((leaf) => canOpen(leaf.to, hasPermission)),
+  })).filter((group) => group.children.length > 0)
 
   return (
     <nav className={className}>
