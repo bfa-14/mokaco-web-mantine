@@ -60,6 +60,8 @@ import type {
   RaisableRequestType,
   ReopenResult,
   RequestCounts,
+  RosterApprovalCreated,
+  RosterApprovalCreateRequest,
   SeparationContext,
   SeparationCreated,
   SeparationCreateRequest,
@@ -737,6 +739,26 @@ export const shiftSwapsService = {
 
   payload: (requestId: number) =>
     apiRequest<ShiftSwapPayload>(`/api/shift-swaps/${requestId}/payload`),
+}
+
+/**
+ * Roster approvals — a branch's whole month of roster, put up for signature in one request.
+ *
+ * CREATE ONLY, and deliberately so: this type has NO typed decision. Approving it changes no
+ * figure and rewrites no row — it records that the month was signed off — so it goes through the
+ * GENERIC approve endpoint like any request whose approval is just an approval. Adding a `decide`
+ * here would be inventing a second path to the same effect and a typed 409 to go with it.
+ *
+ * The refusals worth reading are on create and all say the same kind of thing: this branch-month
+ * is already approved, or already sitting pending on somebody's desk. They arrive as a 400 with
+ * the server's own sentence, which is shown verbatim wherever the create is called from.
+ */
+export const rosterApprovalsService = {
+  create: (body: RosterApprovalCreateRequest) =>
+    apiRequest<RosterApprovalCreated>('/api/workflow/roster-approvals', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
 
 /** Overtime — hours beyond the scheduled shift, approved in advance and paid at a multiplier. */

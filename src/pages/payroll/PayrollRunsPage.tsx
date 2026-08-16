@@ -8,6 +8,8 @@ import { MonthPickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconClock, IconPlus, IconRefresh } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { monthFromPicker, monthToPicker } from '../../components/date/pickerValue'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { PageHelp } from '../../components/PageHelp'
@@ -61,6 +63,11 @@ const PAGE_SIZES = ['12', '24', '48']
  */
 export default function PayrollRunsPage() {
   const navigate = useNavigate()
+  /* PAYROLL_VIEW OPENS THIS PAGE; CREATING A RUN IS PAYROLL_RUN. The two used to be one code, so
+     anybody who needed to read a month's figures was also trusted to start payroll for it. The list
+     below stays fully readable without the write trust — only the acts disappear. */
+  const { hasPermission } = useAuth()
+  const canRun = hasPermission(PERMISSION.PAYROLL_RUN)
   const [runs, setRuns] = useState<PayrollRunListItem[]>(EMPTY_RUNS)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -307,17 +314,22 @@ export default function PayrollRunsPage() {
             <IconRefresh size={16} />
           </ActionIcon>
           {/* A period-close chore rather than a run: nothing schedules it, and skipping it leaves
-              converted exit time never deducted from anybody's leave balance. */}
-          <Button
-            variant="default"
-            leftSection={<IconClock size={16} />}
-            onClick={() => setCloseOpen((v) => !v)}
-          >
-            Post exit-permission leave
-          </Button>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setCreating((v) => !v)}>
-            New payroll run
-          </Button>
+              converted exit time never deducted from anybody's leave balance. It writes the leave
+              ledger for a payroll period, so it belongs to whoever runs payroll. */}
+          {canRun && (
+            <Button
+              variant="default"
+              leftSection={<IconClock size={16} />}
+              onClick={() => setCloseOpen((v) => !v)}
+            >
+              Post exit-permission leave
+            </Button>
+          )}
+          {canRun && (
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setCreating((v) => !v)}>
+              New payroll run
+            </Button>
+          )}
         </div>
       </div>
 

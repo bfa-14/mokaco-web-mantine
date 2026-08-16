@@ -23,6 +23,7 @@ import PositionsPage from './pages/hr/PositionsPage'
 import ComponentTypesPage from './pages/hr/ComponentTypesPage'
 import LeaveTypesPage from './pages/hr/LeaveTypesPage'
 import LeavePolicyPage from './pages/hr/LeavePolicyPage'
+import TiersPage from './pages/hr/TiersPage'
 import CurrenciesPage from './pages/core/CurrenciesPage'
 import ExchangeRatesPage from './pages/core/ExchangeRatesPage'
 import AttendanceHomePage from './pages/attendance/AttendanceHomePage'
@@ -152,6 +153,7 @@ export default function App() {
                       path="/hr/leave-policy"
                       element={guard('/hr/leave-policy', <LeavePolicyPage />)}
                     />
+                    <Route path="/hr/tiers" element={guard('/hr/tiers', <TiersPage />)} />
 
                     <Route path="/core" element={<Navigate to="/core/currencies" replace />} />
                     <Route

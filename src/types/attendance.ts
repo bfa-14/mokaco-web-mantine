@@ -319,6 +319,26 @@ export interface RosterGap {
   workDate: string
 }
 
+/**
+ * WHERE ONE BRANCH-MONTH OF ROSTER HAS GOT TO — GET /api/attendance/roster-month.
+ *
+ * Three states and no others: `Draft` (nobody has put it up yet), `Pending` (a ROSTER_APPROVAL
+ * request is open on it) and `Approved` (it has been signed off). Typed as a plain string rather
+ * than a union on purpose — an unrecognised state from a newer server must render as itself, the
+ * way {@link StatusBadge} treats an unknown attendance status, not crash the page it appears on.
+ */
+export interface RosterMonthStatus {
+  branchId: number
+  /** The month asked for, echoed back as its first day: 'yyyy-MM-01'. */
+  monthDate: string
+  /** Draft · Pending · Approved. */
+  status: string
+  /** The request carrying it. Null while Draft — there is nothing to link to yet. */
+  requestInstanceId: number | null
+  /** When it was signed off. Null unless Approved. */
+  approvedAt?: string | null
+}
+
 /** attendance.EMPLOYEE_SHIFT_PATTERN — an employee's default week (a template, no dates). */
 export interface ShiftPattern {
   patternId: number

@@ -39,6 +39,7 @@ import type {
   RosterGenerateBulkRequest,
   RosterGenerateRequest,
   RosterGenerateResult,
+  RosterMonthStatus,
   Setting,
   SettingUpsertRequest,
   Shift,
@@ -204,6 +205,17 @@ export const rosterService = {
       method: 'POST',
       body: JSON.stringify(request),
     }),
+
+  /**
+   * WHERE ONE BRANCH-MONTH HAS GOT TO — Draft, Pending or Approved.
+   *
+   * `month` is the month's FIRST DAY ('yyyy-MM-01'), the same string the ROSTER_APPROVAL create
+   * takes, so the banner and the request are talking about the identical thing.
+   */
+  monthStatus: (branchId: number, month: string) =>
+    apiRequest<RosterMonthStatus>(
+      `/api/attendance/roster-month?branchId=${branchId}&month=${encodeURIComponent(month)}`,
+    ),
 
   /** Employee-days with NO roster row. These block payroll. */
   getGaps: (from: string, to: string) =>

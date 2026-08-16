@@ -12,6 +12,8 @@ import { notifications } from '@mantine/notifications'
 import { IconCheck, IconPencil, IconPlus, IconTrash, IconX } from '@tabler/icons-react'
 import { PageHelp } from '../../components/PageHelp'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { leavePolicyService, leaveTypesService } from '../../services/hrService'
 import type { LeavePolicy, LeaveType } from '../../types/hr'
 
@@ -98,6 +100,11 @@ function TypeTags({ type }: { type: LeaveType }) {
  * it in and invent a rule the request procedures never consult.
  */
 export default function LeavePolicyPage() {
+  /* LEAVE_POLICY_MANAGE, or the whole page is a reader. Every field, every grid row action and both
+     buttons come off it — this page IS an editor, so without the trust it becomes the statement of
+     what the policy currently is, which is still worth reading. */
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(PERMISSION.LEAVE_POLICY_MANAGE)
   const [policy, setPolicy] = useState<LeavePolicy | null>(null)
   /** Which type the panel is on. NULL means the "+ New leave type" draft, which is in no list yet. */
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -110,6 +117,8 @@ export default function LeavePolicyPage() {
   const [draft, setDraft] = useState<TypeForm | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  /** Every input and action on the page reads this: mid-save, or never allowed in the first place. */
+  const locked = saving || !canManage
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async (selectId?: number) => {
@@ -228,18 +237,20 @@ export default function LeavePolicyPage() {
           <p className="page-subtitle">What each kind of leave entitles, and to whom.</p>
         </div>
         <div className="page-head-actions">
-          <Button
-            variant="default"
-            disabled={saving}
-            onClick={() => {
-              // A new type belongs to no list row, so the selection moves to null and the draft
-              // carries the blank form — the same tag rule, with null as the tag.
-              setSelectedId(null)
-              setDraft({ ...BLANK })
-            }}
-          >
-            + New leave type
-          </Button>
+          {canManage && (
+            <Button
+              variant="default"
+              disabled={locked}
+              onClick={() => {
+                // A new type belongs to no list row, so the selection moves to null and the draft
+                // carries the blank form — the same tag rule, with null as the tag.
+                setSelectedId(null)
+                setDraft({ ...BLANK })
+              }}
+            >
+              + New leave type
+            </Button>
+          )}
         </div>
       </div>
 
@@ -271,7 +282,7 @@ export default function LeavePolicyPage() {
                 type="button"
                 className={active ? 'wf-policy-row wf-policy-row--active' : 'wf-policy-row'}
                 aria-pressed={active}
-                disabled={saving}
+                disabled={locked}
                 onClick={() => {
                   // Drop any unsaved draft when another type is chosen — the panel then derives
                   // itself from the stored row.
@@ -302,7 +313,7 @@ export default function LeavePolicyPage() {
                 <TextInput
                   id="lp-name"
                   value={form.name}
-                  disabled={saving}
+                  disabled={locked}
                   onChange={(e) => patch({ name: e.currentTarget.value })}
                 />
               </div>
@@ -311,25 +322,25 @@ export default function LeavePolicyPage() {
                 <Checkbox
                   label="Paid"
                   checked={form.isPaid}
-                  disabled={saving}
+                  disabled={locked}
                   onChange={(e) => patch({ isPaid: e.currentTarget.checked })}
                 />
                 <Checkbox
                   label="Carries over"
                   checked={form.carryOver}
-                  disabled={saving}
+                  disabled={locked}
                   onChange={(e) => patch({ carryOver: e.currentTarget.checked })}
                 />
                 <Checkbox
                   label="Requires certificate"
                   checked={form.requiresCertificate}
-                  disabled={saving}
+                  disabled={locked}
                   onChange={(e) => patch({ requiresCertificate: e.currentTarget.checked })}
                 />
                 <Checkbox
                   label="Discretionary"
                   checked={form.isDiscretionary}
-                  disabled={saving}
+                  disabled={locked}
                   onChange={(e) => patch({ isDiscretionary: e.currentTarget.checked })}
                 />
               </div>
@@ -345,7 +356,7 @@ export default function LeavePolicyPage() {
                   <NumberInput
                     value={form.minServiceMonthsToUse}
                     min={0}
-                    disabled={saving}
+                    disabled={locked}
                     onChange={(v) =>
                       patch({ minServiceMonthsToUse: typeof v === 'number' ? v : 0 })
                     }
@@ -357,7 +368,7 @@ export default function LeavePolicyPage() {
                   <NumberInput
                     value={form.noticePreferredDays}
                     min={0}
-                    disabled={saving}
+                    disabled={locked}
                     onChange={(v) =>
                       patch({ noticePreferredDays: typeof v === 'number' ? v : 0 })
                     }
@@ -375,7 +386,7 @@ export default function LeavePolicyPage() {
                     min={0}
                     step={1}
                     placeholder="None"
-                    disabled={saving}
+                    disabled={locked}
                     onChange={(v) =>
                       patch({ fixedEntitlementDays: typeof v === 'number' ? v : null })
                     }
@@ -384,11 +395,13 @@ export default function LeavePolicyPage() {
                 </div>
               </div>
 
-              <div className="form-actions">
-                <Button disabled={saving} onClick={() => void saveType()}>
-                  {saving ? 'Saving…' : form.leaveTypeId ? 'Save changes' : 'Create leave type'}
-                </Button>
-              </div>
+              {canManage && (
+                <div className="form-actions">
+                  <Button disabled={locked} onClick={() => void saveType()}>
+                    {saving ? 'Saving…' : form.leaveTypeId ? 'Save changes' : 'Create leave type'}
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* The grids need an id to write against, so a type being created shows none until saved. */}
@@ -407,7 +420,8 @@ export default function LeavePolicyPage() {
                     { field: 'minServiceYears', caption: 'From (years)' },
                     { field: 'annualDays', caption: 'Annual days' },
                   ]}
-                  disabled={saving}
+                  disabled={locked}
+                  readOnly={!canManage}
                   onSet={(row) =>
                     run(
                       () =>
@@ -446,7 +460,8 @@ export default function LeavePolicyPage() {
                       { field: 'fullPayDays', caption: 'Full pay' },
                       { field: 'halfPayDays', caption: 'Half pay' },
                     ]}
-                    disabled={saving}
+                    disabled={locked}
+                    readOnly={!canManage}
                     onSet={(row) =>
                       run(
                         () =>
@@ -485,7 +500,8 @@ export default function LeavePolicyPage() {
                       { field: 'relation', caption: 'Relation', type: 'text' },
                       { field: 'days', caption: 'Days' },
                     ]}
-                    disabled={saving}
+                    disabled={locked}
+                    readOnly={!canManage}
                     onSet={(row) =>
                       run(
                         () =>
@@ -535,6 +551,7 @@ function TierGrid({
   keyField,
   columns,
   disabled,
+  readOnly,
   onSet,
   onDelete,
 }: {
@@ -544,6 +561,11 @@ function TierGrid({
   keyField: string
   columns: { field: string; caption: string; type?: 'text' | 'number' }[]
   disabled: boolean
+  /**
+   * No write trust at all — distinct from `disabled`, which is the transient mid-save state.
+   * A greyed-out Delete comes back; this one never does, so it is removed rather than dimmed.
+   */
+  readOnly: boolean
   onSet: (row: Record<string, unknown>) => Promise<boolean>
   onDelete: (row: Record<string, unknown>) => Promise<boolean>
 }) {
@@ -648,15 +670,17 @@ function TierGrid({
     <div className="card" style={{ marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div className="card-title">{title}</div>
-        <Button
-          variant="subtle"
-          size="compact-sm"
-          leftSection={<IconPlus size={14} />}
-          disabled={disabled || editing}
-          onClick={startAdd}
-        >
-          Add row
-        </Button>
+        {!readOnly && (
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            leftSection={<IconPlus size={14} />}
+            disabled={disabled || editing}
+            onClick={startAdd}
+          >
+            Add row
+          </Button>
+        )}
       </div>
       <p className="hint" style={{ marginTop: 0 }}>
         {subtitle}
@@ -682,33 +706,35 @@ function TierGrid({
                   <Table.Td key={c.field}>{String(r[c.field] ?? '')}</Table.Td>
                 ))}
                 <Table.Td>
-                  <div className="grid-actions">
-                    <ActionIcon
-                      variant="subtle"
-                      title="Edit"
-                      aria-label="Edit"
-                      disabled={disabled || editing}
-                      onClick={() => startEdit(r)}
-                    >
-                      <IconPencil size={16} />
-                    </ActionIcon>
-                    <ActionIcon
-                      variant="subtle"
-                      color="red"
-                      title="Delete"
-                      aria-label="Delete"
-                      disabled={disabled || editing}
-                      onClick={() => {
-                        // The DX grid confirmed deletion itself; window.confirm keeps that gate,
-                        // with DevExtreme's own default wording.
-                        if (window.confirm('Are you sure you want to delete this record?')) {
-                          void onDelete(r)
-                        }
-                      }}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </div>
+                  {!readOnly && (
+                    <div className="grid-actions">
+                      <ActionIcon
+                        variant="subtle"
+                        title="Edit"
+                        aria-label="Edit"
+                        disabled={disabled || editing}
+                        onClick={() => startEdit(r)}
+                      >
+                        <IconPencil size={16} />
+                      </ActionIcon>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        title="Delete"
+                        aria-label="Delete"
+                        disabled={disabled || editing}
+                        onClick={() => {
+                          // The DX grid confirmed deletion itself; window.confirm keeps that gate,
+                          // with DevExtreme's own default wording.
+                          if (window.confirm('Are you sure you want to delete this record?')) {
+                            void onDelete(r)
+                          }
+                        }}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </div>
+                  )}
                 </Table.Td>
               </Table.Tr>
             )

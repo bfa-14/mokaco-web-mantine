@@ -25,7 +25,9 @@ import type {
   Position,
   ReportingLineEntry,
 } from '../../types/hr'
-import { APPROVAL_TIER_OPTIONS, employeeLabel } from '../../types/hr'
+import { employeeLabel } from '../../types/hr'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
+import { useTranslation } from 'react-i18next'
 import type { UnlinkedUser } from '../../types/security'
 
 /**
@@ -61,8 +63,14 @@ interface FormState {
   nssfNumber: string
   userId: number | null
   terminationDate: string
-  /** 1 = staff (default), 2 = management, 3 = executive. */
-  approvalTier: number
+  /**
+   * 1 = head of the organisation, and a bigger number is more junior.
+   *
+   * NULL IS A REAL STATE ON CREATE — "not chosen yet" — and it is load-bearing: the "Reports to"
+   * candidates are derived from this number, so offering that field before a tier exists would
+   * offer a list nobody can yet say is right. On edit it is always filled from the record.
+   */
+  approvalTier: number | null
   /** Who this person reports to, or null for the top of a line. Saved via its own endpoint. */
   reportsToEmployeeId: number | null
 }
@@ -77,7 +85,7 @@ const EMPTY: FormState = {
   nssfNumber: '',
   userId: null,
   terminationDate: '',
-  approvalTier: 1,
+  approvalTier: null,
   reportsToEmployeeId: null,
 }
 
@@ -89,6 +97,25 @@ interface FieldErrors {
   departmentId?: string
   positionId?: string
   hireDate?: string
+  /**
+   * The reporting-line endpoint's own refusal.
+   *
+   * A FIELD ERROR RATHER THAN A TOAST, because the tier rule is enforced by a database trigger and
+   * the client's filter is only its best guess at the same rule: when the two disagree the server
+   * is right, and its sentence has to sit under the box still holding the wrong answer — a toast
+   * would fade while the bad selection stayed on screen looking accepted.
+   */
+  reportsTo?: string
+}
+
+/**
+ * One "Reports to" candidate. The tier rides along so the option can NAME it — the filter alone
+ * leaves the reader to trust a list they cannot check.
+ */
+interface ManagerOption {
+  employeeId: number
+  fullName: string
+  approvalTier: number | null
 }
 
 /** The shape the account picker renders — unlinked accounts, plus (in edit) the currently-linked one. */
@@ -118,6 +145,7 @@ export function EmployeeFormPopup({
 }: EmployeeFormPopupProps) {
   const isEdit = employee !== null
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   // Linking an account is account administration; hide the whole section from anyone who cannot do it.
   const canManageAccounts = hasPermission('USER_MANAGE')
@@ -138,6 +166,31 @@ export function EmployeeFormPopup({
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  /**
+   * A manager choice that a TIER CHANGE has just invalidated and removed.
+   *
+   * Kept as its own flag rather than folded into fieldErrors: nothing was refused and nothing is
+   * wrong — the form quietly stopped being true, and saying so is the difference between a field
+   * that emptied itself for a reason and one that looks like it lost the value.
+   */
+  const [tierClearedManager, setTierClearedManager] = useState(false)
+
+  /**
+   * The seniority dictionary, from the shared cache.
+   *
+   * The employee may ALREADY hold a tier the dictionary no longer lists — a Select whose value is
+   * absent from its data renders blank, and saving that blank would silently demote them. So a
+   * missing tier is added back as its own option rather than dropped.
+   */
+  const { options: tierOptionsFromDict, tierName } = useApprovalTiers()
+  const tierOptions =
+    form.approvalTier == null ||
+    tierOptionsFromDict.some((o) => o.value === String(form.approvalTier))
+      ? tierOptionsFromDict
+      : [
+          ...tierOptionsFromDict,
+          { value: String(form.approvalTier), label: tierName(form.approvalTier) },
+        ]
 
   /** The confirm dialog currently on screen, if any — see ConfirmState. */
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
@@ -218,12 +271,13 @@ export function EmployeeFormPopup({
         nssfNumber: employee.nssfNumber ?? '',
         userId: employee.userId,
         terminationDate: employee.terminationDate?.slice(0, 10) ?? '',
-        approvalTier: employee.approvalTier ?? 1,
+        approvalTier: employee.approvalTier ?? null,
         reportsToEmployeeId: employee.reportsToEmployeeId ?? null,
       })
     } else {
       setForm(EMPTY)
     }
+    setTierClearedManager(false)
   }
 
   /* PORT NOTE: the DX Popup's onShowing event → state adjusted during render when `visible` flips
@@ -248,21 +302,56 @@ export function EmployeeFormPopup({
     ? [currentAccount, ...unlinked]
     : unlinked
 
-  // "Reports to" options — everyone except this person (you cannot report to yourself; the server
-  // refuses that and any loop, but there is no reason to offer self in the first place). The current
-  // manager is guaranteed to be in the list, keyed off the value the form holds, so the control shows
-  // their NAME the moment it opens — even before the employee list has loaded — and never silently
-  // drops a real value into a blank box.
-  const managerOptions: { employeeId: number; fullName: string }[] = (() => {
-    const opts = employees
-      .filter((e) => e.employeeId !== employee?.employeeId)
-      .map((e) => ({ employeeId: e.employeeId, fullName: e.fullName }))
-    const current = form.reportsToEmployeeId
-    if (current != null && !opts.some((o) => o.employeeId === current)) {
-      opts.unshift({ employeeId: current, fullName: employee?.reportsToName ?? 'Current manager' })
-    }
-    return opts
-  })()
+  /** The tier of a candidate, from the list the API already returns. Null = never assigned one. */
+  const tierOf = (employeeId: number): number | null =>
+    employees.find((e) => e.employeeId === employeeId)?.approvalTier ?? null
+
+  /**
+   * "REPORTS TO" — SENIORITY-FILTERED.
+   *
+   * A manager must sit at this person's tier or ABOVE it, and 1 is the head, so "above" is a
+   * SMALLER number: `candidate.approvalTier <= form.approvalTier`. Same-tier is allowed on purpose —
+   * a shift supervisor reporting to another supervisor is an ordinary arrangement, and it is the
+   * database trigger, not this list, that owns the final word.
+   *
+   * Three exclusions beyond the tier test: the person being edited (you cannot report to yourself),
+   * anybody who has LEFT (terminationDate set — a departed manager makes every line-manager step
+   * resolve to nobody), and anybody with no tier at all, whose seniority is simply unknown and so
+   * cannot be shown to satisfy the rule.
+   *
+   * THE CURRENT MANAGER IS KEPT WHATEVER THE FILTER SAYS. The Select is keyed off the value the form
+   * holds, so dropping a stored manager who no longer qualifies would render a blank box over a real
+   * value and save that blank. Tier changes clear it deliberately, with a sentence — see the tier
+   * Select's onChange; silence is the one outcome that must not happen here.
+   */
+  const managerOptions: ManagerOption[] = (() => {
+      const tier = form.approvalTier
+      const opts: ManagerOption[] =
+        tier == null
+          ? []
+          : employees
+              .filter(
+                (e) =>
+                  e.employeeId !== employee?.employeeId &&
+                  e.terminationDate == null &&
+                  e.approvalTier != null &&
+                  e.approvalTier <= tier,
+              )
+              .map((e) => ({
+                employeeId: e.employeeId,
+                fullName: e.fullName,
+                approvalTier: e.approvalTier,
+              }))
+      const current = form.reportsToEmployeeId
+      if (current != null && !opts.some((o) => o.employeeId === current)) {
+        opts.unshift({
+          employeeId: current,
+          fullName: employee?.reportsToName ?? 'Current manager',
+          approvalTier: tierOf(current),
+        })
+      }
+      return opts
+    })()
 
   async function confirmUnlink() {
     if (!employee) return
@@ -331,19 +420,29 @@ export function EmployeeFormPopup({
           const link = await employeesService.linkUser(employee.employeeId, form.userId)
           if (link.warning) notify(link.warning, 'warning', 6000)
         }
-        // The tier has its own endpoint too; only touch it when it actually changed.
-        if (form.approvalTier !== (employee.approvalTier ?? 1)) {
+        // The tier has its own endpoint too; only touch it when it actually changed. Null means
+        // "left alone" — the field cannot be un-set once chosen, so this only skips.
+        if (form.approvalTier != null && form.approvalTier !== (employee.approvalTier ?? 1)) {
           await employeesService.setApprovalTier(employee.employeeId, form.approvalTier)
         }
-        // Reports-to is its own endpoint as well; only when changed. A loop/self-reference throws
-        // here and its message is shown verbatim by the catch; a warning means "saved, but the
-        // manager has no login".
+        /* Reports-to is its own endpoint as well; only when changed. THE TRIGGER IS THE REAL RULE —
+           it refuses a junior manager, a self-reference and any loop — and the list above is only
+           this client's reading of it. So a refusal here lands UNDER THE FIELD and the popup stays
+           open on the offending selection, rather than closing over a change that did not happen.
+           The rest of the edit did save, so the grid is refreshed either way. */
         if (form.reportsToEmployeeId !== (employee.reportsToEmployeeId ?? null)) {
-          const res = await employeesService.setReportsTo(
-            employee.employeeId,
-            form.reportsToEmployeeId,
-          )
-          if (res.warning) notify(res.warning, 'warning', 6000)
+          try {
+            const res = await employeesService.setReportsTo(
+              employee.employeeId,
+              form.reportsToEmployeeId,
+            )
+            if (res.warning) notify(res.warning, 'warning', 6000)
+          } catch (err) {
+            setFieldErrors((fe) => ({ ...fe, reportsTo: getErrorMessage(err) }))
+            setTierClearedManager(false)
+            onSaved()
+            return
+          }
         }
         notify('Employee updated.', 'success', 2200)
       } else {
@@ -357,14 +456,25 @@ export function EmployeeFormPopup({
           nssfNumber: form.nssfNumber.trim() || null,
           hireDate: form.hireDate,
         })
-        // Create defaults everyone to Staff; set the tier straight after only when it is higher.
-        if (form.approvalTier !== 1) {
+        // Create defaults everyone to Staff; set the tier straight after only when it differs.
+        // An untouched tier (null) leaves the server's own default standing, as before.
+        if (form.approvalTier != null && form.approvalTier !== 1) {
           await employeesService.setApprovalTier(created.employeeId, form.approvalTier)
         }
-        // A new employee reports to nobody by default; set it only when one was chosen.
+        /* A new employee reports to nobody by default; set it only when one was chosen. The
+           employee EXISTS by now, so a refusal here cannot be undone by closing — the message goes
+           under the field and the popup stays open on it, the same as the edit path. */
         if (form.reportsToEmployeeId != null) {
-          const res = await employeesService.setReportsTo(created.employeeId, form.reportsToEmployeeId)
-          if (res.warning) notify(res.warning, 'warning', 6000)
+          try {
+            const res = await employeesService.setReportsTo(created.employeeId, form.reportsToEmployeeId)
+            if (res.warning) notify(res.warning, 'warning', 6000)
+          } catch (err) {
+            setFieldErrors((fe) => ({ ...fe, reportsTo: getErrorMessage(err) }))
+            setTierClearedManager(false)
+            notify('Employee created, but the reporting line was refused.', 'warning', 6000)
+            onSaved()
+            return
+          }
         }
         notify('Employee created.', 'success', 2200)
       }
@@ -481,19 +591,48 @@ export function EmployeeFormPopup({
                 option label (the same employeeLabel wording the DX displayExpr rendered). */}
             <Select
               id="emp-reports-to"
+              /* THE TIER IS IN THE LABEL, not just in the filter. "Reports to Sara" is a choice
+                 somebody has to justify to themselves; "Sara — Management" is one they can. */
               data={managerOptions.map((o) => ({
                 value: String(o.employeeId),
-                label: employeeLabel(o),
+                label:
+                  o.approvalTier != null
+                    ? t('hr.employeeForm.managerOption', {
+                        name: employeeLabel(o),
+                        tier: tierName(o.approvalTier),
+                      })
+                    : employeeLabel(o),
               }))}
               value={form.reportsToEmployeeId != null ? String(form.reportsToEmployeeId) : null}
               searchable
               clearable
-              placeholder="Select a manager…"
-              disabled={saving}
-              onChange={(v) =>
-                setForm((f) => ({ ...f, reportsToEmployeeId: v != null ? Number(v) : null }))
+              // The candidates ARE the tier's; without one there is no list to offer, so the field
+              // says which question to answer first instead of presenting an empty dropdown.
+              disabled={saving || form.approvalTier == null}
+              placeholder={
+                form.approvalTier == null
+                  ? t('hr.employeeForm.tierFirst')
+                  : 'Select a manager…'
               }
+              error={fieldErrors.reportsTo}
+              onChange={(v) => {
+                setForm((f) => ({ ...f, reportsToEmployeeId: v != null ? Number(v) : null }))
+                setTierClearedManager(false)
+                setFieldErrors((fe) => ({ ...fe, reportsTo: undefined }))
+              }}
             />
+            {/* Why the box just emptied itself. Above the "steps will skip" note, because it is the
+                newer fact and it explains the state the other one is describing. */}
+            {tierClearedManager && (
+              <div className="form-error">{t('hr.employeeForm.managerCleared')}</div>
+            )}
+            {form.approvalTier == null ? (
+              <div className="hint">{t('hr.employeeForm.tierFirst')}</div>
+            ) : (
+              managerOptions.length === 0 && (
+                <div className="hint">{t('hr.employeeForm.noCandidates')}</div>
+              )
+            )}
             {/* Left empty, any line-manager approval step for this person has nobody to resolve to
                 and will skip. Quiet, not an error — a top-of-org person genuinely reports to nobody. */}
             {form.reportsToEmployeeId == null && (
@@ -601,17 +740,34 @@ export function EmployeeFormPopup({
               </label>
               <Select
                 id="emp-tier"
-                data={APPROVAL_TIER_OPTIONS.map((o) => ({
-                  value: String(o.value),
-                  label: o.label,
-                }))}
-                value={String(form.approvalTier)}
+                // From the dictionary, not a constant — a company that renames tier 2 or adds a
+                // fourth sees it here without a release.
+                data={tierOptions}
+                value={form.approvalTier != null ? String(form.approvalTier) : null}
                 allowDeselect={false}
+                placeholder={t('hr.employeeForm.tierPlaceholder')}
                 w={220}
                 disabled={saving}
-                onChange={(v) =>
-                  setForm((f) => ({ ...f, approvalTier: v != null ? Number(v) : 1 }))
-                }
+                /* CHANGING THE TIER CAN INVALIDATE THE MANAGER. Promote somebody to tier 1 and the
+                   tier-2 manager above them is suddenly junior to them, which the trigger refuses.
+                   Cleared here, WITH a sentence, rather than left to fail at save — and computed
+                   from `form` outside the updater, since a setState cannot be issued inside one. */
+                onChange={(v) => {
+                  const tier = v != null ? Number(v) : null
+                  const managerTier =
+                    form.reportsToEmployeeId != null ? tierOf(form.reportsToEmployeeId) : null
+                  const keeps =
+                    form.reportsToEmployeeId == null ||
+                    (tier != null && managerTier != null && managerTier <= tier)
+                  setForm((f) => ({
+                    ...f,
+                    approvalTier: tier,
+                    reportsToEmployeeId: keeps ? f.reportsToEmployeeId : null,
+                  }))
+                  setTierClearedManager(!keeps)
+                  // A stale server refusal about a manager who is no longer selected is noise.
+                  if (!keeps) setFieldErrors((fe) => ({ ...fe, reportsTo: undefined }))
+                }}
               />
               <div className="hint">
                 Management and executive requests may follow shorter approval chains.

@@ -6,6 +6,8 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Modal, Pagination, Select, Table, Textarea, TextInput } from '@mantine/core'
 import { IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { useLive } from '../../live/useLive'
@@ -33,6 +35,13 @@ export default function PayrollRunDetailPage() {
   const { id } = useParams()
   const runId = Number(id)
   const navigate = useNavigate()
+  /* THREE TRUSTS ON ONE PAGE. PAYROLL_VIEW got the reader in; generating and cancelling are
+     PAYROLL_RUN; approving — which locks the month for ever — is PAYROLL_APPROVE. They are separate
+     codes because they are separate acts: the person who prepares the figures is not always the
+     person who signs them off, and this page is where that separation either holds or does not. */
+  const { hasPermission } = useAuth()
+  const canRun = hasPermission(PERMISSION.PAYROLL_RUN)
+  const canApprove = hasPermission(PERMISSION.PAYROLL_APPROVE)
 
   const [detail, setDetail] = useState<PayrollRunDetail | null>(null)
   const [slips, setSlips] = useState<PayslipRow[]>(EMPTY_SLIPS)
@@ -322,19 +331,30 @@ export default function PayrollRunDetailPage() {
       {/* actions by status — an approved run renders none of these */}
       {error && <div className="wf-balance-warn">{error}</div>}
 
+      {/* THE FACT IS SHOWN TO EVERYONE; THE FIX ONLY TO WHOEVER CAN APPLY IT. A reader without
+          PAYROLL_RUN still needs to know these payslips are missing signed adjustments — that is
+          exactly the kind of thing they are reading the run to find — so the sentence stays and only
+          the Regenerate link goes. */}
       {pending.length > 0 && (
         <div className="wf-balance-warn">
           {pending.length} approved adjustment(s) target {h.periodYearMonth} but are not in the
-          current payslips —{' '}
-          <button
-            type="button"
-            className="pr-warn-link"
-            disabled={busy}
-            onClick={() => act(() => payrollRunsService.generate(runId), false)}
-          >
-            Regenerate
-          </button>{' '}
-          to include them.
+          current payslips
+          {canRun ? (
+            <>
+              {' '}—{' '}
+              <button
+                type="button"
+                className="pr-warn-link"
+                disabled={busy}
+                onClick={() => act(() => payrollRunsService.generate(runId), false)}
+              >
+                Regenerate
+              </button>{' '}
+              to include them.
+            </>
+          ) : (
+            ' — regenerating the run would include them.'
+          )}
         </div>
       )}
 
@@ -344,23 +364,28 @@ export default function PayrollRunDetailPage() {
             {/* Same endpoint either way — the server routes on the run's own type. Only the LABEL
                 changes, because "Generate payslips" undersells what an off-cycle run does: it pays
                 signed adjustments and nothing else. */}
-            <Button
-              disabled={busy}
-              onClick={() => act(() => payrollRunsService.generate(runId), false)}
-            >
-              {h.runType === 'Supplemental'
-                ? 'Generate from signed adjustments'
-                : h.generatedAt ? 'Regenerate payslips' : 'Generate payslips'}
-            </Button>
-            <Button variant="default" disabled={busy || !h.generatedAt}
-              onClick={() => act(() => payrollRunsService.sendToReview(runId), false)}>
-              Send to review
-            </Button>
-            <Button variant="subtle" disabled={busy} onClick={() => setCancelOpen(true)}>
-              Cancel run…
-            </Button>
+            {canRun && (
+              <>
+                <Button
+                  disabled={busy}
+                  onClick={() => act(() => payrollRunsService.generate(runId), false)}
+                >
+                  {h.runType === 'Supplemental'
+                    ? 'Generate from signed adjustments'
+                    : h.generatedAt ? 'Regenerate payslips' : 'Generate payslips'}
+                </Button>
+                <Button variant="default" disabled={busy || !h.generatedAt}
+                  onClick={() => act(() => payrollRunsService.sendToReview(runId), false)}>
+                  Send to review
+                </Button>
+                <Button variant="subtle" disabled={busy} onClick={() => setCancelOpen(true)}>
+                  Cancel run…
+                </Button>
+              </>
+            )}
             {/* Raised as a request: HR states it, the Owner signs it, and the approval is what
-                creates the row. Regenerate afterwards and it appears as a line. */}
+                creates the row. Regenerate afterwards and it appears as a line. Left open to every
+                reader — raising a request needs no payroll trust at all, and the chain decides. */}
             <Link to="/requests/new?type=PAYROLL_ADJUSTMENT">
               Add one-off item…
             </Link>
@@ -368,14 +393,23 @@ export default function PayrollRunDetailPage() {
         )}
         {h.status === 'Review' && (
           <>
-            <Button variant="default" disabled={busy}
-              onClick={() => act(() => payrollRunsService.generate(runId), false)}>
-              Regenerate
-            </Button>
-            <Button disabled={busy} onClick={() => setConfirmApprove(true)}>Approve & lock…</Button>
-            <Button variant="subtle" disabled={busy} onClick={() => setCancelOpen(true)}>
-              Cancel run…
-            </Button>
+            {canRun && (
+              <Button variant="default" disabled={busy}
+                onClick={() => act(() => payrollRunsService.generate(runId), false)}>
+                Regenerate
+              </Button>
+            )}
+            {/* THE LOCK. Its own code, and hidden rather than disabled — a greyed-out "Approve &
+                lock" on a month somebody may never approve is an invitation to go looking for the
+                permission to press it. */}
+            {canApprove && (
+              <Button disabled={busy} onClick={() => setConfirmApprove(true)}>Approve & lock…</Button>
+            )}
+            {canRun && (
+              <Button variant="subtle" disabled={busy} onClick={() => setCancelOpen(true)}>
+                Cancel run…
+              </Button>
+            )}
             {/* Still open, so an adjustment can still reach this period — but it has to be signed
                 first, and approving this run closes the door. */}
             <Link to="/requests/new?type=PAYROLL_ADJUSTMENT">

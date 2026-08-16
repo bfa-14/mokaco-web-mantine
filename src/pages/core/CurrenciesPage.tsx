@@ -8,6 +8,8 @@ import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow
 import { currenciesService } from '../../services/coreService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import type { Currency } from '../../types/core'
 
 /**
@@ -37,9 +39,12 @@ const PAGE_SIZES = ['10', '25', '50']
 
 function CurrenciesGrid({
   rows,
+  canManage,
   onEdit,
 }: {
   rows: Currency[]
+  /** False for a CORE_MANAGE-less reader: the grid still reads, the Actions column goes. */
+  canManage: boolean
   onEdit: (row: Currency) => void
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
@@ -52,24 +57,29 @@ function CurrenciesGrid({
       columnHelper.accessor('currencyCode', { header: 'Code' }),
       columnHelper.accessor('name', { header: 'Name' }),
       columnHelper.accessor('decimalPlaces', { header: 'Decimals' }),
-      columnHelper.display({
-        id: 'actions',
-        header: 'Actions',
-        cell: (info) => (
-          <div className="grid-actions">
-            <Button
-              variant="subtle"
-              size="compact-sm"
-              leftSection={<IconPencil size={14} />}
-              onClick={() => onEdit(info.row.original)}
-            >
-              Edit
-            </Button>
-          </div>
-        ),
-      }),
+      // The column, not just the button — an "Actions" header over empty cells reads as broken.
+      ...(canManage
+        ? [
+            columnHelper.display({
+              id: 'actions',
+              header: 'Actions',
+              cell: (info) => (
+                <div className="grid-actions">
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconPencil size={14} />}
+                    onClick={() => onEdit(info.row.original)}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              ),
+            }),
+          ]
+        : []),
     ],
-    [onEdit],
+    [onEdit, canManage],
   )
 
   const table = useReactTable({
@@ -181,6 +191,8 @@ function CurrenciesGrid({
 }
 
 export default function CurrenciesPage() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(PERMISSION.CORE_MANAGE)
   const [rows, setRows] = useState<Currency[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -302,9 +314,11 @@ export default function CurrenciesPage() {
           >
             <IconRefresh size={16} />
           </ActionIcon>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            New
-          </Button>
+          {canManage && (
+            <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
+              New
+            </Button>
+          )}
         </div>
       </div>
 
@@ -319,7 +333,7 @@ export default function CurrenciesPage() {
           <Loader size={40} />
         </div>
       ) : (
-        <CurrenciesGrid rows={rows} onEdit={openEdit} />
+        <CurrenciesGrid rows={rows} canManage={canManage} onEdit={openEdit} />
       )}
 
       <Modal

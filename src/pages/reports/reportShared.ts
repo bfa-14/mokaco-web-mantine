@@ -3,11 +3,17 @@
  * can sit beside the component-bearing ReportShell without tangling Fast Refresh.
  */
 
-/** All three reports are read-only and gated on the same permission as seeing attendance. */
-export const ATTENDANCE_VIEW = 'ATTENDANCE_VIEW'
+/**
+ * All three reports are read-only and gated on ONE code of their own.
+ *
+ * They used to ride on ATTENDANCE_VIEW, which was wrong in the direction that costs access: the
+ * leave-balance report is not an attendance screen, so anyone who needed a single balance figure had
+ * to be handed the raw punch data to get at it. REPORT_VIEW separates the two.
+ */
+export const REPORT_VIEW = 'REPORT_VIEW'
 
 /** Re-exported for the pages' convenience, so a page imports permissions from one place. */
-export const PERMISSIONS = { view: ATTENDANCE_VIEW } as const
+export const PERMISSIONS = { view: REPORT_VIEW } as const
 
 /** The current period, 'yyyy-MM'. */
 export function currentPeriod(): string {

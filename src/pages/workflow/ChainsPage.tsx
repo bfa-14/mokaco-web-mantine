@@ -16,7 +16,7 @@ import type {
   WorkflowDefinition,
   WorkflowStep,
 } from '../../types/workflow'
-import { chainPopulationLabel } from '../../types/workflow'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import { ChainFlow, StatusChip } from './workflowShared'
 import { approverText, shortDate, toFlowSteps } from './workflowFormat'
 
@@ -71,11 +71,18 @@ function TypeCard({
   onPublish: (definitionId: number) => void
   onDelete: (definitionId: number, version: number) => void
 }) {
-  // There can be MORE THAN ONE active chain per type now — a default plus a management/executive
-  // one — and that is normal, not a conflict. Shown lowest population first (everyone, then up).
+  const { populationLabel } = useApprovalTiers()
+
+  /* There can be MORE THAN ONE active chain per type — a default plus one for a senior population —
+     and that is normal, not a conflict.
+
+     Ordered by seniority, the same direction as every other tier list in the app: the default
+     (everyone) chain first, then tier 1 — the head — then downward. `null` sorts as 0, not as 1:
+     tier 1 is a real tier now, so parking "everyone" on the same key would interleave the default
+     chain with the head's own. */
   const actives = definitions
     .filter((d) => d.status === 'Active')
-    .sort((a, b) => (a.minRequesterTier ?? 1) - (b.minRequesterTier ?? 1))
+    .sort((a, b) => (a.minRequesterTier ?? 0) - (b.minRequesterTier ?? 0))
   const others = definitions.filter((d) => d.status !== 'Active')
   const [activeStepsById, setActiveStepsById] = useState<Record<number, WorkflowStep[]>>({})
   const [showOthers, setShowOthers] = useState(false)
@@ -164,7 +171,7 @@ function TypeCard({
             <div key={a.workflowDefinitionId} className="wf-active-chain">
               {/* Which population this chain serves, tagged — so two active chains read clearly. */}
               <div className="wf-active-head">
-                <span className="wf-pop-tag">{chainPopulationLabel(a.minRequesterTier)}</span>
+                <span className="wf-pop-tag">{populationLabel(a.minRequesterTier)}</span>
                 <span className="hint">
                   v{a.version} · published {shortDate(a.publishedAt)}
                 </span>

@@ -15,7 +15,14 @@ export const currenciesService = {
   },
 }
 
-/** Exchange rates — read requires EMP_VIEW, write requires EMP_EDIT. */
+/**
+ * Exchange rates — reading needs EMP_VIEW, and every WRITE needs CORE_MANAGE.
+ *
+ * ALL THREE WRITES CARRY THE PROCEDURES' OWN REFUSALS. core.EXCHANGE_RATE holds one rate per
+ * (pair, type, effective date), and a clash comes back as a 400 whose message names the pair, the
+ * type and the date, and says to edit the existing row rather than add another. That sentence is the
+ * whole value of the refusal — show it verbatim, next to the figures it is about.
+ */
 export const exchangeRatesService = {
   getAll(): Promise<ExchangeRate[]> {
     return apiRequest<ExchangeRate[]>('/api/exchange-rates')
@@ -31,5 +38,29 @@ export const exchangeRatesService = {
       method: 'POST',
       body: JSON.stringify(rate),
     })
+  },
+
+  /**
+   * Corrects a rate's figure, and optionally the date it takes effect.
+   *
+   * THE PAIR AND THE TYPE ARE NOT SENT, and the endpoint does not accept them: a rate row IS the
+   * answer to "what was Official USD→LBP on this date", so moving the pair would not correct the row
+   * — it would reassign it to a different question. Anything else is a new rate.
+   *
+   * `effectiveDate` omitted means "leave the date as it is", which is the common edit: a mistyped
+   * figure. Returns the STORED row, so the caller shows what the database holds.
+   */
+  update(
+    exchangeRateId: number,
+    body: { rate: number; effectiveDate?: string | null },
+  ): Promise<ExchangeRate> {
+    return apiRequest<ExchangeRate>(`/api/exchange-rates/${exchangeRateId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ rate: body.rate, effectiveDate: body.effectiveDate ?? null }),
+    })
+  },
+
+  remove(exchangeRateId: number): Promise<void> {
+    return apiRequest<void>(`/api/exchange-rates/${exchangeRateId}`, { method: 'DELETE' })
   },
 }

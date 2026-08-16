@@ -126,6 +126,7 @@ const GROUPS: NavGroup[] = [
       { to: '/hr/component-types', labelKey: 'nav.hr.componentTypes', icon: 'money' },
       { to: '/hr/leave-types', labelKey: 'nav.hr.leaveTypes', icon: 'event' },
       { to: '/hr/leave-policy', labelKey: 'nav.hr.leavePolicy', icon: 'detailslayout' },
+      { to: '/hr/tiers', labelKey: 'nav.hr.tiers', icon: 'hierarchy' },
     ],
   },
   {

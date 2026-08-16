@@ -137,7 +137,7 @@ export interface EmployeeListItem {
   nssfNumber: string | null
   hireDate: string
   terminationDate: string | null
-  /** 1 = staff (default), 2 = management, 3 = executive. The grid tags only tier > 1. */
+  /** A tier NUMBER — 1 is the head, bigger is more junior. Its word comes from the tier dictionary. */
   approvalTier: number
   branch: string
   department: string
@@ -210,7 +210,7 @@ export interface EmployeeProfile {
   nssfNumber: string | null
   hireDate: string
   terminationDate: string | null
-  /** 1 = staff (default), 2 = management, 3 = executive — set via its own PUT, not the update body. */
+  /** A tier NUMBER (1 = head) — set via its own PUT, not the update body. Named by the dictionary. */
   approvalTier: number
   /** Who this person reports to — set via its own PUT. Null for the top of a reporting line. */
   reportsToEmployeeId: number | null
@@ -297,20 +297,34 @@ export const EMPLOYEE_SEARCH_EXPR: string[] = ['fullName', 'position']
  * The approval-tier options for the employee form. Tier 1 (Staff) is the default; management and
  * executive requests may follow shorter approval chains.
  */
-export const APPROVAL_TIER_OPTIONS: { value: number; label: string }[] = [
-  { value: 1, label: 'Staff' },
-  { value: 2, label: 'Management' },
-  { value: 3, label: 'Executive' },
-]
-
 /**
- * A tier number as its label, for the list tag. Data can hold a tier outside the catalogue above
- * (seeded rows bypass usp_Employee_SetApprovalTier, which caps at 3), so an unknown tier says so
- * rather than falling back to "Staff" — labelling an elevated person as staff is worse than
- * showing the raw number.
+ * One row of hr.APPROVAL_TIER — the seniority dictionary.
+ *
+ * THE NAMES ARE DATA NOW, not a constant in this file. They were a hard-coded three-item map here
+ * (Staff / Management / Executive) until the tiers became a table somebody can edit; a company that
+ * calls tier 2 "Supervisors" had no way to say so, and a fourth tier could not exist at all.
+ *
+ * Read through {@link ../hr/useApprovalTiers}, never fetched per component — every employee row and
+ * every org-chart node prints one of these.
  */
-export function approvalTierLabel(tier: number): string {
-  return APPROVAL_TIER_OPTIONS.find((t) => t.value === tier)?.label ?? `Tier ${tier}`
+export interface ApprovalTier {
+  tierNo: number
+  name: string
+  /** The Arabic name. null falls back to {@link name} rather than to the number. */
+  nameAr: string | null
+}
+
+/** POST /api/hr/approval-tiers. */
+export interface ApprovalTierCreateRequest {
+  tierNo: number
+  name: string
+  nameAr: string | null
+}
+
+/** PUT /api/hr/approval-tiers/{tierNo} — the number is identity and travels in the route. */
+export interface ApprovalTierNameRequest {
+  name: string
+  nameAr: string | null
 }
 
 /** What PUT /api/employees/{id}/reports-to returns — the new manager and any login warning. */

@@ -73,27 +73,22 @@ export interface WorkflowDefinition {
   notes: string | null
   publishedAt: string | null
   createdAt: string
-  /** Which population this chain serves: null = everyone, 2 = management+, 3 = executive only. */
+  /**
+   * Which population this chain serves: null = everyone, otherwise THAT TIER AND EVERYONE MORE
+   * SENIOR — everyone with a SMALLER number, because tier 1 is the head of the organisation.
+   */
   minRequesterTier: number | null
   stepCount: number
 }
 
-/** Which population a chain serves, from its MinRequesterTier — for the chains list and the builder. */
-export function chainPopulationLabel(minRequesterTier: number | null): string {
-  if (minRequesterTier === 2) return 'Management+'
-  if (minRequesterTier === 3) return 'Executive'
-  return 'Everyone'
-}
+/* THE TIER→WORD MAP THAT USED TO LIVE HERE IS GONE.
+   It hard-coded two names ("Management+", "Executive") for tiers 2 and 3, and its options list
+   offered exactly those two. Both are wrong now: the tier names are an editable dictionary, and a
+   BIGGER number is a LOWER role rather than a higher one, so "and above" named the wrong direction.
+   Labels and options now come from useApprovalTiers() — see populationLabel there. */
 
-/**
- * The "Applies to" options for a draft chain. 0 stands in for null (everyone) so the SelectBox has a
- * real key to bind to; the service maps 0 back to null at the API boundary.
- */
-export const MIN_TIER_OPTIONS: { value: number; label: string }[] = [
-  { value: 0, label: 'Everyone (default)' },
-  { value: 2, label: 'Management and above' },
-  { value: 3, label: 'Executive only' },
-]
+/** The value the "Applies to" Select uses for "everyone"; the API takes null, which a Select cannot bind to. */
+export const MIN_TIER_EVERYONE = 0
 
 export interface WorkflowStep {
   workflowStepId: number
@@ -154,9 +149,9 @@ export interface DefinitionCopySource {
   status: string
   minRequesterTier: number | null
   /**
-   * minRequesterTier in words — "Everyone", "Management+", "Executive". Its own field because the
-   * SOURCE's audience is what lets the builder say, after a copy, that the audience did NOT come
-   * along: applies-to belongs to the draft, never to the steps.
+   * minRequesterTier in words, composed by the SERVER. Its own field because the SOURCE's audience
+   * is what lets the builder say, after a copy, that the audience did NOT come along: applies-to
+   * belongs to the draft, never to the steps.
    */
   appliesTo: string | null
   /** Ready to show — "Overtime · v1 (active) · Everyone". Composed in SQL so one wording serves every caller. */
@@ -1771,4 +1766,34 @@ export interface PayrollAdjustmentPayload {
   adjustmentCreatedAt: string | null
   /** The payslip that consumed it. Null until the target period is locked. */
   appliedToPayslipId: number | null
+}
+
+/**
+ * ROSTER APPROVAL — one branch's WHOLE MONTH of roster, signed off as a single request.
+ *
+ * The subject is a BRANCH AND A MONTH, not a person: there is no employeeId anywhere in the
+ * payload, and the raiser comes off the token like every other branch-scoped type. Which is also
+ * why the form hides the shell's Employee field (`hidesEmployee`).
+ *
+ * ONE REQUEST PER BRANCH-MONTH is the server's rule, not the form's — a month already approved, or
+ * already sitting pending on somebody's desk, is refused with a sentence saying which. Those
+ * refusals are the whole value of the 400 and are shown verbatim.
+ */
+export interface RosterApprovalCreateRequest {
+  branchId: number
+  /**
+   * The month, as its FIRST DAY: 'yyyy-MM-01'.
+   *
+   * A whole date rather than a 'yyyy-MM' period string because that is what the endpoint stores —
+   * the day is always 01 and the form never lets it be anything else.
+   */
+  monthDate: string
+  title?: string | null
+}
+
+/** What raising one produced. Same three fields every typed create returns. */
+export interface RosterApprovalCreated {
+  requestInstanceId: number
+  status: string
+  currentStepNo: number | null
 }

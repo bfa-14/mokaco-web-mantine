@@ -26,9 +26,32 @@
  */
 export const PERMISSION = {
   ATTENDANCE_VIEW: 'ATTENDANCE_VIEW',
+  /* The two attendance WRITE trusts. Neither opens a page of its own — they gate the affordances
+     inside pages ATTENDANCE_VIEW already opened, which is what lets a viewer read a roster they may
+     not edit instead of being turned away from it. */
+  ATTENDANCE_MANAGE: 'ATTENDANCE_MANAGE',
+  ATTENDANCE_CORRECT: 'ATTENDANCE_CORRECT',
   ATTENDANCE_IMPORT: 'ATTENDANCE_IMPORT',
+  DEVICE_MANAGE: 'DEVICE_MANAGE',
   EMP_VIEW: 'EMP_VIEW',
+  EMP_EDIT: 'EMP_EDIT',
+  /* THE CONFIGURATION TRUSTS, split out of EMP_EDIT.
+     Editing an employee and rewriting the branch list were the same permission until now, which
+     meant anyone who could correct a phone number could also delete a department. These four are
+     the setup tables — each one is read by half the app's dropdowns and written by almost nobody. */
+  ORG_MANAGE: 'ORG_MANAGE',
+  LEAVE_POLICY_MANAGE: 'LEAVE_POLICY_MANAGE',
+  COMPONENT_MANAGE: 'COMPONENT_MANAGE',
+  CORE_MANAGE: 'CORE_MANAGE',
+  SETTING_MANAGE: 'SETTING_MANAGE',
+  /* PAYROLL, SPLIT THREE WAYS. Reading a run and generating one used to be the same code, which put
+     every payslip behind the trust to create payroll. PAYROLL_VIEW now opens the pages; PAYROLL_RUN
+     generates; PAYROLL_APPROVE signs and locks. The last two gate buttons, not routes. */
+  PAYROLL_VIEW: 'PAYROLL_VIEW',
   PAYROLL_RUN: 'PAYROLL_RUN',
+  PAYROLL_APPROVE: 'PAYROLL_APPROVE',
+  /** The reports are their own read trust now — they were riding on ATTENDANCE_VIEW. */
+  REPORT_VIEW: 'REPORT_VIEW',
   REQUEST_VIEW_ALL: 'REQUEST_VIEW_ALL',
   ROLE_MANAGE: 'ROLE_MANAGE',
   USER_MANAGE: 'USER_MANAGE',
@@ -55,9 +78,8 @@ export interface RouteRule {
  * THE MAP. Ordered as the nav is, so the two can be read side by side.
  *
  * A route that is NOT here is open to every signed-in user, and that is deliberate rather than an
- * oversight — the dashboard, the requests hub, raising a request, one's own profile and the settings
- * page all have to reach everybody. Settings in particular: its own sections gate themselves, and
- * the language switch inside it is the only route to reading this application in Arabic.
+ * oversight — the dashboard, the requests hub, raising a request and one's own profile all have to
+ * reach everybody.
  */
 export const ROUTE_ACCESS: RouteRule[] = [
   // ── Workflow setup ────────────────────────────────────────────────────────────────────────────
@@ -84,23 +106,33 @@ export const ROUTE_ACCESS: RouteRule[] = [
      they would have been the two leaves that still 403'd inside an otherwise working group. */
   { path: '/attendance/import', anyOf: [PERMISSION.ATTENDANCE_IMPORT] },
   { path: '/attendance/unresolved', anyOf: [PERMISSION.ATTENDANCE_IMPORT] },
-  { path: '/attendance/anomalies', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
-  { path: '/attendance/exit-variances', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
-  // The GET is VIEW; ATTENDANCE_CORRECT gates approving and rejecting, inside the page.
-  { path: '/attendance/corrections', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
+  /* THE THREE HR QUEUES — ATTENDANCE_CORRECT, not ATTENDANCE_VIEW.
+     Each is a worklist rather than a view: an anomaly, an over-run exit and a correction request all
+     exist to be DECIDED, and every action on all three is ATTENDANCE_CORRECT server-side. Gated on
+     VIEW they showed an attendance clerk three queues of other people's work with nothing on them
+     they could press. The pages keep their own can-correct checks — see the note below. */
+  { path: '/attendance/anomalies', anyOf: [PERMISSION.ATTENDANCE_CORRECT] },
+  { path: '/attendance/exit-variances', anyOf: [PERMISSION.ATTENDANCE_CORRECT] },
+  { path: '/attendance/corrections', anyOf: [PERMISSION.ATTENDANCE_CORRECT] },
   { path: '/attendance/shifts', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
-  // Reading the machine list is VIEW; every button on it (Test, Pull now, Clear log) is DEVICE_MANAGE
-  // and gates itself in the page, so an attendance clerk can still see whether a terminal is alive.
-  { path: '/attendance/devices', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
+  /* DEVICE_MANAGE, not ATTENDANCE_VIEW. The machine list is an administration page: every action on
+     it (Test, Pull now, Clear log, add an enrollment, issue an API key) is DEVICE_MANAGE, and with
+     those gone the page is a table of IP addresses. It follows its writes, like the setup tables. */
+  { path: '/attendance/devices', anyOf: [PERMISSION.DEVICE_MANAGE] },
 
-  // ── Payroll ───────────────────────────────────────────────────────────────────────────────────
-  // PayrollController carries a CLASS-level [HasPermission("PAYROLL_RUN")], so every read under it
-  // needs the same code — including the payslip and run-detail deep links.
-  { path: '/payroll/runs', anyOf: [PERMISSION.PAYROLL_RUN] },
-  { path: '/payroll/runs/:id', anyOf: [PERMISSION.PAYROLL_RUN] },
-  { path: '/payroll/payslips/:id', anyOf: [PERMISSION.PAYROLL_RUN] },
-  { path: '/payroll/advances', anyOf: [PERMISSION.PAYROLL_RUN] },
-  { path: '/payroll/adjustments', anyOf: [PERMISSION.PAYROLL_RUN] },
+  /* ── Payroll ───────────────────────────────────────────────────────────────────────────────────
+     THE READS ARE PAYROLL_VIEW NOW. PayrollController's class-level [HasPermission("PAYROLL_RUN")]
+     has been moved to the methods, so every GET under it answers to PAYROLL_VIEW while generating
+     stays PAYROLL_RUN and approving stays PAYROLL_APPROVE. That split is the whole point: reading a
+     payslip and creating a payroll run were one trust, so anybody who needed to look had to be
+     allowed to run. The two write codes gate BUTTONS inside these pages — see PayrollRunsPage. */
+  { path: '/payroll/runs', anyOf: [PERMISSION.PAYROLL_VIEW] },
+  { path: '/payroll/runs/:id', anyOf: [PERMISSION.PAYROLL_VIEW] },
+  { path: '/payroll/payslips/:id', anyOf: [PERMISSION.PAYROLL_VIEW] },
+  { path: '/payroll/advances', anyOf: [PERMISSION.PAYROLL_VIEW] },
+  { path: '/payroll/adjustments', anyOf: [PERMISSION.PAYROLL_VIEW] },
+  /* The one payroll page that is NOT a read: the tiers and ceilings dictionary exists only to be
+     edited, so it follows the write trust exactly as the HR setup tables do. */
   { path: '/payroll/tiers', anyOf: [PERMISSION.PAYROLL_RUN] },
 
   // ── HR ────────────────────────────────────────────────────────────────────────────────────────
@@ -109,28 +141,52 @@ export const ROUTE_ACCESS: RouteRule[] = [
   { path: '/hr/org-chart', anyOf: [PERMISSION.EMP_VIEW] },
   // Linking a person to a login is user administration, not employee data.
   { path: '/hr/employee-accounts', anyOf: [PERMISSION.USER_MANAGE] },
-  { path: '/hr/branches', anyOf: [PERMISSION.EMP_VIEW] },
-  { path: '/hr/departments', anyOf: [PERMISSION.EMP_VIEW] },
-  { path: '/hr/positions', anyOf: [PERMISSION.EMP_VIEW] },
-  { path: '/hr/component-types', anyOf: [PERMISSION.EMP_VIEW] },
-  { path: '/hr/leave-types', anyOf: [PERMISSION.EMP_VIEW] },
-  { path: '/hr/leave-policy', anyOf: [PERMISSION.EMP_VIEW] },
+  /* THE SETUP TABLES ARE GATED ON THEIR WRITE TRUST, NOT ON EMP_VIEW.
+     Their GETs are still EMP_VIEW — deliberately, because a branch list and a currency list feed
+     dropdowns on half the pages in the app and must keep loading for everyone. What is gated here
+     is the ADMIN PAGE for each table: a page whose only purpose is to edit, shown to somebody who
+     cannot edit, is a grid of buttons that all 403. So the page follows the write. */
+  { path: '/hr/branches', anyOf: [PERMISSION.ORG_MANAGE] },
+  { path: '/hr/departments', anyOf: [PERMISSION.ORG_MANAGE] },
+  { path: '/hr/positions', anyOf: [PERMISSION.ORG_MANAGE] },
+  { path: '/hr/component-types', anyOf: [PERMISSION.COMPONENT_MANAGE] },
+  { path: '/hr/leave-types', anyOf: [PERMISSION.LEAVE_POLICY_MANAGE] },
+  { path: '/hr/leave-policy', anyOf: [PERMISSION.LEAVE_POLICY_MANAGE] },
+  /* EMP_EDIT, NOT EMP_VIEW — the one HR route gated on the write trust. Reading a tier NAME needs
+     no permission at all (the API leaves that endpoint open, because the name is printed on screens
+     most of the company sees); this page exists only to CHANGE the dictionary, so seeing it is the
+     same trust as editing it. Gating it on EMP_VIEW would have shown a grid whose every button
+     403s. */
+  { path: '/hr/tiers', anyOf: [PERMISSION.EMP_EDIT] },
 
   // ── Core lookups ──────────────────────────────────────────────────────────────────────────────
-  /* NOT ungated. Both enforce EMP_VIEW on their GET — the same code as the HR lookups, which is
-     consistent once you notice a currency list is only ever read next to a salary. */
-  { path: '/core/currencies', anyOf: [PERMISSION.EMP_VIEW] },
-  { path: '/core/exchange-rates', anyOf: [PERMISSION.EMP_VIEW] },
+  /* Same split as the HR setup tables: the GETs stay EMP_VIEW so every currency dropdown in
+     payroll keeps working, while these two ADMIN pages follow CORE_MANAGE. */
+  { path: '/core/currencies', anyOf: [PERMISSION.CORE_MANAGE] },
+  { path: '/core/exchange-rates', anyOf: [PERMISSION.CORE_MANAGE] },
 
-  // ── Reports ───────────────────────────────────────────────────────────────────────────────────
-  { path: '/reports/monthly-attendance', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
-  { path: '/reports/daily-attendance', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
-  { path: '/reports/leave-balance', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
+  /* ── Reports ───────────────────────────────────────────────────────────────────────────────────
+     REPORT_VIEW, not ATTENDANCE_VIEW. ReportsController's endpoints have moved off the attendance
+     code, and the reason is that the leave-balance report is not an attendance screen at all —
+     gating it on ATTENDANCE_VIEW meant a manager who needed one number had to be given the raw
+     punch data to get it. */
+  { path: '/reports/monthly-attendance', anyOf: [PERMISSION.REPORT_VIEW] },
+  { path: '/reports/daily-attendance', anyOf: [PERMISSION.REPORT_VIEW] },
+  { path: '/reports/leave-balance', anyOf: [PERMISSION.REPORT_VIEW] },
 
   // ── Security ──────────────────────────────────────────────────────────────────────────────────
   { path: '/security/users', anyOf: [PERMISSION.USER_MANAGE] },
   { path: '/security/roles', anyOf: [PERMISSION.ROLE_MANAGE] },
   { path: '/security/role-permissions', anyOf: [PERMISSION.ROLE_MANAGE] },
+
+  /* ── Settings ─────────────────────────────────────────────────────────────────────────────────
+     GATED ON SETTING_MANAGE, WHICH ALSO HIDES THE PERSONAL PREFERENCES INSIDE IT.
+     The page holds two unrelated things: the system settings (SETTING_MANAGE, and the reason for
+     this entry) and each person's own Language and Live-updates choices, which need no permission
+     and used to reach everybody. Gating the route takes the second away with the first — see the
+     note in SettingsPage. The language switch is the one that matters: it is the only route to
+     reading this application in Arabic. */
+  { path: '/settings', anyOf: [PERMISSION.SETTING_MANAGE] },
 ]
 
 /** Indexed once at module load — the nav asks this for every leaf on every render. */

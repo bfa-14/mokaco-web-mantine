@@ -5,7 +5,7 @@ import { IconChevronDown, IconChevronLeft, IconChevronRight } from '@tabler/icon
 import { getErrorMessage } from '../../api/errorMessage'
 import { employeesService } from '../../services/hrService'
 import { PageHelp } from '../../components/PageHelp'
-import { approvalTierLabel } from '../../types/hr'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import type { OrgTreeNode } from '../../types/hr'
 import { chevronForward } from '../../i18n/physical'
 
@@ -33,6 +33,7 @@ function ForwardChevron() {
  */
 export default function OrgChartPage() {
   const navigate = useNavigate()
+  const { tierName } = useApprovalTiers()
 
   const [nodes, setNodes] = useState<OrgTreeNode[]>([])
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
@@ -180,9 +181,9 @@ export default function OrgChartPage() {
 
         <span className="wf-org-name">{n.fullName}</span>
         <span className="wf-org-branch">{n.branchName}</span>
-        {n.approvalTier > 1 && (
-          <span className="badge badge--muted">{approvalTierLabel(n.approvalTier)}</span>
-        )}
+        {/* Every node carries its tier. The old `> 1` guard was a rank test — it treated 1 as the
+            unremarkable default, which is now the head of the organisation. */}
+        <span className="badge badge--muted">{tierName(n.approvalTier)}</span>
       </div>
     )
   }

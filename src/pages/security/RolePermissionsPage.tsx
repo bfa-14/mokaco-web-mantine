@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, Checkbox, Loader, Select } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconDeviceFloppy } from '@tabler/icons-react'
@@ -23,6 +24,7 @@ function sameSet(a: Set<number>, b: Set<number>): boolean {
 }
 
 export default function RolePermissionsPage() {
+  const { t } = useTranslation()
   const [roles, setRoles] = useState<Role[]>([])
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null)
@@ -241,7 +243,14 @@ export default function RolePermissionsPage() {
                         <div key={permission.permissionId} className="perm-item">
                           <Checkbox
                             checked={assigned.has(permission.permissionId)}
-                            label={permission.name || permission.code}
+                            /* The database's own Name is the default, so a permission added to
+                               security.PERMISSION shows up here with its wording and no frontend
+                               change. A translation is an OVERRIDE for the codes we have wording
+                               for — which is what makes this list readable in Arabic at all, since
+                               the Name column is English only. */
+                            label={t(`security.permissions.${permission.code}`, {
+                              defaultValue: permission.name || permission.code,
+                            })}
                             onChange={(e) =>
                               togglePermission(
                                 permission.permissionId,

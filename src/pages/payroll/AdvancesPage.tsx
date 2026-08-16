@@ -6,6 +6,8 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Modal, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
 import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { PageHelp } from '../../components/PageHelp'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
@@ -33,6 +35,10 @@ const PAGE_SIZES = ['15', '30', '60']
  */
 export default function AdvancesPage() {
   const navigate = useNavigate()
+  /* PAYROLL_VIEW reads the ledger; re-pacing a recovery rewrites what payroll deducts next month,
+     so the pencil follows PAYROLL_RUN. Raising a NEW advance is a request and stays open to all. */
+  const { hasPermission } = useAuth()
+  const canRun = hasPermission(PERMISSION.PAYROLL_RUN)
   const [rows, setRows] = useState<SalaryAdvance[]>(EMPTY)
   const [openOnly, setOpenOnly] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +115,7 @@ export default function AdvancesPage() {
         size: 70,
         cell: (c) => {
           const d = c.row.original
-          return d.isSettled ? null : (
+          return d.isSettled || !canRun ? null : (
             <ActionIcon
               variant="subtle"
               title="Change monthly deduction"
@@ -122,7 +128,7 @@ export default function AdvancesPage() {
         },
       }),
     ],
-    [],
+    [canRun],
   )
 
   const table = useReactTable({

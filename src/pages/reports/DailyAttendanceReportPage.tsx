@@ -13,7 +13,7 @@ import type {
   DailyAttendanceRow,
 } from '../../types/reports'
 import { ReportShell, ReportDocHead } from './ReportShell'
-import { ATTENDANCE_VIEW, today, reportDate, reportMinutes } from './reportShared'
+import { REPORT_VIEW, today, reportDate, reportMinutes } from './reportShared'
 
 /** '2026-06-10T08:05:00' → '08:05'. Blank punches read as a dash, not an empty cell. */
 function clock(value: string | null): string {
@@ -40,7 +40,7 @@ function tallyOf(rows: DailyAttendanceRow[]) {
  */
 export default function DailyAttendanceReportPage() {
   const { hasPermission } = useAuth()
-  const canView = hasPermission(ATTENDANCE_VIEW)
+  const canView = hasPermission(REPORT_VIEW)
 
   const [searchParams] = useSearchParams()
 

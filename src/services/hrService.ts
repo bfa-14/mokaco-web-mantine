@@ -2,6 +2,9 @@ import { apiRequest, ApiError } from '../api/client'
 import { API_BASE_URL } from '../config'
 import { tokenStorage } from '../auth/tokenStorage'
 import type {
+  ApprovalTier,
+  ApprovalTierCreateRequest,
+  ApprovalTierNameRequest,
   Branch,
   ComponentType,
   Department,
@@ -251,6 +254,34 @@ export const employeesService = {
   /** The deepest reporting line among current employees — the chain builder warns past it. Returns the number. */
   getOrgMaxDepth: () =>
     apiRequest<{ maxDepth: number }>('/api/org/max-depth').then((r) => r.maxDepth),
+}
+
+/**
+ * The approval-tier dictionary — which named rank each tier number stands for.
+ *
+ * The READ needs no permission (a tier name is a label, printed on screens most of the company
+ * sees); every WRITE is EMP_EDIT, and the API refuses a delete while anybody still holds the tier,
+ * naming who. That refusal is the whole value of the guard, so callers must surface its message
+ * rather than a generic failure.
+ */
+export const approvalTiersService = {
+  getAll: () => apiRequest<ApprovalTier[]>('/api/hr/approval-tiers'),
+
+  create: (request: ApprovalTierCreateRequest) =>
+    apiRequest<ApprovalTier>('/api/hr/approval-tiers', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+
+  /** Renames a tier. The number never moves — it is what employees and chains point at. */
+  setName: (tierNo: number, request: ApprovalTierNameRequest) =>
+    apiRequest<ApprovalTier>(`/api/hr/approval-tiers/${tierNo}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    }),
+
+  remove: (tierNo: number) =>
+    apiRequest<void>(`/api/hr/approval-tiers/${tierNo}`, { method: 'DELETE' }),
 }
 
 export const salaryComponentsService = {

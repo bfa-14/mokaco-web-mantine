@@ -12,7 +12,7 @@ import type {
   MonthlyAttendanceRow,
 } from '../../types/reports'
 import { ReportShell, ReportDocHead } from './ReportShell'
-import { lastMonths, ATTENDANCE_VIEW, reportMinutes } from './reportShared'
+import { lastMonths, REPORT_VIEW, reportMinutes } from './reportShared'
 
 /** The columns whose values are worth summing at the foot of the sheet. */
 function totalsOf(rows: MonthlyAttendanceRow[]) {
@@ -47,7 +47,7 @@ function totalsOf(rows: MonthlyAttendanceRow[]) {
  */
 export default function MonthlyAttendanceReportPage() {
   const { hasPermission } = useAuth()
-  const canView = hasPermission(ATTENDANCE_VIEW)
+  const canView = hasPermission(REPORT_VIEW)
 
   const [searchParams] = useSearchParams()
   const months = lastMonths(12)

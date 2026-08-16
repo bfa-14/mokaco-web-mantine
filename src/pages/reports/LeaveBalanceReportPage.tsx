@@ -9,7 +9,7 @@ import { branchesService, employeesService } from '../../services/hrService'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import type { LeaveBalanceHeader, LeaveBalanceRow } from '../../types/reports'
 import { ReportShell, ReportDocHead } from './ReportShell'
-import { ATTENDANCE_VIEW, lastMonths } from './reportShared'
+import { REPORT_VIEW, lastMonths } from './reportShared'
 
 /**
  * Accrued / carried over / used / remaining, per employee per leave type, as of a period.
@@ -20,7 +20,7 @@ import { ATTENDANCE_VIEW, lastMonths } from './reportShared'
  */
 export default function LeaveBalanceReportPage() {
   const { hasPermission } = useAuth()
-  const canView = hasPermission(ATTENDANCE_VIEW)
+  const canView = hasPermission(REPORT_VIEW)
 
   const [searchParams] = useSearchParams()
   const months = lastMonths(12)

@@ -136,7 +136,8 @@
       "positions": "Positions",
       "componentTypes": "Component Types",
       "leaveTypes": "Leave Types",
-      "leavePolicy": "Leave policy"
+      "leavePolicy": "Leave policy",
+      "tiers": "Tiers"
     },
     "core": {
       "group": "Core",
@@ -254,6 +255,12 @@
     "chain": {
       "noSteps": "No steps yet.",
       "step": "step"
+    },
+    "tiers": {
+      "everyone": "Everyone",
+      "everyoneDefault": "Everyone (default)",
+      "tierAndSenior": "{{tier}} and more senior",
+      "minTierHelp": "Applies to this tier and more senior (smaller numbers)."
     },
     "typeGroup": {
       "Time": "Time",
@@ -377,6 +384,33 @@
       "decide": "Decide",
       "changeDecision": "Change decision",
       "takeBack": "Take this step back"
+    },
+    "settlement": {
+      "title": "Final settlement",
+      "preparedBadge": "Prepared ✓",
+      "notPrepared": "Not prepared — the final sign-off is blocked until the figures are entered.",
+      "service": "Service",
+      "requiredNotice": "Required notice",
+      "givenNotice": "Notice given",
+      "shortfall": "Shortfall",
+      "noShortfall": "None — notice was served in full",
+      "shortfallHint": "Notice was {{days}} short. Record any pay in lieu as notice pay below.",
+      "unusedLeaveDays": "Unused leave days",
+      "unusedLeaveAmount": "Unused leave amount",
+      "indemnityAmount": "Indemnity amount",
+      "noticePayAmount": "Notice pay amount",
+      "otherDues": "Other dues",
+      "deductions": "Deductions",
+      "note": "Note",
+      "total": "Total",
+      "totalFormula": "Leave, indemnity, notice pay and other dues, less deductions. The stored figure is the one the server computes from what you save.",
+      "save": "Save the settlement",
+      "edit": "Edit figures",
+      "saved": "Settlement saved. The final sign-off is no longer blocked.",
+      "currencyRequired": "Choose the currency this settlement is paid in.",
+      "preparedAtLine": "Prepared {{when}}",
+      "preparedByLine": "Prepared by {{name}} · {{when}}",
+      "closedUnprepared": "This request closed without a settlement being prepared."
     }
   },
   "body": {
@@ -592,9 +626,30 @@
       "missingDeduction": "a monthly deduction",
       "missingDeductionSize": "a monthly deduction no larger than the advance",
       "notice": "Once approved, recovery starts in {{period}} — the ledger row is created at the Owner’s signature."
+    },
+    "rosterApproval": {
+      "branchPlaceholder": "Which branch?",
+      "month": "Month",
+      "monthHint": "The whole month’s roster for this branch goes up for signature as one request.",
+      "covers": "Covers every rostered day at {{branch}} in {{month}}.",
+      "missingBranch": "a branch"
     }
   },
   "attendance": {
+    "rosterApproval": {
+      "state": {
+        "draft": "{{month}} has not been submitted for approval.",
+        "pending": "{{month}} is waiting for approval.",
+        "approved": "{{month}} is approved."
+      },
+      "hint": {
+        "draft": "Finish the month first — a roster sent up with gaps in it is sent up twice.",
+        "pending": "A request is open on it. Changes made now are changes nobody has signed for.",
+        "approved": "Signed off. Anything changed after this differs from what was approved."
+      },
+      "submit": "Submit month for approval",
+      "viewRequest": "View request"
+    },
     "status": {
       "Present": "Present",
       "Absent": "Absent",
@@ -767,6 +822,68 @@
     "deniedHint": "You don't have permission to view this page. Ask an administrator if you need it.",
     "backHome": "Back to dashboard",
     "forbiddenAction": "You don't have permission for this action"
+  },
+  "security": {
+    "permissions": {
+      "ORG_MANAGE": "Manage branches, departments & positions",
+      "LEAVE_POLICY_MANAGE": "Manage leave types & leave policy",
+      "COMPONENT_MANAGE": "Manage salary component types",
+      "CORE_MANAGE": "Manage currencies & exchange rates",
+      "PAYROLL_VIEW": "View payroll runs & payslips",
+      "REPORT_VIEW": "View reports"
+    }
+  },
+  "core": {
+    "exchangeRates": {
+      "actions": "Actions",
+      "edit": "Edit",
+      "delete": "Delete",
+      "editTitle": "Edit exchange rate",
+      "deleteTitle": "Delete this rate?",
+      "deleteBody": "{{from}} → {{to}} · {{type}} · {{date}} — rate {{rate}}.",
+      "deleteHint": "Anything already converted at this rate keeps the figure it was converted with. Only conversions made from now on change.",
+      "pairLocked": "The pair and the type cannot be changed — correct the figure or the date, or add a new rate.",
+      "updated": "Exchange rate updated.",
+      "deleted": "Exchange rate deleted.",
+      "rateType": {
+        "Official": "Official",
+        "Market": "Market",
+        "NonOfficial": "Non official"
+      }
+    }
+  },
+  "hr": {
+    "employeeForm": {
+      "tierPlaceholder": "Select the tier…",
+      "tierFirst": "Select the tier first",
+      "managerOption": "{{name}} — {{tier}}",
+      "managerCleared": "That manager is more junior than the new tier, so the choice was cleared. Pick someone at this tier or above.",
+      "noCandidates": "Nobody holds a tier senior enough to manage this person."
+    },
+    "tiers": {
+      "title": "Approval tiers",
+      "subtitle": "The seniority ranks a request's approval chain is chosen by. Renaming one re-labels every screen that shows it.",
+      "tierNo": "Tier",
+      "name": "Name",
+      "nameAr": "Arabic name",
+      "actions": "Actions",
+      "empty": "No tiers are defined.",
+      "add": "Add tier",
+      "addTitle": "New tier",
+      "editTitle": "Edit tier",
+      "create": "Create",
+      "saved": "Saved.",
+      "created": "Tier created.",
+      "deleted": "Tier deleted.",
+      "deletingBusy": "Deleting…",
+      "nameRequired": "Name is required.",
+      "numberHint": "1 is the head of the organisation; a bigger number is a more junior role. The number is what employees and approval chains point at, so it cannot be changed later.",
+      "numberLocked": "The number cannot be changed — employees and approval chains point at it.",
+      "nameArHint": "Shown to readers using Arabic. Left empty, they see the name above.",
+      "deleteTitle": "Delete tier?",
+      "deleteBody": "Delete tier {{tier}} — {{name}}?",
+      "deleteHint": "This is refused while any employee or approval chain still uses the tier, and the refusal will name what does."
+    }
   },
   "settings": {
     "tabs": {

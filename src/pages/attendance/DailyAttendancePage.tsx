@@ -1737,9 +1737,12 @@ export default function DailyAttendancePage() {
           >
             {t('attendance.daily.print', { date: formatDayLabel(day) })}
           </Button>
-          {/* HR ONLY. Hidden rather than disabled: a button somebody can never use is noise, and
-              this one changes what a person is paid. */}
-          {canCorrect && (
+          {/* ATTENDANCE_MANAGE — "enter attendance manually" is what that code is for, and this is
+              the toolbar's ENTER path: a day the processor never produced. The drawer's "Edit day"
+              is the other thing and keeps ATTENDANCE_CORRECT, because overriding a day the system
+              already derived is the act that changes what somebody is paid.
+              Hidden rather than disabled: a button somebody can never use is noise. */}
+          {canManage && (
             <Button
               leftSection={<IconPlus size={16} />}
               onClick={() => setManualNewVisible(true)}

@@ -14,12 +14,14 @@ import { useOnboardingForm } from './OnboardingBody'
 import { useSeparationForm } from './SeparationBody'
 import { usePayrollAdjustmentForm } from './PayrollAdjustmentBody'
 import { useSalaryAdvanceForm } from './SalaryAdvanceBody'
+import { useRosterApprovalForm } from './RosterApprovalBody'
 
 /**
  * Raise a request, of whatever kind. A switchboard: the shell owns the chrome, each type
  * contributes a FORM BODY. All body hooks run every render — the rules of hooks demand it, and it
  * keeps half-typed forms alive across a type-switch. A code absent from the map shows the honest
- * "no form yet" panel; that is the contract, not a failure. (All 11 bodies ported.)
+ * "no form yet" panel; that is the contract, not a failure. (All 11 ported bodies, plus
+ * ROSTER_APPROVAL — which is why that type no longer falls through to the panel.)
  */
 export default function NewRequestPage() {
   const { t } = useTranslation()
@@ -45,6 +47,9 @@ export default function NewRequestPage() {
   // Name-only: mirrors the procedure's composed title; HR raising on behalf keeps the field.
   const payrollAdjustment = usePayrollAdjustmentForm(selectedName, false)
   const salaryAdvance = useSalaryAdvanceForm(selectedName, false)
+  // Branch-scoped like tips: the RAISER'S branch is where the month starts, not the selected
+  // employee's — there is no selected employee on this one (hidesEmployee).
+  const rosterApproval = useRosterApprovalForm(ctx.me?.branchId ?? null, false)
 
   // The keys are the API's RequestTypeCodes, exactly — a mismatch here is a type that silently
   // shows the "no form yet" panel rather than its form.
@@ -60,6 +65,7 @@ export default function NewRequestPage() {
     SEPARATION: separation,
     PAYROLL_ADJUSTMENT: payrollAdjustment,
     SALARY_ADVANCE: salaryAdvance,
+    ROSTER_APPROVAL: rosterApproval,
   }
   const body = ctx.type ? (bodies[ctx.type] ?? null) : null
 

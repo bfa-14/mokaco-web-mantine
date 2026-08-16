@@ -108,6 +108,7 @@ export const TYPE_GROUPS: Record<string, string> = {
   OVERTIME: 'Time',
   SHIFT_SWAP: 'Schedule',
   AVAILABILITY_CHANGE: 'Schedule',
+  ROSTER_APPROVAL: 'Schedule',
   ONBOARDING: 'People',
   SEPARATION: 'People',
   TIP_DISTRIBUTION: 'Money',

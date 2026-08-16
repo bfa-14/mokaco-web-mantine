@@ -8,6 +8,8 @@ import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow
 import { leaveTypesService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import type { LeaveType } from '../../types/hr'
 
 interface FormState {
@@ -61,9 +63,12 @@ const PAGE_SIZES = ['10', '25', '50']
 
 function LeaveTypesGrid({
   rows,
+  canManage,
   onEdit,
 }: {
   rows: LeaveType[]
+  /** False for a LEAVE_POLICY_MANAGE-less reader: the grid still reads, the Actions column goes. */
+  canManage: boolean
   onEdit: (row: LeaveType) => void
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
@@ -86,24 +91,29 @@ function LeaveTypesGrid({
         cell: (info) => <YesNo value={info.row.original.carryOver} />,
         meta: { filterText: yesNoText, filterOptions: YES_NO },
       }),
-      columnHelper.display({
-        id: 'actions',
-        header: 'Actions',
-        cell: (info) => (
-          <div className="grid-actions">
-            <Button
-              variant="subtle"
-              size="compact-sm"
-              leftSection={<IconPencil size={14} />}
-              onClick={() => onEdit(info.row.original)}
-            >
-              Edit
-            </Button>
-          </div>
-        ),
-      }),
+      // The column, not just the button — an "Actions" header over empty cells reads as broken.
+      ...(canManage
+        ? [
+            columnHelper.display({
+              id: 'actions',
+              header: 'Actions',
+              cell: (info) => (
+                <div className="grid-actions">
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconPencil size={14} />}
+                    onClick={() => onEdit(info.row.original)}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              ),
+            }),
+          ]
+        : []),
     ],
-    [onEdit],
+    [onEdit, canManage],
   )
 
   const table = useReactTable({
@@ -215,6 +225,8 @@ function LeaveTypesGrid({
 }
 
 export default function LeaveTypesPage() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(PERMISSION.LEAVE_POLICY_MANAGE)
   const [rows, setRows] = useState<LeaveType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -326,9 +338,11 @@ export default function LeaveTypesPage() {
           >
             <IconRefresh size={16} />
           </ActionIcon>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            New
-          </Button>
+          {canManage && (
+            <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
+              New
+            </Button>
+          )}
         </div>
       </div>
 
@@ -343,7 +357,7 @@ export default function LeaveTypesPage() {
           <Loader size={40} />
         </div>
       ) : (
-        <LeaveTypesGrid rows={rows} onEdit={openEdit} />
+        <LeaveTypesGrid rows={rows} canManage={canManage} onEdit={openEdit} />
       )}
 
       <Modal

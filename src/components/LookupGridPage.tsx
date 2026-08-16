@@ -5,6 +5,7 @@ import { ActionIcon, Button, Group, Loader, Modal, Pagination, Select, Switch, T
 import { notifications } from '@mantine/notifications'
 import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../api/errorMessage'
+import { useAuth } from '../auth/useAuth'
 import { alignStart } from '../i18n/physical'
 import { gridFilterFn, GridFilterRow } from './grid/GridFilterRow'
 import { GridHeaderContent } from './grid/GridHeaderFilter'
@@ -34,6 +35,17 @@ const columnHelper = createColumnHelper<LookupRow>()
 interface LookupGridPageProps {
   title: string
   subtitle: string
+  /**
+   * The permission code that may CHANGE this dictionary — 'ORG_MANAGE' and the like.
+   *
+   * Without it the grid renders read-only: no New, no Edit, no popup. The route guard usually keeps
+   * such a reader out of these pages entirely (the setup tables follow their write trust), so this
+   * is the second lock rather than the first — and it is the one that still holds if a page is ever
+   * opened up to its read code, which is the change that would otherwise leave live buttons behind.
+   *
+   * Omitted, the grid is editable by anyone who reached it.
+   */
+  managePermission?: string
   /** Primary-key field name, e.g. "branchId". */
   keyField: string
   /** The editable text field name, e.g. "name" or "title". */
@@ -48,6 +60,7 @@ interface LookupGridPageProps {
 export function LookupGridPage({
   title,
   subtitle,
+  managePermission,
   keyField,
   textField,
   textLabel,
@@ -55,6 +68,8 @@ export function LookupGridPage({
   create,
   update,
 }: LookupGridPageProps) {
+  const { hasPermission } = useAuth()
+  const canManage = managePermission == null || hasPermission(managePermission)
   const [rows, setRows] = useState<LookupRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -178,23 +193,29 @@ export function LookupGridPage({
         ),
         meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
       }),
-      columnHelper.display({
-        id: 'actions',
-        header: 'Actions',
-        cell: (info) => (
-          <Button
-            variant="subtle"
-            size="compact-sm"
-            leftSection={<IconPencil size={14} />}
-            onClick={() => openEdit(info.row.original)}
-          >
-            Edit
-          </Button>
-        ),
-      }),
+      // The whole COLUMN goes for a reader, not just the button inside it — an "Actions" header
+      // over a strip of empty cells reads as a grid that failed to render its own controls.
+      ...(canManage
+        ? [
+            columnHelper.display({
+              id: 'actions',
+              header: 'Actions',
+              cell: (info) => (
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconPencil size={14} />}
+                  onClick={() => openEdit(info.row.original)}
+                >
+                  Edit
+                </Button>
+              ),
+            }),
+          ]
+        : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [keyField, textField, textLabel],
+    [keyField, textField, textLabel, canManage],
   )
 
   const table = useReactTable({
@@ -239,9 +260,11 @@ export function LookupGridPage({
           >
             <IconRefresh size={16} />
           </ActionIcon>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            New
-          </Button>
+          {canManage && (
+            <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
+              New
+            </Button>
+          )}
         </div>
       </div>
 

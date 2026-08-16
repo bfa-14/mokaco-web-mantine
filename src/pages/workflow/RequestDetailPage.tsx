@@ -20,6 +20,7 @@ import {
   payrollAdjustmentsService,
   requestsService,
   salaryAdvancesService,
+  separationsService,
   tipDistributionsService,
 } from '../../services/workflowService'
 import type { ExpensePayload } from '../../services/workflowService'
@@ -37,6 +38,7 @@ import type {
   RequestReversal,
   RequestStep,
   SalaryAdvancePayload,
+  SeparationPayload,
   SignatureLogEntry,
   SignatureRequirement,
   TipDistributionPayload,
@@ -45,6 +47,7 @@ import { WF } from '../../types/workflow'
 import { RequestStepper, StatusChip } from './workflowShared'
 import { DecidePopup } from './DecidePopup'
 import { RequestDocuments } from './RequestDocuments'
+import { SeparationSettlement } from './SeparationSettlement'
 import { balanceDaysText } from './newRequestShared'
 import {
   clockTime,
@@ -1083,6 +1086,8 @@ export default function RequestDetailPage() {
     useState<SalaryAdvancePayload | null>(null)
   /** The onboarding payload — the candidate's details and the checklist that gates the final approval. */
   const [onboardingPayload, setOnboardingPayload] = useState<OnboardingPayload | null>(null)
+  /** The separation payload — the notice arithmetic, and the settlement that gates the sign-off. */
+  const [separationPayload, setSeparationPayload] = useState<SeparationPayload | null>(null)
   /** Known when the PAGE loads, not when a dialog opens — a signature must never surprise anyone. */
   const [signature, setSignature] = useState<SignatureRequirement | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1162,6 +1167,10 @@ export default function RequestDetailPage() {
         setExpensePayload(await expensesService.payload(requestId).catch(() => null))
       } else if (d.header.requestTypeCode === 'ONBOARDING') {
         setOnboardingPayload(await onboardingService.payload(requestId).catch(() => null))
+      } else if (d.header.requestTypeCode === 'SEPARATION') {
+        // Reloaded after every save AND every decision: preparing the settlement stamps preparedAt
+        // and the server's own total, and the final approval stamps appliedAt and leaveClearedAt.
+        setSeparationPayload(await separationsService.payload(requestId).catch(() => null))
       } else if (d.header.requestTypeCode === 'PAYROLL_ADJUSTMENT') {
         // Reloaded after every decision, which is what moves the lifecycle badge: the final
         // approval writes the ledger row, and the payslip id appears later still, when the target
@@ -1785,6 +1794,21 @@ export default function RequestDetailPage() {
         <div className="wf-print-hide">
           <RequestDocuments requestId={requestId} canEdit={h.status === 'Pending' || h.status === 'OnHold'} />
         </div>
+
+        {/* THE FINAL SETTLEMENT, between the documents and the chain — which is where it belongs in
+            the reading order: it is the last thing prepared BEFORE anyone signs, and the final
+            sign-off is refused while it does not exist. Saving refetches the request, so the
+            decision dialog's refusal clears without a reload. */}
+        {separationPayload && (
+          <div className="wf-print-hide">
+            <SeparationSettlement
+              requestId={requestId}
+              payload={separationPayload}
+              canEdit={h.status === 'Pending' || h.status === 'OnHold'}
+              onSaved={load}
+            />
+          </div>
+        )}
 
         {/* WHAT WILL HAPPEN IF THEY SIGN, said before the button rather than instead of it. The
             Approve button stays live on purpose: the API's refusal NAMES every outstanding item, and

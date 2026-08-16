@@ -7,6 +7,8 @@ import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-rea
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { componentTypesService } from '../../services/hrService'
 import type { ComponentType } from '../../types/hr'
 
@@ -46,9 +48,12 @@ const PAGE_SIZES = ['10', '25', '50']
 
 function ComponentTypesGrid({
   rows,
+  canManage,
   onEdit,
 }: {
   rows: ComponentType[]
+  /** False for a COMPONENT_MANAGE-less reader: the grid still reads, the Actions column goes. */
+  canManage: boolean
   onEdit: (row: ComponentType) => void
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
@@ -70,25 +75,30 @@ function ComponentTypesGrid({
         cell: (info) => (info.row.original.sign < 0 ? '−1' : '+1'),
         meta: { filterText: (v) => (v < 0 ? '−1' : '+1'), filterOptions: ['+1', '−1'] },
       }),
-      columnHelper.display({
-        id: 'actions',
-        header: 'Actions',
-        cell: (info) => (
-          <div className="grid-actions">
-            <Button
-              variant="subtle"
-              size="compact-sm"
-              leftSection={<IconPencil size={14} />}
-              onClick={() => onEdit(info.row.original)}
-            >
-              Edit
-            </Button>
-          </div>
-        ),
-      }),
+      // The column, not just the button — an "Actions" header over empty cells reads as broken.
+      ...(canManage
+        ? [
+            columnHelper.display({
+              id: 'actions',
+              header: 'Actions',
+              cell: (info) => (
+                <div className="grid-actions">
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconPencil size={14} />}
+                    onClick={() => onEdit(info.row.original)}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              ),
+            }),
+          ]
+        : []),
     ],
     // `rows` only feeds the Category dropdown's option list.
-    [onEdit, rows],
+    [onEdit, rows, canManage],
   )
 
   const table = useReactTable({
@@ -200,6 +210,8 @@ function ComponentTypesGrid({
 }
 
 export default function ComponentTypesPage() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(PERMISSION.COMPONENT_MANAGE)
   const [rows, setRows] = useState<ComponentType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -311,9 +323,11 @@ export default function ComponentTypesPage() {
           >
             <IconRefresh size={16} />
           </ActionIcon>
-          <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            New
-          </Button>
+          {canManage && (
+            <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
+              New
+            </Button>
+          )}
         </div>
       </div>
 
@@ -328,7 +342,7 @@ export default function ComponentTypesPage() {
           <Loader size={40} />
         </div>
       ) : (
-        <ComponentTypesGrid rows={rows} onEdit={openEdit} />
+        <ComponentTypesGrid rows={rows} canManage={canManage} onEdit={openEdit} />
       )}
 
       <Modal

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   ActionIcon,
@@ -25,7 +26,8 @@ import type {
   WorkflowDefinition,
   WorkflowStep,
 } from '../../types/workflow'
-import { MIN_TIER_OPTIONS, chainPopulationLabel } from '../../types/workflow'
+import { MIN_TIER_EVERYONE } from '../../types/workflow'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import { approverText } from './workflowFormat'
 
 /**
@@ -74,6 +76,7 @@ export default function ChainBuilderPage() {
   const { definitionId } = useParams()
   const defId = Number(definitionId)
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const [definition, setDefinition] = useState<WorkflowDefinition | null>(null)
   const [steps, setSteps] = useState<WorkflowStep[]>([])
@@ -251,6 +254,19 @@ export default function ChainBuilderPage() {
    */
   const [tierChoice, setTierChoice] = useState<{ defId: number; value: number } | null>(null)
   const [tierSaving, setTierSaving] = useState(false)
+
+  /**
+   * The tier dictionary, for the "Applies to" control and the subtitle that echoes it.
+   *
+   * The options are the default population followed by every tier in seniority order — tier 1, the
+   * head, first. Previously this was a fixed three-entry constant naming tiers 2 and 3, so a
+   * renamed tier, a new one, or the fourth a company actually uses could never be chosen here.
+   */
+  const { options: tierOptions, populationLabel } = useApprovalTiers()
+  const appliesToOptions = [
+    { value: String(MIN_TIER_EVERYONE), label: t('workflow.tiers.everyoneDefault') },
+    ...tierOptions,
+  ]
   /** The API's refusal, shown verbatim beside the control that just reverted. */
   const [tierError, setTierError] = useState<string | null>(null)
   /**
@@ -322,7 +338,7 @@ export default function ChainBuilderPage() {
       // Captured BEFORE the reload clears the selection — it is the source's audience, and the
       // source is about to stop being selected.
       const sourceAppliesTo = copySource?.appliesTo ?? null
-      const draftAppliesTo = chainPopulationLabel(shownTier === 0 ? null : shownTier)
+      const draftAppliesTo = populationLabel(shownTier === MIN_TIER_EVERYONE ? null : shownTier)
 
       const result = await chainsService.copyStepsFrom(defId, copySourceId, replaceExisting)
       await load()
@@ -455,7 +471,7 @@ export default function ChainBuilderPage() {
               {definition
                 ? // shownTier, not definition.minRequesterTier: one source of truth, so the subtitle
                   // cannot disagree with the dropdown while a save is in flight.
-                  `${definition.requestTypeName} · v${definition.version} · ${definition.status} · ${chainPopulationLabel(shownTier === 0 ? null : shownTier)}`
+                  `${definition.requestTypeName} · v${definition.version} · ${definition.status} · ${populationLabel(shownTier === MIN_TIER_EVERYONE ? null : shownTier)}`
                 : ''}
             </p>
           </div>
@@ -471,16 +487,21 @@ export default function ChainBuilderPage() {
             </label>
             <Select
               id="wf-applies-to"
-              data={MIN_TIER_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+              // Built from the dictionary, in seniority order (tier 1 — the head — first), with
+              // the default population at the top. No tier is named in this file.
+              data={appliesToOptions}
               // The local choice, which outranks anything a refetch brings in — see changeMinTier.
               value={String(shownTier)}
-              w={220}
+              w={260}
               allowDeselect={false}
               // Disabled for the length of the PUT: a second change mid-save would desync the
               // control's own value from the one being written.
               disabled={tierSaving}
-              onChange={(v) => void changeMinTier(v != null ? Number(v) : 0)}
+              onChange={(v) => void changeMinTier(v != null ? Number(v) : MIN_TIER_EVERYONE)}
             />
+            <p className="hint" style={{ marginTop: 6 }}>
+              {t('workflow.tiers.minTierHelp')}
+            </p>
             {tierSaving && <div className="hint">Saving…</div>}
             {tierError && (
               <div className="wf-applies-to-error" role="alert">

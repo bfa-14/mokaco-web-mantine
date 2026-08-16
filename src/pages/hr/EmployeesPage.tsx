@@ -11,9 +11,10 @@ import { employeesService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { EmployeeFormPopup } from './EmployeeFormPopup'
 import type { EmployeeListItem, EmployeeLoginStatus } from '../../types/hr'
-import { approvalTierLabel } from '../../types/hr'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import { alignStart } from '../../i18n/physical'
 
 /**
@@ -78,6 +79,11 @@ export default function EmployeesPage() {
   const { hasPermission } = useAuth()
   // The login column and its filter are account administration — shown only to those who can manage it.
   const canManageAccounts = hasPermission('USER_MANAGE')
+  /* EMP_VIEW opened this page; changing the register is EMP_EDIT. Without it the grid is fully
+     readable and every profile still opens — only creating and removing people go. */
+  const canEdit = hasPermission(PERMISSION.EMP_EDIT)
+  // The tier column's words. Shared cache, so renaming a tier re-tags this grid at once.
+  const { tierName } = useApprovalTiers()
 
   const [rows, setRows] = useState<EmployeeListItem[]>([])
   const [logins, setLogins] = useState<Map<number, EmployeeLoginStatus>>(new Map())
@@ -217,22 +223,21 @@ export default function EmployeesPage() {
         meta: { filterText: (v) =>
           v ? new Date(v).toLocaleDateString() : '' },
       }),
-      /* Approval tier — tagged only for tier > 1; staff (the default) shows nothing, so the
-         column stays quiet unless someone is actually elevated. */
+      /* Approval tier — EVERY tier is tagged, including tier 1.
+         It used to hide tier 1 as "the unremarkable default", which was a rank test: it assumed 1
+         meant staff and that anything above it was the exception worth showing. Tier 1 is the HEAD
+         of the organisation now, so hiding it hid exactly the people most worth seeing — and with
+         an editable dictionary there is no default tier to be quiet about. It is a label. */
       columnHelper.accessor('approvalTier', {
         header: 'Tier',
         enableGlobalFilter: false,
-        cell: (info) => {
-          const tier = info.row.original.approvalTier
-          if (tier <= 1) return null
-          return <span className="badge badge--muted">{approvalTierLabel(tier)}</span>
+        cell: (info) => (
+          <span className="badge badge--muted">{tierName(info.row.original.approvalTier)}</span>
+        ),
+        meta: {
+          filterText: (v) => tierName(v),
+          filterOptions: optionsFrom(rows, (r) => tierName(r.approvalTier)),
         },
-        // Tier 1 shows an EMPTY cell, so its filter value is the empty string and it is simply
-        // absent from the dropdown — picking a tier means picking an elevated one.
-        meta: { filterText: (v) =>
-          v <= 1 ? '' : approvalTierLabel(v), filterOptions: optionsFrom(rows, (r) =>
-            r.approvalTier <= 1 ? '' : approvalTierLabel(r.approvalTier),
-          ) },
       }),
       // The accessor is the termination DATE (so the sort groups leavers by when they left); the
       // cell shows one of two words, and the filter matches those.
@@ -275,15 +280,18 @@ export default function EmployeesPage() {
               >
                 <IconSearch size={16} />
               </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                title="Remove"
-                aria-label="Remove"
-                onClick={() => void handleDelete(emp)}
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
+              {/* Opening a profile is a read and stays; removing somebody is not. */}
+              {canEdit && (
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  title="Remove"
+                  aria-label="Remove"
+                  onClick={() => void handleDelete(emp)}
+                >
+                  <IconTrash size={16} />
+                </ActionIcon>
+              )}
             </div>
           )
         },
@@ -292,7 +300,7 @@ export default function EmployeesPage() {
     // `rows` (the unfiltered load) feeds the three dropdowns' option lists — deliberately not
     // `displayed`, so narrowing one column does not empty the choices in the others.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canManageAccounts, logins, navigate, rows],
+    [canManageAccounts, canEdit, logins, navigate, rows, tierName],
   )
 
   const table = useReactTable({
@@ -354,9 +362,11 @@ export default function EmployeesPage() {
           >
             <IconRefresh size={16} />
           </ActionIcon>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateVisible(true)}>
-            New Employee
-          </Button>
+          {canEdit && (
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateVisible(true)}>
+              New Employee
+            </Button>
+          )}
         </div>
       </div>
 

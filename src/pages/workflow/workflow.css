@@ -1284,7 +1284,7 @@
   gap: 10px;
   margin-bottom: 8px;
 }
-/* The population tag: which requesters a chain serves (Everyone / Management+ / Executive). */
+/* The population tag: which requesters a chain serves — everyone, or a tier and everyone senior to it. */
 .wf-pop-tag {
   font-size: 11.5px;
   font-weight: 600;
@@ -2059,4 +2059,107 @@
 .wf-tip-mismatch {
   font-weight: 400;
   font-size: 12px;
+}
+
+/* ── The final settlement panel (separations). ──
+   Not a form beside the request: the final sign-off is REFUSED while it is unprepared, so the panel
+   states that in amber before anyone meets the refusal in the decision dialog, and turns green only
+   once the figures actually exist. */
+.wf-settle-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.wf-settle-badge {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #e9f2e6;
+  border: 1px solid #c3ddbb;
+  color: #2f5d3a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* The read-only context the figures are worked out from, ruled off from the form below it. */
+.wf-settle-context {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The shared banner carries its own bottom margin for a page; inside this card it needs a top one. */
+.wf-settle .wf-balance-warn {
+  margin: 14px 0 0;
+}
+
+.wf-settle-form {
+  margin-top: 14px;
+}
+
+/* THE LIVE SUM, while it is being typed — the one moment a wrong figure is still cheap to notice. */
+.wf-settle-total,
+.wf-settle-sum {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.wf-settle-total {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.wf-settle-sum {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #c3ddbb;
+}
+/* Tabular, so a figure re-read after an edit sits digit under digit rather than shifting. */
+.wf-settle-figure {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: #2f5d3a;
+}
+
+/* The stored settlement. Green because it is settled — the thing that was blocking the sign-off. */
+.wf-settle-summary {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #c3ddbb;
+  border-inline-start: 3px solid #2f5d3a;
+  border-radius: 8px;
+  background: #f4f9f1;
+}
+.wf-settle-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px 24px;
+}
+.wf-settle-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wf-settle-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.wf-settle-value {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.wf-settle-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.wf-settle-when {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-muted);
 }

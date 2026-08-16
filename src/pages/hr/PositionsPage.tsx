@@ -1,4 +1,5 @@
 import { LookupGridPage } from '../../components/LookupGridPage'
+import { PERMISSION } from '../../auth/routeAccess'
 import { positionsService } from '../../services/hrService'
 
 export default function PositionsPage() {
@@ -6,6 +7,7 @@ export default function PositionsPage() {
     <LookupGridPage
       title="Positions"
       subtitle="Job titles assigned to employees."
+      managePermission={PERMISSION.ORG_MANAGE}
       keyField="positionId"
       textField="title"
       textLabel="Title"
