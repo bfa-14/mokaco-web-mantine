@@ -8,14 +8,13 @@ import { IconDownload, IconTrash, IconUpload } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { fmtBytes, fmtDateTime } from './hrFormat'
 import { documentsService } from '../../services/hrService'
 import type { Document } from '../../types/hr'
 
-function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${bytes} B`
-}
+/* formatSize/date formatting are SHARED and null-safe — see hrFormat.ts. The local version was
+   typed `(bytes: number)` and called .toFixed on it directly, which throws rather than renders the
+   moment the API omits the field. */
 
 /**
  * notify(msg, type, ms) → Mantine notifications, adapted once so every call site below
@@ -148,15 +147,14 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
       columnHelper.accessor('contentType', { header: 'Type' }),
       columnHelper.accessor('sizeBytes', {
         header: 'Size',
-        cell: (info) => formatSize(info.row.original.sizeBytes),
+        cell: (info) => fmtBytes(info.row.original?.sizeBytes),
         // Sorts by the byte count so the biggest file really is last; matches on "1.4 MB".
-        meta: { filterText: formatSize },
+        meta: { filterText: fmtBytes },
       }),
       columnHelper.accessor('uploadedUtc', {
         header: 'Uploaded',
-        cell: (info) => (info.getValue() ? new Date(info.getValue()).toLocaleString() : ''),
-        meta: { filterText: (v) =>
-          v ? new Date(v).toLocaleString() : '' },
+        cell: (info) => fmtDateTime(info.getValue()),
+        meta: { filterText: fmtDateTime },
       }),
       columnHelper.display({
         id: 'actions',

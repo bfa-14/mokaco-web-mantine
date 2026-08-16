@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ActionIcon, Button, Checkbox, Loader, Modal, Textarea, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
@@ -146,13 +147,24 @@ function ExitPayload({ payload }: { payload: ExitPermissionDetail }) {
  * and the ledger, not the calendar, carries the reduction.
  */
 function LeavePayload({ payload }: { payload: LeaveRequestPayload }) {
+  const { t } = useTranslation()
   const granted = payload.daysApproved
   const wasReduced = granted != null && granted < payload.daysRequested
   const posted = payload.appliedToLedgerAt != null
 
   return (
     <div className="card">
-      <div className="card-title">Leave request</div>
+      <div className="card-title">
+        Leave request
+        {/* The approver waived the deduction. Said as a BADGE ON THE PANEL, not buried in the
+            footnote, because it is the one fact that makes the untouched balance below correct
+            rather than a bug — and it is a property of this request, never of the leave type. */}
+        {payload.isDiscretionary && (
+          <span className="badge badge--on" style={{ marginInlineStart: 8 }}>
+            {t('workflow.leaveDiscretionary.badge')}
+          </span>
+        )}
+      </div>
       <div className="detail-grid">
         <div className="detail">
           <span className="detail-label">Leave type</span>
@@ -210,6 +222,18 @@ function LeavePayload({ payload }: { payload: LeaveRequestPayload }) {
         )}
       </div>
 
+      {/* SHORT NOTICE — advisory, and deliberately amber rather than red: the request was accepted
+          and is in flight, nothing refuses it, and an approver may well grant it anyway. It is here
+          so that judgement is made knowingly instead of the fact only ever reaching the requester. */}
+      {payload.noticeShorterThanPreferred && (
+        <div className="wf-balance-warn" role="status" style={{ marginTop: 12, marginBottom: 0 }}>
+          {t('workflow.leaveNotice.short', {
+            given: payload.noticeGivenDays,
+            preferred: payload.noticePreferredDays,
+          })}
+        </div>
+      )}
+
       {/* THE CERTIFICATE GATE, said before it bites. usp_LeaveRequest_Decide counts attachments and
           refuses to approve without one, so this is the same count and the same rule — shown here
           so the requester can act on it, instead of an approver meeting it at the moment they sign. */}
@@ -224,9 +248,13 @@ function LeavePayload({ payload }: { payload: LeaveRequestPayload }) {
           not at submit, so until then the balance above is untouched and saying so avoids the
           reasonable assumption that asking has already cost something. */}
       <p className="hint" style={{ marginBottom: 0 }}>
-        {posted
-          ? `Deducted from the balance on ${dateTime(payload.appliedToLedgerAt)}.`
-          : 'Nothing has been deducted yet — days come out of the balance when the request is fully approved.'}
+        {/* Discretionary answers this question outright: there IS no pending deduction, so the
+            "not deducted yet" wording would promise one that is never coming. */}
+        {payload.isDiscretionary
+          ? t('workflow.leaveDiscretionary.panelNote')
+          : posted
+            ? `Deducted from the balance on ${dateTime(payload.appliedToLedgerAt)}.`
+            : 'Nothing has been deducted yet — days come out of the balance when the request is fully approved.'}
       </p>
     </div>
   )

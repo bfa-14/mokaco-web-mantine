@@ -23,6 +23,7 @@ import type {
   LeaveLedgerEntry,
   LeaveLedgerPostRequest,
   LeavePolicy,
+  LeaveYearOpenSummary,
   LeaveRelationEntitlement,
   LeaveType,
   LeaveTypeUpsertRequest,
@@ -136,6 +137,17 @@ export const leaveTypesService = {
 export const leavePolicyService = {
   /** Types, accrual tiers, pay tiers and relations in one call. */
   getAll: () => apiRequest<LeavePolicy>('/api/leave-policy'),
+
+  /**
+   * OPENS THE LEAVE YEAR — grants every active employee the entitlement the tier grids describe,
+   * and settles last year's remainder (carried over, or expired, by the type's own rule).
+   *
+   * SAFE TO CALL TWICE: the procedure skips employees already opened for that year, so a repeat
+   * returns a summary with zero employees rather than granting anybody a second entitlement.
+   * A refusal arrives as a 400 whose text is the procedure's own sentence — show it verbatim.
+   */
+  openYear: (year: number) =>
+    apiRequest<LeaveYearOpenSummary[]>(`/api/leave/year-open?year=${year}`, { method: 'POST' }),
 
   setAccrualTier: (leaveTypeId: number, minServiceYears: number, annualDays: number) =>
     apiRequest<void>(`/api/leave-types/${leaveTypeId}/accrual-tier`, {

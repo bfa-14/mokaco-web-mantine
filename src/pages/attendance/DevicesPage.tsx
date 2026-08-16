@@ -10,6 +10,7 @@ import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow
 import { PageHelp } from '../../components/PageHelp'
 import { devicesService } from '../../services/attendanceService'
 import { branchesService, departmentsService, employeesService } from '../../services/hrService'
+import { branchOptions, departmentOptions } from '../../hr/assignableOptions'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { useAuth } from '../../auth/useAuth'
 import {
@@ -1375,7 +1376,10 @@ export default function DevicesPage() {
           </label>
           <Select
             id="device-branch"
-            data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
+            /* A device is POSTED to a branch, so the active-only rule applies here as it does on
+               the employee form — with the branch an existing device already sits at kept, or
+               editing that device's name would silently blank where it is. */
+            data={branchOptions(branches, deviceForm.branchId)}
             value={deviceForm.branchId != null ? String(deviceForm.branchId) : null}
             onChange={(v) =>
               setDeviceForm((f) => ({
@@ -1399,10 +1403,7 @@ export default function DevicesPage() {
           </label>
           <Select
             id="device-department"
-            data={departments.map((d) => ({
-              value: String(d.departmentId),
-              label: d.name,
-            }))}
+            data={departmentOptions(departments, deviceForm.departmentId)}
             value={deviceForm.departmentId != null ? String(deviceForm.departmentId) : null}
             onChange={(v) =>
               setDeviceForm((f) => ({

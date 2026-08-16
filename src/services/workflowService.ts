@@ -630,6 +630,11 @@ export const leaveRequestsService = {
    *
    * `approvedDays` omitted (or null) means "as requested". `password` is sent only when the step
    * required a signature.
+   *
+   * `makeDiscretionary` grants the leave WITHOUT deducting it. Sent explicitly as false rather than
+   * omitted, so the request always states which of the two it is. Every approver may ask for it,
+   * but only the decision that closes the request touches the ledger — so the answer that takes
+   * effect is the last one, and `discretionaryGranted` on the result says what actually happened.
    */
   decide: (
     requestId: number,
@@ -638,6 +643,7 @@ export const leaveRequestsService = {
       comment?: string | null
       code?: string
       password?: string
+      makeDiscretionary?: boolean
     },
   ) =>
     apiRequest<LeaveRequestDecideResult>(`/api/leave-requests/${requestId}/decide`, {
@@ -647,6 +653,7 @@ export const leaveRequestsService = {
         comment: body.comment ?? null,
         code: body.code ?? null,
         password: body.password ?? null,
+        makeDiscretionary: body.makeDiscretionary ?? false,
       }),
     }),
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Loader, Modal, NumberInput, PasswordInput, Select, Textarea } from '@mantine/core'
+import { useTranslation } from 'react-i18next'
+import { Button, Checkbox, Loader, Modal, NumberInput, PasswordInput, Select, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { ApiError } from '../../api/client'
@@ -116,6 +117,7 @@ export function DecidePopup({
   /** Refresh whatever the caller shows. */
   onDecided: () => void | Promise<void>
 }) {
+  const { t } = useTranslation()
   const [decisions, setDecisions] = useState<DecisionOption[]>([])
   const [decisionCode, setDecisionCode] = useState('')
   /** The note — held separately so switching the dropdown never wipes it. */
@@ -130,6 +132,16 @@ export function DecidePopup({
   /** THE TYPED FIGURE for leave; null means "as requested" (the procedure's own default). */
   const [grantValue, setGrantValue] = useState<number | null>(null)
   const [leave, setLeave] = useState<LeaveRequestPayload | null>(null)
+
+  /**
+   * GRANT THE LEAVE WITHOUT DEDUCTING IT — a per-request favour, not a property of the leave type.
+   *
+   * Off by default, because the ordinary answer is that leave costs leave. It is offered at EVERY
+   * step rather than only the last, since no approver can know they are the last one; only the
+   * decision that closes the request reaches the ledger, so the final approver's box is the one
+   * that takes effect and the result reports what was actually done.
+   */
+  const [makeDiscretionary, setMakeDiscretionary] = useState(false)
 
   const isLeave = requestTypeCode === 'LEAVE_REQUEST'
   const isExpense = requestTypeCode === 'EXPENSE_REIMBURSEMENT'
@@ -464,9 +476,18 @@ export function DecidePopup({
             comment: text || null,
             code: d.code,
             password: pw,
+            makeDiscretionary,
           })
           if (result.status !== 'Approved') return null
           const granted = `Granted ${balanceDaysText(result.daysApproved)}.`
+          // Said from the RESULT, not from the box: a discretionary grant posts nothing, so
+          // reporting "the balance is now X" would imply a deduction that never happened.
+          if (result.discretionaryGranted) {
+            return `${granted} ${t('workflow.leaveDiscretionary.outcome', {
+              type: leave?.leaveTypeName ?? '',
+              balance: balanceDaysText(result.balanceAfter),
+            })}`
+          }
           return result.balanceIsNegative
             ? `${granted} ${leave?.leaveTypeName ?? 'The'} balance is now ${balanceDaysText(result.balanceAfter)} — negative.`
             : `${granted} ${leave?.leaveTypeName ?? 'The'} balance is now ${balanceDaysText(result.balanceAfter)}.`
@@ -1173,6 +1194,29 @@ export function DecidePopup({
             </div>
           )}
 
+          {/* DISCRETIONARY — offered to EVERY approver on an Approve, not only the one who may
+              change the figure: waiving the deduction is a different question from cutting the days,
+              and it is not gated by the step's CanAdjust. The last approver's answer is the one the
+              procedure acts on, which is what the hint says rather than leaving people to guess. */}
+          {isLeave && leave && selected?.engineAction === 'Approve' && (
+            <div className="form-field">
+              <Checkbox
+                label={t('workflow.leaveDiscretionary.label')}
+                checked={makeDiscretionary}
+                disabled={submitting}
+                onChange={(e) => setMakeDiscretionary(e.currentTarget.checked)}
+              />
+              <div className="hint">
+                {makeDiscretionary
+                  ? t('workflow.leaveDiscretionary.hintOn', {
+                      type: leave.leaveTypeName.toLowerCase(),
+                      balance: balanceDaysText(leave.currentBalance),
+                    })
+                  : t('workflow.leaveDiscretionary.hintOff')}
+              </div>
+            </div>
+          )}
+
           {/* ALWAYS visible — only its "(required)" changes with the decision. */}
           <div className="form-field">
             <Textarea
@@ -1258,6 +1302,19 @@ export function DecidePopup({
               ? 'State the monthly deduction.'
               : 'State the amount to approve.'}
         </p>
+      )}
+
+      {/* SHORT NOTICE, last thing before the buttons. The same advisory the request page carries,
+          repeated HERE because this is the moment it matters: a signer who never opened the detail
+          page would otherwise approve without ever being told. Shown whatever the chosen decision
+          is — it is a fact about the request, not about the answer — and it blocks nothing. */}
+      {isLeave && leave?.noticeShorterThanPreferred && (
+        <div className="wf-balance-warn" role="status" style={{ marginBottom: 12 }}>
+          {t('workflow.leaveNotice.short', {
+            given: leave.noticeGivenDays,
+            preferred: leave.noticePreferredDays,
+          })}
+        </div>
       )}
 
       <div className="form-actions">

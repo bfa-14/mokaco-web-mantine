@@ -11,6 +11,7 @@ import { attendanceService } from '../../services/attendanceService'
 import { getErrorMessage } from '../../api/errorMessage'
 import type { AttendanceRecord } from '../../types/attendance'
 import type { Branch, EmployeeListItem } from '../../types/hr'
+import { branchOptions } from '../../hr/assignableOptions'
 import { formatDate, formatMinutes } from './attendanceFormat'
 
 /** Present / Absent / Leave / RestDay — the four states a day can be told to be. */
@@ -373,7 +374,9 @@ export function ManualEntryForm({
           </label>
           <Select
             id="manual-branch"
-            data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
+            /* Stamps the branch onto the day, so it assigns rather than filters — active only,
+               keeping whatever an already-stamped day carries. */
+            data={branchOptions(branches, form.branchId)}
             value={form.branchId != null ? String(form.branchId) : null}
             onChange={(v) =>
               setForm((f) => ({ ...f, branchId: v != null ? Number(v) : null }))

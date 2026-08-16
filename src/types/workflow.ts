@@ -843,6 +843,12 @@ export interface LeaveRequestDecideResult {
   balanceAfter: number
   /** Approved into the negative — show it, never block on it. The approver already decided. */
   balanceIsNegative: boolean
+  /**
+   * The leave was granted DISCRETIONARILY: approved, but no usage posted, so the balance is
+   * untouched. Reports what the procedure DID, not what was asked — only the decision that closes
+   * the request reaches the ledger, so an earlier approver who ticked the box still gets false here.
+   */
+  discretionaryGranted: boolean
 }
 
 export interface LeaveRequestPayload {
@@ -871,6 +877,26 @@ export interface LeaveRequestPayload {
   attachmentCount: number
   /** The employee's CURRENT balance for this leave type — the all-time ledger sum. */
   currentBalance: number
+  /**
+   * Granted without deducting it. A property of THIS REQUEST, decided by the approver who closed
+   * it — not of the leave type.
+   *
+   * It is why appliedToLedgerAt can stay null on an approved request without anything being wrong:
+   * there was no ledger movement to stamp.
+   */
+  isDiscretionary: boolean
+  /** Days between the request being raised and the leave starting. */
+  noticeGivenDays: number
+  /** The notice this type prefers, in days. 0 when it has no preference. */
+  noticePreferredDays: number
+  /**
+   * Raised at shorter notice than the type prefers. ADVISORY — the same figure the requester was
+   * warned with at submit, carried here so the APPROVER sees it too. Nothing is blocked by it and
+   * usp_LeaveRequest_Decide does not consult it; it is context for a signature, not a gate.
+   *
+   * False when the type has no preference, so a type that never set one cannot look breached.
+   */
+  noticeShorterThanPreferred: boolean
 }
 
 export interface MyLeaveRequest {

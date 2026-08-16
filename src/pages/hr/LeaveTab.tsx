@@ -1,18 +1,32 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState, Table as TableInstance } from '@tanstack/react-table'
 import { ActionIcon, Button, Loader, Modal, NumberInput, Select, Table, Textarea } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { IconCalendar, IconPlus, IconPrinter, IconTrash } from '@tabler/icons-react'
+import { IconAdjustments, IconCalendar, IconPlus, IconPrinter, IconTrash } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { leaveLedgerService, leaveTypesService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { fmtDate, fmtNumber, fmtSigned } from './hrFormat'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import type { LeaveBalance, LeaveLedgerEntry, LeaveType } from '../../types/hr'
 
-const MOVEMENT_TYPES = ['Accrual', 'Usage', 'CarryOver', 'Adjustment']
+/** The movement an out-of-band balance correction is filed as — see AdjustBalanceModal. */
+const ADJUSTMENT = 'Adjustment'
+
+const MOVEMENT_TYPES = ['Accrual', 'Usage', 'CarryOver', ADJUSTMENT]
+
+function todayYMD(): string {
+  const now = new Date()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${m}-${d}`
+}
 
 interface FormState {
   leaveTypeId: number | null
@@ -48,11 +62,9 @@ interface ConfirmState {
   resolve: (proceed: boolean) => void
 }
 
-/** DX format="#,##0.##" — grouped thousands, up to two decimals. */
-const fmtNum = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 2 })
-
-/** DX dataType="date" — the API timestamp shown as its plain date. */
-const fmtDate = (v: string | null | undefined) => (v ? v.slice(0, 10) : '')
+/* The formatters are SHARED and null-safe — see hrFormat.ts. They used to be declared here as
+   `(v: number) => v.toLocaleString(…)`, which threw the moment the API had not caught up with a
+   new column and sent undefined for it. */
 
 /* PORT NOTE: the two DevExtreme DataGrids are TanStack Table + Mantine Table, per RequestsGrid.tsx.
    The source grids declared no pager, search or export, so none is added; showBorders →
@@ -116,8 +128,191 @@ function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText
 const balanceHelper = createColumnHelper<LeaveBalance>()
 const ledgerHelper = createColumnHelper<LeaveLedgerEntry>()
 
+/**
+ * ADJUST BALANCE — a correction to what the ledger says this person is owed.
+ *
+ * Deliberately NOT a second "Post Movement". That form can file any movement type on any date and
+ * is the administrator's tool; this one asks only the three things a correction needs — which
+ * leave, how many days, and WHY — and files them as an Adjustment dated today. The sign is the
+ * whole interface: positive gives days back, negative takes them away, in halves because half days
+ * are how leave is actually taken.
+ *
+ * THE NOTE IS REQUIRED, unlike on the movement form. The row lives in the ledger permanently and a
+ * balance change nobody can explain a year later is worse than no correction at all — the note is
+ * the audit trail, so it is a field, not an afterthought.
+ *
+ * Mounted only while open, so every opening starts from an empty form with no error left over.
+ */
+function AdjustBalanceModal({
+  employeeId,
+  leaveTypes,
+  onClose,
+  onPosted,
+}: {
+  employeeId: number
+  leaveTypes: LeaveType[]
+  onClose: () => void
+  /** Refetches the balances and the ledger. Runs after the post, and cannot fail the save. */
+  onPosted: () => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [leaveTypeId, setLeaveTypeId] = useState<number | null>(
+    leaveTypes[0]?.leaveTypeId ?? null,
+  )
+  /** '' while the box is empty — an empty box is not the same answer as zero. */
+  const [days, setDays] = useState<number | string>('')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<{
+    leaveTypeId?: string
+    days?: string
+    note?: string
+  }>({})
+  /** The API's own refusal text, kept in the form rather than a toast so it sits beside the
+      fields that caused it and survives long enough to read. */
+  const [serverError, setServerError] = useState<string | null>(null)
+
+  const effectiveDate = todayYMD()
+  const trimmedNote = note.trim()
+
+  async function submit() {
+    const parsedDays = typeof days === 'number' ? days : Number(days)
+    const errors: { leaveTypeId?: string; days?: string; note?: string } = {}
+    if (leaveTypeId == null) errors.leaveTypeId = t('hr.leaveAdjust.leaveTypeRequired')
+    // Zero is refused rather than posted: it would write a permanent row that changes nothing,
+    // and it is far more likely to be an unfilled box than a deliberate answer.
+    if (days === '' || !Number.isFinite(parsedDays) || parsedDays === 0) {
+      errors.days = t('hr.leaveAdjust.daysRequired')
+    }
+    if (!trimmedNote) errors.note = t('hr.leaveAdjust.noteRequired')
+    setFieldErrors(errors)
+    if (errors.leaveTypeId || errors.days || errors.note) return
+
+    setServerError(null)
+    setSaving(true)
+    try {
+      await leaveLedgerService.post({
+        employeeId,
+        leaveTypeId: leaveTypeId!,
+        movementType: ADJUSTMENT,
+        days: parsedDays,
+        effectiveDate,
+        // An adjustment answers to nobody's leave request — that is what makes it an adjustment.
+        leaveRequestId: null,
+        note: trimmedNote,
+      })
+    } catch (err) {
+      // A 400 here is the stored procedure's refusal (a closed period, a type this employee has no
+      // policy for). Its text is the whole value, so it is shown verbatim and the form stays open.
+      setServerError(getErrorMessage(err))
+      return
+    } finally {
+      setSaving(false)
+    }
+
+    // Saved. Nothing past this point can undo it, so the form closes and both lists are refetched —
+    // the returned day has to appear in the balance without anybody reloading the page.
+    notify(t('hr.leaveAdjust.posted'), 'success', 2000)
+    onClose()
+    await onPosted()
+  }
+
+  return (
+    <Modal opened onClose={onClose} title={t('hr.leaveAdjust.title')} size={460} centered>
+      <p className="hint" style={{ marginTop: 0 }}>
+        {t('hr.leaveAdjust.intro')}
+      </p>
+
+      <div className="form-field">
+        <label className="form-label" htmlFor="adjust-leave-type">
+          {t('hr.leaveAdjust.leaveType')}
+        </label>
+        <Select
+          id="adjust-leave-type"
+          data={leaveTypes.map((x) => ({ value: String(x.leaveTypeId), label: x.name }))}
+          value={leaveTypeId != null ? String(leaveTypeId) : null}
+          placeholder={t('hr.leaveAdjust.leaveTypePlaceholder')}
+          allowDeselect={false}
+          disabled={saving || leaveTypes.length === 0}
+          error={fieldErrors.leaveTypeId}
+          onChange={(v) => setLeaveTypeId(v != null ? Number(v) : null)}
+        />
+        {leaveTypes.length === 0 && (
+          <p className="hint" style={{ marginTop: 6 }}>
+            {t('hr.leaveAdjust.noTypes')}
+          </p>
+        )}
+      </div>
+
+      <div className="form-field">
+        <label className="form-label" htmlFor="adjust-days">
+          {t('hr.leaveAdjust.days')}
+        </label>
+        <NumberInput
+          id="adjust-days"
+          value={days}
+          step={0.5}
+          decimalScale={2}
+          // Negative IS the interface — it is how days are taken away.
+          allowNegative
+          disabled={saving}
+          error={fieldErrors.days}
+          w={160}
+          onChange={setDays}
+        />
+        <p className="hint" style={{ marginTop: 6 }}>
+          {t('hr.leaveAdjust.daysHint')}
+        </p>
+      </div>
+
+      <div className="form-field">
+        <label className="form-label" htmlFor="adjust-note">
+          {t('hr.leaveAdjust.note')}
+        </label>
+        <Textarea
+          id="adjust-note"
+          value={note}
+          minRows={3}
+          autosize
+          disabled={saving}
+          error={fieldErrors.note}
+          onChange={(e) => {
+            const value = e.currentTarget.value
+            setNote(value)
+          }}
+        />
+        <p className="hint" style={{ marginTop: 6 }}>
+          {t('hr.leaveAdjust.noteHint')}
+        </p>
+      </div>
+
+      <p className="hint">{t('hr.leaveAdjust.effectiveHint', { date: effectiveDate })}</p>
+
+      {serverError && (
+        <div className="alert alert--error" role="alert">
+          {serverError}
+        </div>
+      )}
+
+      <div className="form-actions">
+        <Button variant="default" onClick={onClose} disabled={saving}>
+          {t('common.cancel')}
+        </Button>
+        <Button onClick={() => void submit()} disabled={saving || leaveTypes.length === 0}>
+          {saving ? t('hr.leaveAdjust.posting') : t('hr.leaveAdjust.post')}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
 export function LeaveTab({ employeeId }: { employeeId: number }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
+  /* Reading a balance is EMP_VIEW, which opened this profile. CHANGING one is EMP_EDIT — the API
+     enforces that either way, so this only keeps an action nobody may take off the screen. */
+  const { hasPermission } = useAuth()
+  const canEdit = hasPermission(PERMISSION.EMP_EDIT)
   const [balances, setBalances] = useState<LeaveBalance[]>([])
   const [ledger, setLedger] = useState<LeaveLedgerEntry[]>([])
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
@@ -125,6 +320,7 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
   const [error, setError] = useState<string | null>(null)
 
   const [popupVisible, setPopupVisible] = useState(false)
+  const [adjustVisible, setAdjustVisible] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
   /* PORT NOTE: DX ValidationGroup/RequiredRule → the same required checks, message for message,
@@ -163,6 +359,16 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
     ])
     setBalances(bal)
     setLedger(led)
+  }
+
+  /** reload(), for callers whose own work already succeeded — a failed refetch is reported, not
+      thrown back at them as though the save had failed. */
+  async function refresh() {
+    try {
+      await reload()
+    } catch (err) {
+      notify(getErrorMessage(err), 'error', 4000)
+    }
   }
 
   useEffect(() => {
@@ -253,26 +459,41 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
       meta: { filterText: typeName, filterOptions: optionsFrom(balances, (b) => typeName(b.leaveTypeId)) },
     }),
     balanceHelper.accessor('periodYearMonth', { header: 'Period', size: 120 }),
-    // fmtNum groups thousands, so the printed figure differs from the raw one past 1,000.
+    // fmtNumber groups thousands, so the printed figure differs from the raw one past 1,000.
     balanceHelper.accessor('accrued', {
       header: 'Accrued',
-      cell: (c) => fmtNum(c.getValue()),
-      meta: { filterText: fmtNum },
+      cell: (c) => fmtNumber(c.getValue()),
+      meta: { filterText: fmtNumber },
     }),
     balanceHelper.accessor('carriedOver', {
       header: 'Carried',
-      cell: (c) => fmtNum(c.getValue()),
-      meta: { filterText: fmtNum },
+      cell: (c) => fmtNumber(c.getValue()),
+      meta: { filterText: fmtNumber },
     }),
     balanceHelper.accessor('used', {
       header: 'Used',
-      cell: (c) => fmtNum(c.getValue()),
-      meta: { filterText: fmtNum },
+      cell: (c) => fmtNumber(c.getValue()),
+      meta: { filterText: fmtNumber },
+    }),
+    /* BETWEEN USED AND REMAINING, so the row reads as the sum it is:
+       remaining = accrued + carried − used + adjusted. Without it a corrected balance looks like
+       arithmetic that does not work, which is how a real adjustment gets reported as a bug.
+       Signed both ways — fmtSigned keeps the + so "gave days back" is visible at a glance.
+
+       `?? 0` AT THE ACCESSOR, not just inside the formatter. This column shipped ahead of the
+       server field, so every row arrives without it until the API catches up; reading 0 here means
+       the grid renders — and SORTS and FILTERS — as though nothing had been adjusted, which is the
+       true answer, rather than throwing on the first cell and taking the whole profile down. */
+    balanceHelper.accessor((row) => row.adjusted ?? 0, {
+      id: 'adjusted',
+      header: t('hr.leaveBalance.adjusted'),
+      cell: (c) => fmtSigned(c.getValue()),
+      meta: { filterText: fmtSigned },
     }),
     balanceHelper.accessor('remaining', {
       header: 'Remaining',
-      cell: (c) => fmtNum(c.getValue()),
-      meta: { filterText: fmtNum },
+      cell: (c) => fmtNumber(c.getValue()),
+      meta: { filterText: fmtNumber },
     }),
   ]
 
@@ -297,8 +518,8 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
     ledgerHelper.accessor('days', {
       header: 'Days',
       size: 90,
-      cell: (c) => fmtNum(c.getValue()),
-      meta: { filterText: fmtNum },
+      cell: (c) => fmtNumber(c.getValue()),
+      meta: { filterText: fmtNumber },
     }),
     ledgerHelper.accessor('note', { header: 'Note', meta: { noHeaderFilter: true } }),
     ledgerHelper.display({
@@ -383,6 +604,15 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
         >
           Print balances
         </Button>
+        {canEdit && (
+          <Button
+            leftSection={<IconAdjustments size={16} />}
+            title={t('hr.leaveAdjust.intro')}
+            onClick={() => setAdjustVisible(true)}
+          >
+            {t('hr.leaveAdjust.action')}
+          </Button>
+        )}
       </div>
       <GridTable table={balanceTable} emptyText="No leave balance yet." />
 
@@ -478,6 +708,15 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
           </Button>
         </div>
       </Modal>
+
+      {adjustVisible && (
+        <AdjustBalanceModal
+          employeeId={employeeId}
+          leaveTypes={leaveTypes}
+          onClose={() => setAdjustVisible(false)}
+          onPosted={refresh}
+        />
+      )}
 
       {/* The confirm dialog — devextreme/ui/dialog's confirm(), as a Mantine Modal. */}
       {confirmState && (

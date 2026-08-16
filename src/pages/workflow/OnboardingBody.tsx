@@ -4,6 +4,7 @@ import { DatePickerInput } from '@mantine/dates'
 import { IconCalendar } from '@tabler/icons-react'
 import { onboardingService } from '../../services/workflowService'
 import { branchesService, departmentsService, positionsService } from '../../services/hrService'
+import { branchOptions, departmentOptions, positionOptions } from '../../hr/assignableOptions'
 import type { Branch, Department, Position } from '../../types/hr'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
@@ -105,7 +106,9 @@ export function useOnboardingForm(saving: boolean): RequestFormBody {
         <div className="form-field">
           <Select
             label={t('common.branch')}
-            data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
+            /* No `current` on any of the three: a new hire is being placed for the first time, so
+               there is no existing assignment to preserve — only active postings are offerable. */
+            data={branchOptions(branches, null)}
             value={branchId != null ? String(branchId) : null}
             disabled={saving}
             onChange={(v) => setBranchId(v != null ? Number(v) : null)}
@@ -114,7 +117,7 @@ export function useOnboardingForm(saving: boolean): RequestFormBody {
         <div className="form-field">
           <Select
             label={t('common.department')}
-            data={departments.map((d) => ({ value: String(d.departmentId), label: d.name }))}
+            data={departmentOptions(departments, null)}
             value={departmentId != null ? String(departmentId) : null}
             disabled={saving}
             onChange={(v) => setDepartmentId(v != null ? Number(v) : null)}
@@ -123,7 +126,7 @@ export function useOnboardingForm(saving: boolean): RequestFormBody {
         <div className="form-field">
           <Select
             label={t('common.position')}
-            data={positions.map((p) => ({ value: String(p.positionId), label: p.title }))}
+            data={positionOptions(positions, null)}
             value={positionId != null ? String(positionId) : null}
             searchable
             disabled={saving}

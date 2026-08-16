@@ -116,6 +116,29 @@ export interface LeavePolicy {
  * first four fields) from clearing the certificate rule, the service gate and the notice period
  * whenever someone renames a type there.
  */
+/**
+ * One leave type's line in what POST /api/leave/year-open did.
+ *
+ * THE YEARLY OPENING IS THE ONLY GRANTING PATH — there is no monthly accrual. The figures are
+ * independent: an employee can be granted this year AND have last year's remainder carried in, or
+ * granted it and have last year's expire, by the type's own carry-over rule.
+ */
+export interface LeaveYearOpenSummary {
+  leaveTypeName: string
+  /** Employees this run opened. Already-opened ones are skipped, so a second run reports 0. */
+  employeesOpened: number
+  daysGranted: number
+  /**
+   * How many of those got a PART year — hired partway through it. Above zero, headcount × annual
+   * entitlement will not equal daysGranted, which is the only thing that explains the difference.
+   */
+  proratedEmployees: number
+  /** Last year's unused days brought forward — types WITH carry over. */
+  daysCarriedOver: number
+  /** Last year's unused days written off — types WITHOUT carry over. */
+  daysExpired: number
+}
+
 export interface LeaveTypeUpsertRequest {
   name: string
   isPaid: boolean
@@ -460,7 +483,13 @@ export interface LeaveLedgerEntry {
   createdAt: string
 }
 
-/** Row from GET /api/leave-ledger/balance/{id}. */
+/**
+ * Row from GET /api/leave-ledger/balance/{id}.
+ *
+ * THE COLUMNS ADD UP: remaining = accrued + carriedOver − used + adjusted. Every part is shown on
+ * the profile's balance grid, because a remaining figure nobody can reconstruct is one nobody can
+ * check — and the adjustments are exactly the movements somebody may later have to explain.
+ */
 export interface LeaveBalance {
   employeeId: number
   leaveTypeId: number
@@ -468,6 +497,13 @@ export interface LeaveBalance {
   accrued: number
   carriedOver: number
   used: number
+  /**
+   * The Adjustment movements — everything that moved this balance by hand rather than by rule: an
+   * HR correction, a discretionary grant waived at approval, the year-close settlement.
+   *
+   * SIGNED, and both signs are ordinary: positive gave days back, negative took them away.
+   */
+  adjusted: number
   remaining: number
 }
 

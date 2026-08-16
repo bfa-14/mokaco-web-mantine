@@ -27,6 +27,7 @@ import type {
 } from '../../types/hr'
 import { employeeLabel } from '../../types/hr'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
+import { branchOptions, departmentOptions, positionOptions } from '../../hr/assignableOptions'
 import { useTranslation } from 'react-i18next'
 import type { UnlinkedUser } from '../../types/security'
 
@@ -523,7 +524,9 @@ export function EmployeeFormPopup({
             </label>
             <Select
               id="emp-branch"
-              data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
+              /* ACTIVE ONLY — plus this employee's own branch if it has since been deactivated,
+                 which is the only way the field can still show what they actually hold. */
+              data={branchOptions(branches, form.branchId)}
               value={form.branchId != null ? String(form.branchId) : null}
               placeholder="Select branch…"
               allowDeselect={false}
@@ -551,7 +554,7 @@ export function EmployeeFormPopup({
             </label>
             <Select
               id="emp-dept"
-              data={departments.map((d) => ({ value: String(d.departmentId), label: d.name }))}
+              data={departmentOptions(departments, form.departmentId)}
               value={form.departmentId != null ? String(form.departmentId) : null}
               placeholder="Select department…"
               allowDeselect={false}
@@ -569,7 +572,7 @@ export function EmployeeFormPopup({
             </label>
             <Select
               id="emp-position"
-              data={positions.map((p) => ({ value: String(p.positionId), label: p.title }))}
+              data={positionOptions(positions, form.positionId)}
               value={form.positionId != null ? String(form.positionId) : null}
               placeholder="Select position…"
               allowDeselect={false}

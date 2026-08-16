@@ -10,6 +10,7 @@ import { currenciesService } from '../../services/coreService'
 import { componentTypesService, salaryComponentsService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { fmtDate, fmtNumber } from './hrFormat'
 import type { ComponentType, SalaryComponent } from '../../types/hr'
 import type { Currency } from '../../types/core'
 
@@ -47,11 +48,8 @@ interface ConfirmState {
   resolve: (proceed: boolean) => void
 }
 
-/** DX format="#,##0.##" — grouped thousands, up to two decimals. */
-const fmtNum = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 2 })
-
-/** DX dataType="date" — the API timestamp shown as its plain date. */
-const fmtDate = (v: string | null | undefined) => (v ? v.slice(0, 10) : '')
+/* The formatters are SHARED and null-safe — see hrFormat.ts. Declared locally they were typed
+   `(v: number)`, a promise the API cannot keep the moment a column is added server-side. */
 
 /* PORT NOTE: the DevExtreme DataGrid is TanStack Table + Mantine Table, per RequestsGrid.tsx. The
    source grid declared no pager, search or export, so none is added; showBorders → withTableBorder,
@@ -267,9 +265,9 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
       header: 'Amount',
       // 'right', not alignEnd() — a FIGURE column, and figures keep a fixed edge in both
       // directions so digits line up. See the note in src/i18n/physical.ts.
-      cell: (c) => <div style={{ textAlign: 'right' }}>{fmtNum(c.getValue())}</div>,
-      // fmtNum groups thousands, so a salary line prints "1,500" where the row holds 1500.
-      meta: { filterText: fmtNum },
+      cell: (c) => <div style={{ textAlign: 'right' }}>{fmtNumber(c.getValue())}</div>,
+      // fmtNumber groups thousands, so a salary line prints "1,500" where the row holds 1500.
+      meta: { filterText: fmtNumber },
     }),
     columnHelper.accessor('currencyCode', {
       header: 'Currency',

@@ -213,9 +213,21 @@
     },
     "zeroMinutes": "0m",
     "hoursOnly": "{{hours}}h",
-    "clear": "Clear."
+    "clear": "Clear.",
+    "inactiveOption": "{{name}} (inactive)"
   },
   "workflow": {
+    "leaveNotice": {
+      "short": "Short notice — {{given}} days given, {{preferred}} preferred for this leave type."
+    },
+    "leaveDiscretionary": {
+      "label": "Grant as discretionary — do not deduct from the balance",
+      "hintOff": "The approved days come out of the balance when the request is fully approved.",
+      "hintOn": "Nothing is deducted: the {{type}} balance stays at {{balance}}. Every approver can set this, and the final approver's choice is the one that takes effect.",
+      "outcome": "Discretionary — nothing was deducted, so the {{type}} balance is still {{balance}}.",
+      "badge": "Discretionary — balance not deducted",
+      "panelNote": "Granted at the approver's discretion — nothing was deducted, and nothing will be."
+    },
     "status": {
       "Pending": "Pending",
       "OnHold": "On hold",
@@ -883,6 +895,50 @@
       "deleteTitle": "Delete tier?",
       "deleteBody": "Delete tier {{tier}} — {{name}}?",
       "deleteHint": "This is refused while any employee or approval chain still uses the tier, and the refusal will name what does."
+    },
+    "leaveYear": {
+      "action": "Open leave year",
+      "title": "Open leave year",
+      "year": "Year",
+      "yearLocked": "Only the current year can be opened.",
+      "explain": "Grants every active employee the entitlement from this grid for that year. Last year's unused days are carried over (types with Carry over) or expired (types without). Running twice is safe — already-opened employees are skipped.",
+      "confirm": "Open the year",
+      "opening": "Opening…",
+      "colType": "Type",
+      "colEmployees": "Employees",
+      "colGranted": "Granted",
+      "colCarried": "Carried",
+      "colExpired": "Expired",
+      "nothingToDo": "Nothing to do — every employee was already opened for {{year}}.",
+      "prorated_one": "{{count}} employee was hired part way through the year, so their grant is proportional.",
+      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional."
+    },
+    "leavePolicy": {
+      "fixedFromTiers": "Days come from this type's tiers — fixed entitlement does not apply.",
+      "fixedUnpaid": "Unpaid leave has no entitlement.",
+      "nameRequired": "Give the leave type a name."
+    },
+    "leaveBalance": {
+      "adjusted": "Adjusted"
+    },
+    "leaveAdjust": {
+      "action": "Adjust balance",
+      "title": "Adjust leave balance",
+      "intro": "Corrects what this employee's ledger says they are owed. Positive days give leave back, negative days take it away.",
+      "leaveType": "Leave type",
+      "leaveTypePlaceholder": "Select…",
+      "days": "Days",
+      "daysHint": "Positive adds days back to the balance, negative removes them. Half days are allowed.",
+      "note": "Note",
+      "noteHint": "Why the balance is being changed. The row stays on the ledger permanently, and this note is the only record of the reason — so it is required.",
+      "effectiveHint": "Posted as an Adjustment dated today, {{date}}.",
+      "leaveTypeRequired": "Choose the leave type to adjust.",
+      "daysRequired": "Enter a number of days other than zero.",
+      "noteRequired": "A note is required — it is the reason this adjustment can be explained later.",
+      "post": "Post adjustment",
+      "posting": "Posting…",
+      "posted": "Balance adjusted.",
+      "noTypes": "No leave types are defined, so there is nothing to adjust."
     }
   },
   "settings": {
