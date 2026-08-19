@@ -18,6 +18,10 @@ import { PageHelp } from '../../components/PageHelp'
 // The module-level `t`, for the warning builder below — it is a plain function, not a component,
 // and threading the hook's TFunction through it buys nothing. Same rationale as attendanceFormat.
 import { t as translate } from '../../i18n/t'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
+import { approvalTiersService } from '../../services/hrService'
 import { currenciesService } from '../../services/coreService'
 import { nssfRatesService, taxBracketsService } from '../../services/payrollService'
 import { settingsService } from '../../services/settingsService'
@@ -25,6 +29,7 @@ import { NSSF_CEILING_USD_KEY } from '../../types/payroll'
 import type {
   NssfRate, NssfRateUpsertRequest, TaxBracket, TaxBracketUpsertRequest,
 } from '../../types/payroll'
+import type { ApprovalTier } from '../../types/hr'
 import type { Currency } from '../../types/core'
 import type { Setting } from '../../types/settings'
 
@@ -55,6 +60,13 @@ function money(value: number | null | undefined, dash: string): string {
 
 /** 'yyyy-MM-dd' out of whatever the API sent, so a date input and a cell agree. */
 const dateOnly = (value: string | null | undefined) => (value ? value.slice(0, 10) : '')
+
+/**
+ * One side of a salary band. NULL is not missing data — it is "this side is open" — so it says so
+ * in words rather than printing the em-dash that everywhere else on this page means "no value".
+ */
+const bound = (value: number | null | undefined, noBound: string) =>
+  value == null ? noBound : money(value, noBound)
 
 /* ────────────────────────────── the tiers' own arithmetic ────────────────────────────── */
 
@@ -397,6 +409,111 @@ function NssfGrid({
   return <ConfigGrid table={table} columns={columns} empty={t('payroll.tiers.noSchemes')} />
 }
 
+/* ──────────────────────────── basic salary by tier ──────────────────────────── */
+
+const tierHelper = createColumnHelper<ApprovalTier>()
+
+const TIER_SALARY_WIDTHS: Record<string, number | undefined> = {
+  tierNo: 90,
+  minBasicSalary: 150,
+  maxBasicSalary: 150,
+  salaryCurrency: 120,
+  actions: 120,
+}
+
+/**
+ * What a basic salary may be at each rank.
+ *
+ * THIS GRID IS THE ONLY PLACE THE RULE IS VISIBLE BEFORE IT BITES. The band is enforced by a
+ * database trigger on the salary-component write, so without this screen the first anybody hears of
+ * it is a refusal while trying to pay someone. An unbounded side prints as "no bound" rather than a
+ * dash, because a blank cell reads as missing data when it is actually a deliberate setting.
+ */
+function TierSalaryGrid({
+  rows,
+  canEdit,
+  tierName,
+  onEdit,
+}: {
+  rows: ApprovalTier[]
+  canEdit: boolean
+  tierName: (tierNo: number) => string
+  onEdit: (row: ApprovalTier) => void
+}) {
+  const { t } = useTranslation()
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'tierNo', desc: false }])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+
+  const columns = useMemo(
+    () => [
+      tierHelper.accessor('tierNo', { header: t('payroll.tiers.tierNo') }),
+      /* The NAME comes from the shared dictionary, not from the row, so it follows the reader's
+         language and any rename made on the HR tiers page without this grid re-fetching. */
+      tierHelper.accessor((row) => tierName(row.tierNo), {
+        id: 'name',
+        header: t('payroll.tiers.tierName'),
+      }),
+      tierHelper.accessor((row) => row.minBasicSalary ?? null, {
+        id: 'minBasicSalary',
+        header: t('payroll.tiers.minBasic'),
+        cell: (info) => bound(info.getValue(), t('payroll.tiers.noBound')),
+        meta: { filterText: (v) => bound(v as number | null, t('payroll.tiers.noBound')) },
+      }),
+      tierHelper.accessor((row) => row.maxBasicSalary ?? null, {
+        id: 'maxBasicSalary',
+        header: t('payroll.tiers.maxBasic'),
+        cell: (info) => bound(info.getValue(), t('payroll.tiers.noBound')),
+        meta: { filterText: (v) => bound(v as number | null, t('payroll.tiers.noBound')) },
+      }),
+      tierHelper.accessor((row) => row.salaryCurrency ?? '', {
+        id: 'salaryCurrency',
+        header: t('common.currency'),
+        cell: (info) => info.getValue() || t('common.dash'),
+      }),
+      ...(canEdit
+        ? [
+            tierHelper.display({
+              id: 'actions',
+              header: t('payroll.tiers.actions'),
+              cell: (info) => (
+                <div className="grid-actions">
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    leftSection={<IconPencil size={14} />}
+                    onClick={() => onEdit(info.row.original)}
+                  >
+                    {t('common.edit')}
+                  </Button>
+                </div>
+              ),
+              meta: { noFilter: true },
+            }),
+          ]
+        : []),
+    ],
+    [canEdit, onEdit, tierName, t],
+  )
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting, columnFilters },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    defaultColumn: { filterFn: gridFilterFn },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    enableMultiSort: false,
+    initialState: { pagination: { pageSize: 10 } },
+    getRowId: (row) => String(row.tierNo),
+  })
+
+  return <ConfigGrid table={table} columns={columns} empty={t('payroll.tiers.noBands')} />
+}
+
 /* ───────────────────────────── the grid chrome both share ───────────────────────────── */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -414,7 +531,11 @@ function ConfigGrid({
   columns: unknown[]
   empty: string
 }) {
-  const widths: Record<string, number | undefined> = { ...BRACKET_WIDTHS, ...NSSF_WIDTHS }
+  const widths: Record<string, number | undefined> = {
+    ...BRACKET_WIDTHS,
+    ...NSSF_WIDTHS,
+    ...TIER_SALARY_WIDTHS,
+  }
   const pageIndex = table.getState().pagination.pageIndex
   const pageSize = table.getState().pagination.pageSize
   const total = table.getFilteredRowModel().rows.length
@@ -527,6 +648,14 @@ const EMPTY_NSSF: NssfForm = {
 
 export default function TiersCeilingsPage() {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
+  /* PAYROLL_RUN already opens this route, so this is not the gate — it is the answer for a future
+     reader who arrives here with only PAYROLL_VIEW. The API enforces it either way. */
+  const canSetBand = hasPermission(PERMISSION.PAYROLL_RUN)
+
+  /* The shared dictionary, so a rename made on the HR tiers page is reflected here without this
+     page knowing it happened — and so setting a band can invalidate the one copy everybody reads. */
+  const { tiers, tierName, refetch: refetchTiers } = useApprovalTiers()
 
   const [brackets, setBrackets] = useState<TaxBracket[]>([])
   const [schemes, setSchemes] = useState<NssfRate[]>([])
@@ -593,6 +722,51 @@ export default function TiersCeilingsPage() {
         : optionsFrom(brackets, (b) => b.currencyCode).map((c) => ({ value: c, label: c })),
     [currencies, brackets],
   )
+
+  /* ---- basic salary by tier ---- */
+
+  /** The tier whose band is being edited, or null when the dialog is closed. */
+  const [bandTier, setBandTier] = useState<ApprovalTier | null>(null)
+  /** '' is the blank box, which MEANS "no bound" — distinct from 0, which is a real floor. */
+  const [bandMin, setBandMin] = useState<number | ''>('')
+  const [bandMax, setBandMax] = useState<number | ''>('')
+  const [bandCurrency, setBandCurrency] = useState<string>('')
+  const [bandSaving, setBandSaving] = useState(false)
+  const [bandError, setBandError] = useState<string | null>(null)
+
+  function openBand(row: ApprovalTier) {
+    setBandTier(row)
+    setBandMin(row.minBasicSalary ?? '')
+    setBandMax(row.maxBasicSalary ?? '')
+    // Defaulted to the first currency only when the tier has no band yet — never overriding one.
+    setBandCurrency(row.salaryCurrency ?? currencyOptions[0]?.value ?? '')
+    setBandError(null)
+  }
+
+  async function saveBand() {
+    if (!bandTier) return
+    setBandError(null)
+    setBandSaving(true)
+    try {
+      await approvalTiersService.setSalaryRange(bandTier.tierNo, {
+        // Blank → null → "no bound". Sent explicitly so clearing a side actually clears it.
+        minBasicSalary: bandMin === '' ? null : bandMin,
+        maxBasicSalary: bandMax === '' ? null : bandMax,
+        salaryCurrency: bandCurrency,
+      })
+      notify(t('payroll.tiers.bandSaved'), 'success', 2200)
+      setBandTier(null)
+      // The dictionary is what this grid renders AND what the salary form's hint reads, so the one
+      // shared copy is invalidated rather than a local list being patched.
+      await refetchTiers()
+    } catch (err) {
+      // "Minimum cannot be above the maximum", "Unknown currency 'XYZ'" — the procedure's own
+      // sentences, kept in the dialog beside the fields that caused them.
+      setBandError(getErrorMessage(err))
+    } finally {
+      setBandSaving(false)
+    }
+  }
 
   /* ---- tax tier dialog ---- */
   const [bracketOpen, setBracketOpen] = useState(false)
@@ -889,6 +1063,20 @@ export default function TiersCeilingsPage() {
               fallbackCeiling={fallbackCeiling}
               onEdit={openEditScheme}
               onNewVersion={openNewVersion}
+            />
+          </div>
+
+          {/* BELOW the NSSF schemes: this is the newest and least-visited of the three, and it
+              describes a rule enforced elsewhere rather than a figure payroll computes from. */}
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-title">{t('payroll.tiers.bandCard')}</div>
+            <p className="hint">{t('payroll.tiers.bandHint')}</p>
+
+            <TierSalaryGrid
+              rows={tiers}
+              canEdit={canSetBand}
+              tierName={tierName}
+              onEdit={openBand}
             />
           </div>
 
@@ -1235,6 +1423,83 @@ export default function TiersCeilingsPage() {
           </Button>
         </div>
       </Modal>
+
+      {/* THE BAND for one tier. Mounted only while open, so each opening starts from the stored
+          row with no error left over from the last attempt. */}
+      {bandTier && (
+        <Modal
+          opened
+          onClose={() => setBandTier(null)}
+          title={t('payroll.tiers.bandTitle', { tier: tierName(bandTier.tierNo) })}
+          size={480}
+          centered
+        >
+          <p className="hint" style={{ marginTop: 0 }}>
+            {t('payroll.tiers.bandBlankHint')}
+          </p>
+
+          <div className="form-grid">
+            <div className="form-field">
+              <label className="form-label" htmlFor="band-min">
+                {t('payroll.tiers.minBasic')}
+              </label>
+              <NumberInput
+                id="band-min"
+                value={bandMin}
+                min={0}
+                decimalScale={2}
+                placeholder={t('payroll.tiers.noBound')}
+                disabled={bandSaving}
+                onChange={(v) => setBandMin(v === '' || v == null ? '' : Number(v))}
+              />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label" htmlFor="band-max">
+                {t('payroll.tiers.maxBasic')}
+              </label>
+              <NumberInput
+                id="band-max"
+                value={bandMax}
+                min={0}
+                decimalScale={2}
+                placeholder={t('payroll.tiers.noBound')}
+                disabled={bandSaving}
+                onChange={(v) => setBandMax(v === '' || v == null ? '' : Number(v))}
+              />
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="band-currency">
+              {t('common.currency')}
+            </label>
+            <Select
+              id="band-currency"
+              data={currencyOptions}
+              value={bandCurrency || null}
+              allowDeselect={false}
+              disabled={bandSaving}
+              onChange={(v) => setBandCurrency(v ?? '')}
+            />
+          </div>
+
+          {bandError && (
+            <div className="alert alert--error" role="alert">
+              {bandError}
+            </div>
+          )}
+
+          <div className="form-actions">
+            <Button variant="default" onClick={() => setBandTier(null)} disabled={bandSaving}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={() => void saveBand()} loading={bandSaving} disabled={bandSaving}>
+              {bandSaving ? t('common.saving') : t('common.save')}
+            </Button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

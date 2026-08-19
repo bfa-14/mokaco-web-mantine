@@ -214,7 +214,8 @@
     "zeroMinutes": "0m",
     "hoursOnly": "{{hours}}h",
     "clear": "Clear.",
-    "inactiveOption": "{{name}} (inactive)"
+    "inactiveOption": "{{name}} (inactive)",
+    "required": "(required)"
   },
   "workflow": {
     "leaveNotice": {
@@ -321,6 +322,12 @@
       "involved": "No requests involve you."
     },
     "card": {
+      "delegateToDeputy": "Delegate to deputy",
+      "delegateConfirm": "Hand this step to {{role}}?",
+      "delegateConfirmHint": "They will be able to sign it in your place. You can take it back until they do.",
+      "delegateConfirmYes": "Hand it over",
+      "delegatedTo": "Delegated to {{role}}",
+      "takeBackFromDeputy": "Take back",
       "noteCount": "{{count}} note(s)",
       "approvedOn": "You approved this on {{date}}",
       "rejectedOn": "You rejected this on {{date}}",
@@ -395,6 +402,14 @@
       "documents_other": "{{count}} documents",
       "decide": "Decide",
       "changeDecision": "Change decision",
+      "delegateToDeputy": "Delegate to deputy",
+      "delegateConfirm": "Hand this step to {{role}}?",
+      "delegateConfirmHint": "They will be able to sign it in your place. You can take it back until they do.",
+      "delegateConfirmYes": "Hand it over",
+      "delegatedToDeputy": "Delegated to deputy — {{role}}",
+      "delegatedOn": "on {{date}}",
+      "takeBackFromDeputy": "Take back",
+      "approverAbsent": "Approver absent — deputy may sign",
       "takeBack": "Take this step back"
     },
     "settlement": {
@@ -423,6 +438,24 @@
       "preparedAtLine": "Prepared {{when}}",
       "preparedByLine": "Prepared by {{name}} · {{when}}",
       "closedUnprepared": "This request closed without a settlement being prepared."
+    },
+    "cancel": {
+      "action": "Cancel request",
+      "title": "Cancel this request?",
+      "reasonHint": "The request is cancelled, not deleted — the reason stays in its history.",
+      "reasonRequired": "A reason is required.",
+      "confirm": "Cancel the request",
+      "busy": "Cancelling…",
+      "done": "Request cancelled. The reason is on its history."
+    },
+    "retract": {
+      "action": "Retract my decision",
+      "reasonRequired": "A reason is required.",
+      "signExplain": "Undoing a signed decision must itself be signed with your password.",
+      "password": "Your password",
+      "confirm": "Retract my decision",
+      "busy": "Retracting…",
+      "done": "Decision withdrawn. Step {{step}} is waiting for a fresh decision."
     }
   },
   "body": {
@@ -768,12 +801,29 @@
     }
   },
   "payroll": {
+    "adjustments": {
+      "addForAll": "Add for all employees",
+      "bulkTitle": "Add for all employees",
+      "confirm": "This creates one adjustment per active employee.",
+      "component": "Component",
+      "componentPlaceholder": "Pick a pay component",
+      "targetPeriod": "Target period",
+      "reasonHint": "It appears on every payslip line this creates.",
+      "branchAll": "All branches",
+      "branchHint": "Leave as all branches unless this is meant for one of them.",
+      "branchUnreadable": "The branch list is not readable with your permissions, so this can only be given to every branch.",
+      "submit": "Add for all employees",
+      "submitting": "Adding…",
+      "given_one": "{{count}} employee given",
+      "given_other": "{{count}} employees given",
+      "givenNoneHint": "Everyone in scope already has this component for this period with this reason."
+    },
     "tiers": {
       "title": "Tiers & ceilings",
-      "subtitle": "The rate tables payroll computes from — income tax tiers, and the NSSF schemes with their salary ceilings.",
+      "subtitle": "The rate tables payroll computes from — income tax brackets, and the NSSF schemes with their salary ceilings.",
       "help": "Nothing here recomputes a payslip. A run already generated keeps the figures it was generated with; these tables decide what the NEXT run computes. NSSF rates are versioned rather than edited, so an old month re-runs to what it produced at the time.",
-      "taxCard": "Income tax tiers",
-      "taxHint": "Each tier taxes the slice of ANNUAL income between its floor and its ceiling. The top tier is left open — it applies to everything above the last floor.",
+      "taxCard": "Income tax brackets",
+      "taxHint": "Each bracket taxes the slice of ANNUAL income between its floor and its ceiling. The top bracket is left open — it applies to everything above the last floor.",
       "nssfCard": "NSSF schemes",
       "nssfHint": "Employee and employer contribution rates, and the salary above which each scheme stops contributing. Rates change by decree — use New version rather than editing, so months already paid still explain themselves.",
       "fallbackCard": "Default NSSF ceiling (fallback)",
@@ -783,13 +833,13 @@
       "fallbackMissingHint": "NssfCeilingUsd is a system setting, and reading it needs SETTING_MANAGE. Schemes with their own ceiling are unaffected; ask an administrator to set the fallback.",
       "floor": "Floor (annual)",
       "ceiling": "Ceiling (annual)",
-      "ceilingHint": "Leave empty for the top tier — it then applies to everything above the floor.",
+      "ceilingHint": "Leave empty for the top bracket — it then applies to everything above the floor.",
       "andAbove": "and above",
       "rate": "Rate %",
       "currency": "Currency",
       "effectiveFrom": "Effective from",
       "effectiveTo": "Effective to",
-      "effectiveToHint": "Leave empty while the tier is still in force.",
+      "effectiveToHint": "Leave empty while the bracket is still in force.",
       "note": "Note",
       "actions": "Actions",
       "scheme": "Scheme",
@@ -803,30 +853,41 @@
       "usingFallback": "Default ({{value}})",
       "usingFallbackUnset": "Default (not set)",
       "fallbackTitle": "This scheme has no ceiling of its own, so the default below applies.",
-      "newTier": "New tier",
-      "editTier": "Edit tier",
+      "newTier": "New bracket",
+      "editTier": "Edit bracket",
       "newScheme": "New scheme",
       "editScheme": "Edit scheme",
       "newVersion": "New version",
       "newVersionOf": "New version of {{scheme}}",
       "newVersionTitle": "Create a new dated version of this scheme, prefilled from it. The existing row is left untouched.",
       "newVersionHint": "This creates a NEW row. Set the date it takes effect from — the existing version stays exactly as it is, so months already paid still explain themselves.",
-      "noTiers": "No income tax tiers yet.",
+      "noTiers": "No income tax brackets yet.",
       "noSchemes": "No NSSF schemes yet.",
       "saved": "Saved.",
-      "deleted": "Tier deleted.",
-      "deleteTitle": "Delete this tier?",
-      "deleteBody": "The {{currency}} tier from {{floor}} to {{ceiling}} will be removed.",
+      "deleted": "Bracket deleted.",
+      "deleteTitle": "Delete this bracket?",
+      "deleteBody": "The {{currency}} bracket from {{floor}} to {{ceiling}} will be removed.",
       "deleteHint": "Payslips already generated are not changed — they keep the figures they were generated with. This only affects what the next run computes.",
-      "warnTitle": "Check these tiers",
-      "warnOverlap": "{{scope}}: income from {{from}} to {{to}} falls in two tiers at once.",
-      "warnGap": "{{scope}}: income from {{from}} to {{to}} falls in no tier at all.",
-      "warnManyOpen": "{{scope}}: {{count}} tiers are left open-ended. Only the top one should be.",
-      "warnOpenNotLast": "{{scope}}: the open-ended tier at {{floor}} is not the highest one, so the tiers above it can never apply.",
+      "warnTitle": "Check these brackets",
+      "warnOverlap": "{{scope}}: income from {{from}} to {{to}} falls in two brackets at once.",
+      "warnGap": "{{scope}}: income from {{from}} to {{to}} falls in no bracket at all.",
+      "warnManyOpen": "{{scope}}: {{count}} brackets are left open-ended. Only the top one should be.",
+      "warnOpenNotLast": "{{scope}}: the open-ended bracket at {{floor}} is not the highest one, so the brackets above it can never apply.",
       "errRate": "A rate must be between 0 and 100%.",
-      "errCeiling": "The ceiling must be above the floor, or empty for the top tier.",
+      "errCeiling": "The ceiling must be above the floor, or empty for the top bracket.",
       "errCeilingAmount": "A ceiling must be more than zero. Leave it empty to use the default.",
-      "errRequired": "Fill in the required fields."
+      "errRequired": "Fill in the required fields.",
+      "tierNo": "Tier",
+      "tierName": "Name",
+      "minBasic": "Min basic",
+      "maxBasic": "Max basic",
+      "noBound": "No bound",
+      "noBands": "No tiers are defined.",
+      "bandCard": "Basic salary by tier",
+      "bandHint": "What a basic salary may be at each rank. Enforced on every salary-component write, so a basic outside its tier band is refused when it is saved.",
+      "bandTitle": "Basic salary band — {{tier}}",
+      "bandBlankHint": "Leave a box blank for no bound on that side. Blank on both sides removes the band entirely.",
+      "bandSaved": "Salary band saved."
     }
   },
   "access": {
@@ -865,6 +926,13 @@
     }
   },
   "hr": {
+    "employee": {
+      "email": "Email",
+      "emailPlaceholder": "name@company.com",
+      "emailHint": "Where the system sends the notice when one of their requests is approved or rejected. Leave empty and none is sent.",
+      "emailInvalid": "That does not look like an email address.",
+      "phoneNumber": "Phone number"
+    },
     "employeeForm": {
       "tierPlaceholder": "Select the tier…",
       "tierFirst": "Select the tier first",
@@ -939,6 +1007,10 @@
       "posting": "Posting…",
       "posted": "Balance adjusted.",
       "noTypes": "No leave types are defined, so there is nothing to adjust."
+    },
+    "salaryComponents": {
+      "tierBand": "Tier {{tier}}: basic salary must be between {{min}} and {{max}} {{currency}}",
+      "noBound": "no bound"
     }
   },
   "settings": {

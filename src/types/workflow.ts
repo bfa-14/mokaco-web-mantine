@@ -402,8 +402,39 @@ export interface RequestStep {
   delegatedToUserId: number | null
   delegatedToUsername: string | null
   delegatedFromUsername: string | null
+  /**
+   * DEPUTY DELEGATION — a different act from the person-to-person delegation above. That one names
+   * a user; this one opens the step to `fallbackRoleId`, so whoever holds that role may sign.
+   * Non-null `delegatedToDeputyAt` IS the signal — a configured `fallbackRoleName` on its own only
+   * means a deputy EXISTS, not that the step was handed over.
+   */
+  delegatedToDeputyAt: string | null
+  deputyDelegatedByUserId: number | null
+  deputyDelegatedByUsername: string | null
+  /**
+   * True when the step's MAIN approver cannot act — absent, vacant, or the requester themselves.
+   *
+   * THE DEPUTY MAY ALREADY SIGN WHEN THIS IS TRUE, with nothing delegated: absence is the system
+   * noticing the approver has stepped away, delegation is them saying so. The server computes this
+   * with the same rule fn_CanUserActOnStep uses to allow the deputy, so it never disagrees with
+   * what the decisions endpoint offers.
+   */
+  mainApproverAbsent: boolean
   /** How many proof attachments hang off this step (bytes are never in the list). */
   proofCount: number
+}
+
+/**
+ * What the delegate/reclaim calls return — the step's deputy state after the act.
+ *
+ * Both members come back null after a reclaim, which is what lets a caller re-render from the
+ * response alone. The pages here refetch anyway: delegating also changes who the decisions
+ * endpoint will answer for, and that is not in this shape.
+ */
+export interface DeputyDelegationResult {
+  stepNo: number
+  delegatedToDeputyAt: string | null
+  deputyDelegatedByUserId: number | null
 }
 
 export interface SignatureLogEntry {
@@ -548,6 +579,26 @@ export interface ForUserRequest {
   myComment: string | null
   /** How many notes are on this request — drives the speech-bubble count on the card. */
   noteCount: number
+  /**
+   * DEPUTY DELEGATION ON THE CURRENT STEP — all four answered for the signed-in caller, so the
+   * hub card can offer the act without a second call per row.
+   *
+   * `fallbackRoleName` null means the current step has no deputy configured, which is most steps.
+   * `delegatedToDeputyAt` non-null IS the "handed over" signal — a configured role on its own only
+   * means a deputy exists.
+   */
+  fallbackRoleName: string | null
+  delegatedToDeputyAt: string | null
+  /**
+   * True when I may hand the current step to its deputy: I am its MAIN approver, request and step
+   * are open, a deputy exists, and it is not delegated yet.
+   *
+   * NOT `waitingOnMe`. That one is true for the DEPUTY too — it asks who may SIGN — and a deputy
+   * must never be offered a button to delegate the step to themselves.
+   */
+  canDelegate: boolean
+  /** True when I may take the current step back from the deputy — mine, and still delegated. */
+  canReclaim: boolean
   /** True when I have an unsigned draft decision waiting on this request's current step — badge it,
    *  and sort it to the top of "To handle". Optional: absent until the backend serves it. */
   hasMyDraft?: boolean

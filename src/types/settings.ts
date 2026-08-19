@@ -13,6 +13,16 @@ export interface Setting {
   dataType: string
   /** What this setting controls, in words. This IS the label the user reads. */
   description: string | null
+  /**
+   * Which band of the page this belongs to — "Attendance", "Payroll", "Notifications".
+   *
+   * THE GROUPING IS DATA, not a map in this codebase: a feature that adds keys with a Section gets
+   * its own heading with no frontend change. Null for an unfiled key, which then renders in the
+   * ungrouped remainder rather than vanishing.
+   */
+  section: string | null
+  /** Reading order within the section. The API already returns rows in it, so it rarely needs sorting again. */
+  sortOrder: number | null
   modifiedAt: string | null
   modifiedBy: number | null
 }

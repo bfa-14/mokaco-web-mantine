@@ -2,7 +2,7 @@
 import { apiRequest } from '../api/client'
 import type {
   AttendanceReadiness, EmployeePayslip, MyPayslip, NssfRate, NssfRateUpsertRequest,
-  PayrollAdjustment, PayrollComponentType,
+  PayrollAdjustment, PayrollAdjustmentBulkRequest, PayrollAdjustmentBulkResult, PayrollComponentType,
   PayrollRunCreateRequest, PayrollRunDetail, PayrollRunListItem, PayslipDetail, PayslipLineLookup,
   PayslipRow, SalaryAdvance, StatutoryReportRow, TaxBracket, TaxBracketUpsertRequest,
 } from '../types/payroll'
@@ -90,8 +90,26 @@ export const advancesService = {
 export const adjustmentsService = {
   getForPeriod: (period: string) =>
     apiRequest<PayrollAdjustment[]>(`/api/payroll/adjustments?period=${encodeURIComponent(period)}`),
-  // NO create. An adjustment is raised as a request — payrollAdjustmentsService.create in
-  // workflowService.ts — and both the route and its procedure are gone/refusing.
+  // NO single-employee create. ONE adjustment is raised as a request —
+  // payrollAdjustmentsService.create in workflowService.ts — and both that route and its procedure
+  // are gone/refusing.
+
+  /**
+   * One adjustment for EVERY active employee. PAYROLL_APPROVE, not PAYROLL_RUN: this is the act
+   * that gives the whole company something, so it carries the trust that locks a run rather than
+   * the one that prepares it.
+   *
+   * SAFE TO RE-SUBMIT. The procedure skips anyone already carrying this component, period and
+   * reason, so a double click gives the second call `employeesGiven: 0` instead of a double payment.
+   * Report the number it returns, not the headcount.
+   *
+   * Every refusal is the procedure's own sentence, arriving as a 400 — a non-positive amount, a
+   * blank reason, an unknown component or currency. Show it verbatim.
+   */
+  createBulk: (body: PayrollAdjustmentBulkRequest) =>
+    apiRequest<PayrollAdjustmentBulkResult>('/api/payroll/adjustments/bulk', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
   /**
    * Still a live endpoint, and nothing in the app calls it: the procedure now refuses a consumed
    * row AND a request-authorised one, which between them is every row the app can produce. Kept

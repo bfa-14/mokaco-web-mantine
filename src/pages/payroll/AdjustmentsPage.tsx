@@ -3,20 +3,41 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { ActionIcon, Button, Group, Pagination, Select, Table, TextInput } from '@mantine/core'
+import { useTranslation } from 'react-i18next'
+import {
+  ActionIcon, Button, Group, Modal, NumberInput, Pagination, Select, Table, Textarea, TextInput,
+} from '@mantine/core'
 import { MonthPickerInput } from '@mantine/dates'
-import { IconCalendar, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { notifications } from '@mantine/notifications'
+import { IconCalendar, IconPlus, IconRefresh, IconSearch, IconUsersGroup } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
+import { PERMISSION } from '../../auth/routeAccess'
+import { useAuth } from '../../auth/useAuth'
 import { monthFromPicker, monthToPicker } from '../../components/date/pickerValue'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { PageHelp } from '../../components/PageHelp'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
+import { currenciesService } from '../../services/coreService'
+import { branchesService } from '../../services/hrService'
 import { adjustmentsService, payrollRunsService } from '../../services/payrollService'
-import type { PayrollAdjustment, PayrollRunListItem } from '../../types/payroll'
+import type { Currency } from '../../types/core'
+import type { Branch } from '../../types/hr'
+import type {
+  PayrollAdjustment, PayrollComponentType, PayrollRunListItem,
+} from '../../types/payroll'
 import './payroll.css'
 
 const EMPTY: PayrollAdjustment[] = []
 const NO_RUNS: PayrollRunListItem[] = []
+const NO_COMPONENTS: PayrollComponentType[] = []
+const NO_CURRENCIES: Currency[] = []
+const NO_BRANCHES: Branch[] = []
+/**
+ * The branch select's default, and a SENTINEL rather than an empty string: Mantine reads '' as
+ * nothing-selected, which would make the default indistinguishable from a cleared box. It maps back
+ * to `branchId: null` on submit, which is what the procedure reads as every branch.
+ */
+const ALL_BRANCHES = 'all'
 const fmt = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 /**
  * THE DEFAULT IS THE CURRENT MONTH, not the next one.
@@ -34,12 +55,19 @@ const columnHelper = createColumnHelper<PayrollAdjustment>()
 const PAGE_SIZES = ['15', '30', '60']
 
 /**
- * ADJUSTMENTS — the LEDGER, and read-only.
+ * ADJUSTMENTS — the LEDGER, and very nearly read-only.
  *
- * Nothing is created here any more. An adjustment is a request now: HR raises it, the Owner signs
- * it, and only that final approval writes the row this page lists. The database enforces it —
- * payroll.usp_Adjustment_Create refuses outright and points at the request type — so a create form
- * here would be a button that could only ever produce an error.
+ * NOBODY IS ADJUSTED INDIVIDUALLY HERE. An adjustment for one person is a request: HR raises it,
+ * the Owner signs it, and only that final approval writes the row this page lists. The database
+ * enforces it — payroll.usp_Adjustment_Create refuses outright and points at the request type — so
+ * a single-employee form here would be a button that could only ever produce an error.
+ *
+ * THE ONE EXCEPTION IS THE WHOLE COMPANY AT ONCE, and it is an exception because the rule stops
+ * making sense at that size. The chain protects an individual from having their pay changed
+ * unsigned; a bonus for everybody is one decision, and putting it through the chain would mean one
+ * request per head. So that act carries PAYROLL_APPROVE instead — the trust that locks a run — and
+ * HR, who may raise an adjustment for anyone, may not give it to everyone. The button is hidden
+ * without that permission and the server refuses regardless, which is the order those two belong in.
  *
  * Nothing is DELETED here either, for the same reason turned around: a row is the residue of a
  * signed chain. An unconsumed one is refused because it was authorised; a consumed one because it
@@ -52,6 +80,13 @@ const PAGE_SIZES = ['15', '30', '60']
 export default function AdjustmentsPage() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
+  const { t } = useTranslation()
+  /* The bulk create is the only act on this page, and it is not the trust that opened it: reading
+     adjustments is PAYROLL_RUN, giving one to everybody is PAYROLL_APPROVE. Hiding the button from
+     HR is a courtesy — the route refuses them anyway — but it is the honest courtesy: an affordance
+     that could only ever return 403 is worse than no affordance at all. */
+  const { hasPermission } = useAuth()
+  const canAddForAll = hasPermission(PERMISSION.PAYROLL_APPROVE)
   const period = params.get('period') ?? currentMonth()
 
   const [rows, setRows] = useState<PayrollAdjustment[]>(EMPTY)
@@ -82,6 +117,171 @@ export default function AdjustmentsPage() {
     next.set('period', s)
     setParams(next, { replace: true })
   }, [params, setParams])
+
+  /* ─────────────────────────── add for all employees ─────────────────────────── */
+
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  const [componentTypes, setComponentTypes] = useState<PayrollComponentType[]>(NO_COMPONENTS)
+  const [currencies, setCurrencies] = useState<Currency[]>(NO_CURRENCIES)
+  const [branches, setBranches] = useState<Branch[]>(NO_BRANCHES)
+  /** The branch list needs EMP_VIEW, which two of the roles that may be here do not hold. */
+  const [branchesUnreadable, setBranchesUnreadable] = useState(false)
+  const [refLoaded, setRefLoaded] = useState(false)
+
+  const [bulkForm, setBulkForm] = useState({
+    componentTypeId: null as string | null,
+    amount: '' as number | string,
+    currencyCode: '',
+    targetPeriod: period,
+    reason: '',
+    branchId: ALL_BRANCHES,
+  })
+
+  /**
+   * The three reference lists, fetched on FIRST OPEN rather than with the page.
+   *
+   * Nobody who cannot press the button should pay for its dropdowns, and most visits here are
+   * somebody checking what is queued. Loading them lazily also puts any permission failure in
+   * front of the person it affects, at the moment it affects them, rather than into a console on
+   * page load.
+   */
+  useEffect(() => {
+    if (!bulkOpen || refLoaded) return
+    setRefLoaded(true)
+
+    // The component list is the one the modal cannot work without, so its failure is shown.
+    adjustmentsService.componentTypes()
+      .then(setComponentTypes)
+      .catch((e) => setBulkError(getErrorMessage(e)))
+
+    // Currencies and branches are EMP_VIEW, which the General Manager and Operations Manager roles
+    // do not hold — and both of those ARE PAYROLL_APPROVE holders, so this is the ordinary case
+    // here rather than an edge one. Neither failure is an error: the currency list falls back to
+    // the codes already on the page, and an unreadable branch list leaves every branch, which is
+    // the default anyway.
+    currenciesService.getAll()
+      .then(setCurrencies)
+      .catch(() => setCurrencies(NO_CURRENCIES))
+
+    branchesService.getAll()
+      .then((all) => setBranches(all.filter((b) => b.isActive)))
+      .catch(() => setBranchesUnreadable(true))
+  }, [bulkOpen, refLoaded])
+
+  const componentOptions = useMemo(
+    () => componentTypes.map((c) => ({
+      value: String(c.componentTypeId),
+      label: `${c.name} — ${c.category}`,
+    })),
+    [componentTypes],
+  )
+
+  /** The picked component, only so the form can show WHICH WAY the amount is about to go. */
+  const pickedComponent = useMemo(
+    () => componentTypes.find((c) => String(c.componentTypeId) === bulkForm.componentTypeId) ?? null,
+    [componentTypes, bulkForm.componentTypeId],
+  )
+
+  /**
+   * Currencies, with a fallback that needs no permission the reader is missing.
+   *
+   * The codes already on this page — the ones on the listed adjustments, and every run’s primary
+   * currency — arrived through PAYROLL_RUN, which everyone here holds. A General Manager therefore
+   * gets a usable list rather than an empty box; what they lose is the NAME beside the code.
+   */
+  const currencyOptions = useMemo(() => {
+    if (currencies.length > 0) {
+      return currencies.map((c) => ({ value: c.currencyCode, label: `${c.currencyCode} — ${c.name}` }))
+    }
+    const codes = new Set<string>()
+    rows.forEach((r) => { if (r.currencyCode) codes.add(r.currencyCode) })
+    runsAll.forEach((r) => { if (r.primaryCurrency) codes.add(r.primaryCurrency) })
+    return Array.from(codes).sort().map((c) => ({ value: c, label: c }))
+  }, [currencies, rows, runsAll])
+
+  const branchOptions = useMemo(
+    () => [{ value: ALL_BRANCHES, label: t('payroll.adjustments.branchAll') }]
+      .concat(branches.map((b) => ({ value: String(b.branchId), label: b.name }))),
+    [branches, t],
+  )
+
+  /** Filled once the options arrive, and never over a choice the user has already made. */
+  useEffect(() => {
+    if (!bulkOpen || currencyOptions.length === 0) return
+    setBulkForm((f) => (f.currencyCode ? f : {
+      ...f,
+      currencyCode: currencyOptions.some((o) => o.value === 'USD') ? 'USD' : currencyOptions[0].value,
+    }))
+  }, [bulkOpen, currencyOptions])
+
+  /** Opens on the period being LOOKED AT — the month the reader already has in mind. */
+  const openBulk = useCallback(() => {
+    setBulkForm({
+      componentTypeId: null,
+      amount: '',
+      currencyCode: '',
+      targetPeriod: period,
+      reason: '',
+      branchId: ALL_BRANCHES,
+    })
+    setBulkError(null)
+    setBulkOpen(true)
+  }, [period])
+
+  /**
+   * Submits, and reports THE NUMBER OF ROWS WRITTEN rather than the headcount.
+   *
+   * The procedure skips anyone who already carries this component, period and reason, so a second
+   * submit answers zero instead of paying everybody twice. That zero earns a sentence of its own:
+   * alone it reads as a failure, when what it means is that the first submit already did the work.
+   *
+   * Only the two fields that would otherwise make a NONSENSE request are checked here. The amount,
+   * the currency and the component’s existence are the procedure’s to refuse, and its sentences are
+   * better than any this page could invent — they arrive as a 400 and are shown verbatim, in red.
+   */
+  const submitBulk = useCallback(async () => {
+    setBulkError(null)
+
+    const componentTypeId = Number(bulkForm.componentTypeId)
+    if (!componentTypeId || bulkForm.reason.trim().length === 0) {
+      setBulkError(t('common.formIncomplete'))
+      return
+    }
+
+    setBulkSaving(true)
+    try {
+      const result = await adjustmentsService.createBulk({
+        componentTypeId,
+        amount: typeof bulkForm.amount === 'number' ? bulkForm.amount : Number(bulkForm.amount),
+        currencyCode: bulkForm.currencyCode,
+        targetPeriod: bulkForm.targetPeriod,
+        reason: bulkForm.reason.trim(),
+        branchId: bulkForm.branchId === ALL_BRANCHES ? null : Number(bulkForm.branchId),
+      })
+
+      const given = t('payroll.adjustments.given', { count: result.employeesGiven })
+      notifications.show({
+        message: result.employeesGiven === 0
+          ? `${given} — ${t('payroll.adjustments.givenNoneHint')}`
+          : given,
+        color: result.employeesGiven === 0 ? 'yellow' : 'green',
+        autoClose: 5000,
+      })
+
+      setBulkOpen(false)
+      // The rows exist NOW, so the grid had better be showing the month they exist in. Refreshing
+      // the month on screen after writing into a different one would show the reader nothing at
+      // all, which reads as "it did not work".
+      if (bulkForm.targetPeriod === period) refresh()
+      else setPeriod(bulkForm.targetPeriod)
+    } catch (e) {
+      setBulkError(getErrorMessage(e))
+    } finally {
+      setBulkSaving(false)
+    }
+  }, [bulkForm, period, refresh, setPeriod, t])
 
   /**
    * A queued adjustment is INVISIBLE on the run until the run is regenerated — the row exists, but
@@ -205,8 +405,20 @@ export default function AdjustmentsPage() {
           <ActionIcon variant="default" size="lg" aria-label="Refresh" onClick={refresh}>
             <IconRefresh size={16} />
           </ActionIcon>
-          {/* The only way in. The form defaults to the current month and lists locked runs itself,
-              so nothing is prefilled from here. */}
+          {/* EVERYBODY AT ONCE — secondary on purpose. Raising a request is the ordinary act and
+              stays the primary button; this one is rarer, larger in effect, and gated on a
+              permission most people reading this page do not hold. */}
+          {canAddForAll && (
+            <Button
+              variant="default"
+              leftSection={<IconUsersGroup size={16} />}
+              onClick={openBulk}
+            >
+              {t('payroll.adjustments.addForAll')}
+            </Button>
+          )}
+          {/* The only way in for ONE person. The form defaults to the current month and lists
+              locked runs itself, so nothing is prefilled from here. */}
           <Button leftSection={<IconPlus size={16} />}
             onClick={() => navigate('/requests/new?type=PAYROLL_ADJUSTMENT')}>
             Raise an adjustment request
@@ -304,6 +516,156 @@ export default function AdjustmentsPage() {
           </Group>
         </Group>
       </div>
+
+      {/* ── add for all employees ── */}
+      <Modal
+        opened={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title={t('payroll.adjustments.bulkTitle')}
+        size={520}
+        centered
+      >
+        {/* What the button DOES, above the fields rather than buried under them. This is the one
+            action on the page that touches everybody at once, and the reader should have read that
+            sentence before they start filling anything in — not while their hand is on Submit. */}
+        <p className="hint" style={{ marginTop: 0 }}>
+          {t('payroll.adjustments.confirm')}
+        </p>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="bulk-component">
+            {t('payroll.adjustments.component')}
+          </label>
+          <Select
+            id="bulk-component"
+            data={componentOptions}
+            value={bulkForm.componentTypeId}
+            onChange={(v) => setBulkForm((f) => ({ ...f, componentTypeId: v }))}
+            placeholder={t('payroll.adjustments.componentPlaceholder')}
+            searchable
+            required
+            disabled={bulkSaving}
+          />
+          {/* WHICH WAY THE MONEY GOES. The amount is always positive and the component decides the
+              direction, which is easy to forget when the same box is used for a bonus and for a
+              deduction — and this one lands on every employee. */}
+          {pickedComponent && (
+            <p className="hint" style={{ marginTop: 6 }}>
+              {pickedComponent.sign < 0 ? '−' : '+'} {pickedComponent.category}
+            </p>
+          )}
+        </div>
+
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="form-label" htmlFor="bulk-amount">
+              {t('common.amount')}
+            </label>
+            <NumberInput
+              id="bulk-amount"
+              value={bulkForm.amount}
+              onChange={(v) => setBulkForm((f) => ({ ...f, amount: v }))}
+              min={0}
+              decimalScale={2}
+              required
+              disabled={bulkSaving}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bulk-currency">
+              {t('common.currency')}
+            </label>
+            <Select
+              id="bulk-currency"
+              data={currencyOptions}
+              value={bulkForm.currencyCode || null}
+              onChange={(v) => setBulkForm((f) => ({ ...f, currencyCode: v ?? f.currencyCode }))}
+              allowDeselect={false}
+              searchable
+              disabled={bulkSaving}
+            />
+          </div>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="bulk-period">
+            {t('payroll.adjustments.targetPeriod')}
+          </label>
+          {/* Same guard as the page header: a period is never nothing, so a clear is refused
+              rather than written through as an empty string. */}
+          <MonthPickerInput
+            id="bulk-period"
+            valueFormat="MMMM YYYY"
+            leftSection={<IconCalendar size={14} />}
+            value={monthToPicker(bulkForm.targetPeriod)}
+            onChange={(v) => {
+              const month = monthFromPicker(v)
+              if (month) setBulkForm((f) => ({ ...f, targetPeriod: month }))
+            }}
+            disabled={bulkSaving}
+          />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="bulk-reason">
+            {t('common.reason')}
+          </label>
+          {/* 300 is the column, not a guess: payroll.PAYROLL_ADJUSTMENT.Reason is nvarchar(300),
+              and it is also half the key the procedure skips re-runs on — a reason silently cut
+              short would quietly stop matching the one already stored. */}
+          <Textarea
+            id="bulk-reason"
+            value={bulkForm.reason}
+            onChange={(e) => setBulkForm((f) => ({ ...f, reason: e.currentTarget.value }))}
+            maxLength={300}
+            autosize
+            minRows={2}
+            required
+            disabled={bulkSaving}
+          />
+          <p className="hint" style={{ marginTop: 6 }}>
+            {t('payroll.adjustments.reasonHint')}
+          </p>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label" htmlFor="bulk-branch">
+            {t('common.branch')} {t('common.optional')}
+          </label>
+          <Select
+            id="bulk-branch"
+            data={branchOptions}
+            value={bulkForm.branchId}
+            onChange={(v) => setBulkForm((f) => ({ ...f, branchId: v ?? ALL_BRANCHES }))}
+            allowDeselect={false}
+            searchable
+            disabled={bulkSaving || branchesUnreadable}
+          />
+          <p className="hint" style={{ marginTop: 6 }}>
+            {branchesUnreadable
+              ? t('payroll.adjustments.branchUnreadable')
+              : t('payroll.adjustments.branchHint')}
+          </p>
+        </div>
+
+        {/* The procedure’s own sentence, verbatim and in red — "The amount must be above zero.",
+            "Unknown currency." Nothing is rewritten on the way through. */}
+        {bulkError && (
+          <div className="alert alert--error" role="alert">
+            {bulkError}
+          </div>
+        )}
+
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setBulkOpen(false)} disabled={bulkSaving}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submitBulk()} disabled={bulkSaving}>
+            {bulkSaving ? t('payroll.adjustments.submitting') : t('payroll.adjustments.submit')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

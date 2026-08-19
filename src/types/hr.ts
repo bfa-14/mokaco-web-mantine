@@ -233,6 +233,15 @@ export interface EmployeeProfile {
   nssfNumber: string | null
   hireDate: string
   terminationDate: string | null
+  /**
+   * How the person is reached. Both optional and stored NULL rather than empty.
+   *
+   * EMAIL IS ALSO AN ADDRESS THE SYSTEM WRITES TO — the closing-request notification goes here,
+   * and somebody with none simply gets no mail rather than a queued one that cannot be delivered.
+   * Phone is stored and displayed only; nothing sends to it yet.
+   */
+  email: string | null
+  phoneNumber: string | null
   /** A tier NUMBER (1 = head) — set via its own PUT, not the update body. Named by the dictionary. */
   approvalTier: number
   /** Who this person reports to — set via its own PUT. Null for the top of a reporting line. */
@@ -260,6 +269,9 @@ export interface EmployeeCreateRequest {
   nationalId: string | null
   nssfNumber: string | null
   hireDate: string
+  /** Optional. Send null, never "" — the procedure NULLIFs a blank anyway, but null is the honest wire value. */
+  email: string | null
+  phoneNumber: string | null
 }
 
 /** PUT /api/employees/{id}. */
@@ -272,6 +284,9 @@ export interface EmployeeUpdateRequest {
   nssfNumber: string | null
   hireDate: string
   terminationDate: string | null
+  /** Optional. Sending null CLEARS what was there — emptying the box is a real edit. */
+  email: string | null
+  phoneNumber: string | null
 }
 
 /**
@@ -335,6 +350,16 @@ export interface ApprovalTier {
   name: string
   /** The Arabic name. null falls back to {@link name} rather than to the number. */
   nameAr: string | null
+
+  /* THE BASIC-SALARY BAND FOR THIS TIER. Policy: a DB trigger refuses a BASIC component outside
+     it. Surfaced so the salary form can SAY the rule before the save is refused by it. */
+
+  /** The floor. null = no lower bound. */
+  minBasicSalary?: number | null
+  /** The ceiling. null = no upper bound. */
+  maxBasicSalary?: number | null
+  /** Which currency the two figures are in. null when the tier has no band at all. */
+  salaryCurrency?: string | null
 }
 
 /** POST /api/hr/approval-tiers. */
@@ -348,6 +373,21 @@ export interface ApprovalTierCreateRequest {
 export interface ApprovalTierNameRequest {
   name: string
   nameAr: string | null
+}
+
+/**
+ * PUT /api/hr/approval-tiers/{tierNo}/salary-range.
+ *
+ * Separate from the rename because it needs a different trust: renaming is EMP_EDIT, setting what
+ * a rank may be paid is PAYROLL_RUN.
+ *
+ * EITHER BOUND MAY BE null, and null means "no bound" — not "leave alone". Both null clears the
+ * band, which is how a tier goes back to unconstrained.
+ */
+export interface ApprovalTierSalaryRangeRequest {
+  minBasicSalary: number | null
+  maxBasicSalary: number | null
+  salaryCurrency: string
 }
 
 /** What PUT /api/employees/{id}/reports-to returns — the new manager and any login warning. */

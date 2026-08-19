@@ -401,8 +401,43 @@ export interface PayrollAdjustment {
   requestInstanceId: number | null
 }
 
-// The create shape that used to live here is gone with its endpoint. An adjustment is raised as a
-// REQUEST now — see PayrollAdjustmentCreateRequest in types/workflow.ts.
+// The single-employee create shape that used to live here is gone with its endpoint. ONE adjustment
+// is raised as a REQUEST now — see PayrollAdjustmentCreateRequest in types/workflow.ts.
+
+/**
+ * One adjustment for EVERY active employee — POST /api/payroll/adjustments/bulk, PAYROLL_APPROVE.
+ *
+ * The company-wide bonus, and the one direct create left. It is not a hole in the request chain:
+ * the chain protects an INDIVIDUAL's pay from being changed unsigned, and applied here it would mean
+ * one request per head for a decision taken once — so the trust is spent on the act instead, on the
+ * same permission that locks a run.
+ *
+ * Rows this writes have no `requestInstanceId`, and the grid shows them as direct entries. That is
+ * accurate: there are no signatures to link to.
+ */
+export interface PayrollAdjustmentBulkRequest {
+  componentTypeId: number
+  /** Always POSITIVE — the component type's sign decides direction. */
+  amount: number
+  currencyCode: string
+  /** Format 2026-09. */
+  targetPeriod: string
+  /** Required by the procedure: it lands on every payslip line, and it is part of the re-run key. */
+  reason: string
+  /** Omitted or null means EVERY branch — the default, and the common case. */
+  branchId?: number | null
+}
+
+/**
+ * How many rows were actually written.
+ *
+ * NOT the headcount: the procedure skips anyone who already carries this component, period and
+ * reason, so a second submit reports 0 rather than paying everybody twice. Show this number, never
+ * the number of employees on screen.
+ */
+export interface PayrollAdjustmentBulkResult {
+  employeesGiven: number
+}
 
 /**
  * A pay component the adjustment form may choose from.

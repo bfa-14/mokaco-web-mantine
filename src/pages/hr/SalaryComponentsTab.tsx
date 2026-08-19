@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState, Table as TableInstance } from '@tanstack/react-table'
 import { ActionIcon, Button, Loader, Modal, NumberInput, Select, Table } from '@mantine/core'
@@ -11,6 +12,7 @@ import { componentTypesService, salaryComponentsService } from '../../services/h
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { fmtDate, fmtNumber } from './hrFormat'
+import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import type { ComponentType, SalaryComponent } from '../../types/hr'
 import type { Currency } from '../../types/core'
 
@@ -110,7 +112,32 @@ function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText
 
 const columnHelper = createColumnHelper<SalaryComponent>()
 
-export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
+/**
+ * Which component type is the BASIC salary — the one the tier band constrains.
+ *
+ * MATCHED ON NAME because the DTO carries no code: hr.COMPONENT_TYPE gives this screen an id, a
+ * name, a category and a sign, and none of the other three distinguishes basic pay from any other
+ * earning. That makes this a heuristic, and it is allowed to be one: it decides only whether an
+ * ADVISORY HINT appears. The rule itself is a database trigger, so a name this fails to recognise
+ * costs the user the hint, never the enforcement.
+ */
+function isBasicComponent(type: ComponentType | undefined): boolean {
+  return /\bbasic\b/i.test(type?.name ?? '')
+}
+
+export function SalaryComponentsTab({
+  employeeId,
+  approvalTier,
+}: {
+  employeeId: number
+  /**
+   * The employee's tier, for the basic-salary band hint. Passed down rather than re-fetched: the
+   * profile page has already loaded it, and a second fetch could disagree with the header on screen.
+   */
+  approvalTier?: number | null
+}) {
+  const { t } = useTranslation()
+  const { tiers, tierName } = useApprovalTiers()
   const [rows, setRows] = useState<SalaryComponent[]>([])
   const [componentTypes, setComponentTypes] = useState<ComponentType[]>([])
   const [currencies, setCurrencies] = useState<Currency[]>([])
@@ -128,6 +155,9 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
     currencyCode?: string
     effectiveFrom?: string
   }>({})
+
+  /** The API's own refusal — the tier-band trigger's sentence, chiefly. Cleared on each attempt. */
+  const [serverError, setServerError] = useState<string | null>(null)
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -184,6 +214,7 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
   function openCreate() {
     setEditingId(null)
     setFieldErrors({})
+    setServerError(null)
     setForm({ ...EMPTY, currencyCode: currencies[0]?.currencyCode ?? '' })
     setPopupVisible(true)
   }
@@ -191,6 +222,7 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
   function openEdit(row: SalaryComponent) {
     setEditingId(row.salaryComponentId)
     setFieldErrors({})
+    setServerError(null)
     setForm({
       componentTypeId: row.componentTypeId,
       amount: row.amount,
@@ -201,6 +233,31 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
     setPopupVisible(true)
   }
 
+  /**
+   * The band hint for the component being edited, or null when there is nothing to say.
+   *
+   * Null in every case where the sentence would be a guess or a half-truth: the employee has no
+   * tier, the tier is not in the dictionary, the chosen type is not the basic salary, or the tier
+   * carries no band. "Hide when the tier has no range" is the same rule as all the others here.
+   */
+  const basicBand = useMemo(() => {
+    if (approvalTier == null) return null
+    const selected = componentTypes.find((x) => x.componentTypeId === form.componentTypeId)
+    if (!isBasicComponent(selected)) return null
+
+    const tier = tiers.find((x) => x.tierNo === approvalTier)
+    // A band needs a currency AND at least one side; without either there is no rule to state.
+    if (!tier?.salaryCurrency) return null
+    if (tier.minBasicSalary == null && tier.maxBasicSalary == null) return null
+
+    return {
+      tier: tierName(approvalTier),
+      min: tier.minBasicSalary,
+      max: tier.maxBasicSalary,
+      currency: tier.salaryCurrency,
+    }
+  }, [approvalTier, componentTypes, form.componentTypeId, tiers, tierName])
+
   async function submit() {
     /* The DX "Amount is required" rule is not reproduced: the state coerces an empty box to 0, so
        that rule could never fire in the original either (0 satisfies a RequiredRule). */
@@ -210,6 +267,7 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
     if (!form.effectiveFrom) errors.effectiveFrom = 'Start date is required'
     setFieldErrors(errors)
     if (errors.componentTypeId || errors.currencyCode || errors.effectiveFrom) return
+    setServerError(null)
     setSaving(true)
     try {
       if (editingId != null) {
@@ -234,7 +292,10 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
       setPopupVisible(false)
       await reload()
     } catch (err) {
-      notify(getErrorMessage(err), 'error', 4000)
+      /* IN THE FORM, NOT A TOAST. The tier-band trigger refuses an out-of-range basic with a
+         sentence naming what the figure must be between — that is the fix, and it has to stay on
+         screen next to the Amount box while it is corrected, not time out after four seconds. */
+      setServerError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -395,6 +456,25 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
                 setForm((f) => ({ ...f, amount: typeof v === 'number' ? v : 0 }))
               }
             />
+            {/* THE RULE, BEFORE IT REFUSES. A trigger enforces this band on save; saying it here
+                turns a refusal into something the user could have avoided. Advisory only — the
+                form never blocks on it, because the trigger is the authority and this is a hint. */}
+            {basicBand && (
+              <p className="hint" style={{ marginTop: 6 }}>
+                {t('hr.salaryComponents.tierBand', {
+                  tier: basicBand.tier,
+                  min:
+                    basicBand.min == null
+                      ? t('hr.salaryComponents.noBound')
+                      : fmtNumber(basicBand.min),
+                  max:
+                    basicBand.max == null
+                      ? t('hr.salaryComponents.noBound')
+                      : fmtNumber(basicBand.max),
+                  currency: basicBand.currency,
+                })}
+              </p>
+            )}
           </div>
 
           <div className="form-field">
@@ -442,6 +522,14 @@ export function SalaryComponentsTab({ employeeId }: { employeeId: number }) {
             />
           </div>
         </div>
+
+        {/* The tier-band refusal names the figures the basic must be between — kept on screen
+            beside the Amount box that caused it, rather than shown as a toast that times out. */}
+        {serverError && (
+          <div className="alert alert--error" role="alert">
+            {serverError}
+          </div>
+        )}
 
         <div className="form-actions">
           <Button variant="default" onClick={() => setPopupVisible(false)} disabled={saving}>

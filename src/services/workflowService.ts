@@ -84,6 +84,7 @@ import type {
   TipDistributionPayload,
   TypedDecideRequest,
   TypedDecisionResult,
+  DeputyDelegationResult,
   RequestDetail,
   RequestNote,
   RequestStep,
@@ -400,7 +401,7 @@ export const requestsService = {
    * Routes to the request-type's typed withdraw procedure server-side (it restores the figure first).
    */
   withdraw: (id: number, stepNo: number, reason: string, password?: string) =>
-    apiRequest<void>(`/api/requests/${id}/steps/${stepNo}/withdraw`, {
+    apiRequest<void>(`/api/requests/${id}/steps/${stepNo}/withdraw-decision`, {
       method: 'POST',
       body: JSON.stringify({ reason, password: password ?? null }),
     }),
@@ -414,6 +415,24 @@ export const requestsService = {
       method: 'POST',
       body: JSON.stringify({ reason: reason ?? null }),
     }),
+
+  /**
+   * Hand the CURRENT step to its deputy role, so whoever holds that role may sign instead.
+   *
+   * NOT `reclaim` above, which is the person-to-person delegation. This one names no user: it opens
+   * the step to a ROLE. No password — offering a step decides nothing.
+   *
+   * Every refusal is the procedure's sentence, arriving as a 400: not the step waiting, not the
+   * main approver, no deputy role with an active member, already delegated. Show it verbatim.
+   */
+  delegateToDeputy: (id: number, stepNo: number) =>
+    apiRequest<DeputyDelegationResult>(
+      `/api/requests/${id}/steps/${stepNo}/delegate-deputy`, { method: 'POST' }),
+
+  /** Take the step back from the deputy — the delegator only, and only while nobody has signed. */
+  reclaimFromDeputy: (id: number, stepNo: number) =>
+    apiRequest<DeputyDelegationResult>(
+      `/api/requests/${id}/steps/${stepNo}/delegate-deputy`, { method: 'DELETE' }),
 
   /** HR only. Reopen a REJECTED or CANCELLED request to the step that closed it. Approved cannot be reopened. */
   reopen: (id: number, reason: string) =>

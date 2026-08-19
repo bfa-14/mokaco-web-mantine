@@ -62,6 +62,8 @@ interface FormState {
   hireDate: string
   nationalId: string
   nssfNumber: string
+  email: string
+  phoneNumber: string
   userId: number | null
   terminationDate: string
   /**
@@ -84,6 +86,8 @@ const EMPTY: FormState = {
   hireDate: '',
   nationalId: '',
   nssfNumber: '',
+  email: '',
+  phoneNumber: '',
   userId: null,
   terminationDate: '',
   approvalTier: null,
@@ -92,8 +96,20 @@ const EMPTY: FormState = {
 
 /* PORT NOTE: DevExtreme ValidationGroup/RequiredRule → the same five required checks, message for
    message, run in submit() and shown as field-level errors. */
+/**
+ * DELIBERATELY LOOSE: one @, a dot after it, no spaces.
+ *
+ * The strict RFC grammar is famously enormous, and every compact approximation of it rejects
+ * addresses that genuinely deliver. What this is actually for is catching the typo — the missing
+ * @, the trailing comma from a pasted list — and the real verification is the mail either arriving
+ * or bouncing into EMAIL_OUTBOX.Error, which is a better test than any regex.
+ */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 interface FieldErrors {
   fullName?: string
+  /** Only ever set for a MALFORMED address — an empty box is a valid answer, not an error. */
+  email?: string
   branchId?: string
   departmentId?: string
   positionId?: string
@@ -270,6 +286,8 @@ export function EmployeeFormPopup({
         hireDate: employee.hireDate?.slice(0, 10) ?? '',
         nationalId: employee.nationalId ?? '',
         nssfNumber: employee.nssfNumber ?? '',
+        email: employee.email ?? '',
+        phoneNumber: employee.phoneNumber ?? '',
         userId: employee.userId,
         terminationDate: employee.terminationDate?.slice(0, 10) ?? '',
         approvalTier: employee.approvalTier ?? null,
@@ -399,6 +417,11 @@ export function EmployeeFormPopup({
     if (form.departmentId == null) errors.departmentId = 'Department is required'
     if (form.positionId == null) errors.positionId = 'Position is required'
     if (!form.hireDate) errors.hireDate = 'Hire date is required'
+    // OPTIONAL, SO ONLY A FILLED BOX IS JUDGED. The check is deliberately loose — one @, a dot
+    // after it, no spaces — because the strict grammar rejects addresses that genuinely deliver,
+    // and the cost of a typo here is a mail nobody receives, not a corrupted record.
+    if (form.email.trim() && !EMAIL_PATTERN.test(form.email.trim()))
+      errors.email = t('hr.employee.emailInvalid')
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) return
 
@@ -412,6 +435,8 @@ export function EmployeeFormPopup({
           fullName: form.fullName.trim(),
           nationalId: form.nationalId.trim() || null,
           nssfNumber: form.nssfNumber.trim() || null,
+          email: form.email.trim() || null,
+          phoneNumber: form.phoneNumber.trim() || null,
           hireDate: form.hireDate,
           terminationDate: form.terminationDate || null,
         })
@@ -455,6 +480,8 @@ export function EmployeeFormPopup({
           fullName: form.fullName.trim(),
           nationalId: form.nationalId.trim() || null,
           nssfNumber: form.nssfNumber.trim() || null,
+          email: form.email.trim() || null,
+          phoneNumber: form.phoneNumber.trim() || null,
           hireDate: form.hireDate,
         })
         // Create defaults everyone to Staff; set the tier straight after only when it differs.
@@ -701,6 +728,46 @@ export function EmployeeFormPopup({
               onChange={(e) => {
                 const value = e.currentTarget.value
                 setForm((f) => ({ ...f, nssfNumber: value }))
+              }}
+              disabled={saving}
+            />
+          </div>
+
+          {/* CONTACT. Optional, both of them — plenty of staff have neither on file, and refusing
+              to save an employee record over a missing phone number would be absurd. The email is
+              the one the SYSTEM uses: request-closed notifications go to it, and somebody without
+              one simply gets none. */}
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-email">
+              {t('hr.employee.email')}
+            </label>
+            <TextInput
+              id="emp-email"
+              type="email"
+              value={form.email}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setForm((f) => ({ ...f, email: value }))
+              }}
+              placeholder={t('hr.employee.emailPlaceholder')}
+              error={fieldErrors.email}
+              disabled={saving}
+            />
+            <p className="hint" style={{ marginTop: 6 }}>
+              {t('hr.employee.emailHint')}
+            </p>
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-phone">
+              {t('hr.employee.phoneNumber')}
+            </label>
+            <TextInput
+              id="emp-phone"
+              value={form.phoneNumber}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setForm((f) => ({ ...f, phoneNumber: value }))
               }}
               disabled={saving}
             />

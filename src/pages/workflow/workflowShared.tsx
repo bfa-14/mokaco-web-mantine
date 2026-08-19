@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@mantine/core'
+import { Button, Popover } from '@mantine/core'
 import { attachmentsService, requestsService } from '../../services/workflowService'
 import type { Attachment, RequestHeader, RequestStep } from '../../types/workflow'
 import {
@@ -280,6 +280,10 @@ export function RequestStepper({
   decideLabel,
   onWithdraw,
   onReclaim,
+  currentUserId,
+  isMainApprover,
+  onDelegateDeputy,
+  onReclaimDeputy,
 }: {
   requestId: number
   header: RequestHeader
@@ -298,8 +302,34 @@ export function RequestStepper({
   onWithdraw?: (step: RequestStep) => void
   /** "↩ Take this step back" on a step this caller DELEGATED and the delegate has not yet decided. */
   onReclaim?: (step: RequestStep) => void
+  /**
+   * The signed-in user's id, used for ONE question: is this viewer the person who handed the step
+   * to the deputy? Only they are offered the way back.
+   */
+  currentUserId?: number
+  /**
+   * Whether this caller is the step's MAIN approver — the only person the procedure lets delegate.
+   *
+   * A PREDICATE, and the page's to answer, not this component's. Deciding it needs the caller's
+   * identity and their roles, and a shared presentational component that reaches into auth is one
+   * that cannot be rendered from a test or a print view. It also keeps the rule in the same file as
+   * the handler that acts on it, where the two can be read together.
+   */
+  isMainApprover?: (step: RequestStep) => boolean
+  /** Hand the current step to its deputy role. Rendered only where the procedure would accept it. */
+  onDelegateDeputy?: (step: RequestStep) => void
+  /** Take the step back from the deputy — the delegator only, and only while nobody has signed. */
+  onReclaimDeputy?: (step: RequestStep) => void
 }) {
   const requestOpen = header.status === 'Pending' || header.status === 'OnHold'
+  /**
+   * Which step's "hand it over?" popover is open — a step number, not a boolean.
+   *
+   * Handing a step to somebody else is not undoable by pressing Escape once it has happened, and
+   * the button sits inches from Decide. The confirm is the whole point; keyed by step so opening
+   * one can never leave another's open behind it.
+   */
+  const [confirmDeputyStep, setConfirmDeputyStep] = useState<number | null>(null)
   // Defaulted here rather than in the signature: a default parameter is evaluated at CALL time,
   // which is right, but writing it here keeps the translated string out of the parameter list where
   // it reads as a constant.
@@ -321,6 +351,20 @@ export function RequestStepper({
         const delegated = step.delegatedToUserId != null
         // The step the request is waiting on right now — the only row that may offer a decision.
         const isCurrent = requestOpen && header.currentStepNo === step.stepNo
+        // DEPUTY delegation, which is not the delegation above: that one names a user, this one opens
+        // the step to the fallback ROLE. A configured fallbackRoleName alone means only that a deputy
+        // exists — the timestamp is what says the step was handed over.
+        const deputyDelegated = step.delegatedToDeputyAt != null
+        // Offered to the MAIN APPROVER of the waiting step, and only where there is a deputy to hand
+        // it to. Every one of these conditions is also checked by the procedure; they are repeated
+        // here to decide what is worth SHOWING, never to decide what is allowed.
+        const showDelegateDeputy =
+          onDelegateDeputy != null && isCurrent && !deputyDelegated &&
+          step.fallbackRoleName != null && (isMainApprover?.(step) ?? false)
+        // The way back belongs to whoever gave it away — not to the deputy, and not to a bystander.
+        const showTakeBackDeputy =
+          onReclaimDeputy != null && isCurrent && deputyDelegated &&
+          currentUserId != null && step.deputyDelegatedByUserId === currentUserId
         // The recorded decision, but only where it says more than the status already has:
         // "Approved with changes" is worth a line; "Approved" on an Approved step is noise.
         const extraDecision =
@@ -383,6 +427,35 @@ export function RequestStepper({
                 </div>
               )}
 
+              {/* Handed to the deputy ROLE: who did it and when. A bare "delegated" is a dead end for
+                  anyone working out whom to chase, and this step is by definition one somebody is
+                  waiting on. */}
+              {deputyDelegated && (
+                <div className="wf-deputy-state">
+                  <span className="wf-deputy-badge">
+                    {t('requests.step.delegatedToDeputy', { role: step.fallbackRoleName ?? '' })}
+                  </span>
+                  {step.deputyDelegatedByUsername ? (
+                    <> {t('requests.step.handedBy', { name: step.deputyDelegatedByUsername })}</>
+                  ) : null}
+                  {step.delegatedToDeputyAt ? (
+                    <> {t('requests.step.delegatedOn', { date: dateTime(step.delegatedToDeputyAt) })}</>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Nobody delegated anything and the approver still cannot act — so the deputy may sign
+                  regardless. THE BADGE SAYS THE CONSEQUENCE, not just the state: "approver absent" on
+                  its own reads as bad news, when it is actually the explanation for why the step can
+                  still move. Shown only where a deputy exists, because otherwise it cannot. */}
+              {isCurrent && !deputyDelegated && step.mainApproverAbsent && step.fallbackRoleName && (
+                <div className="wf-deputy-state">
+                  <span className="wf-deputy-badge wf-deputy-badge--absent">
+                    {t('requests.step.approverAbsent')}
+                  </span>
+                </div>
+              )}
+
               {/* Skipped: the reason, in words, where a signature would be. NEVER a blank — a gap
                   here reads as "unsigned but should have been", so a missing reason says so. */}
               {step.status === 'Skipped' && (
@@ -429,9 +502,62 @@ export function RequestStepper({
               {/* THE decision, on the row of the step it acts on. Only on the current step, and only
                   when the caller passed a handler — which they do only for a non-empty decisions
                   response. Nothing here, and no explanation, is what "not yours to decide" looks like. */}
-              {onDecide && isCurrent && (
+              {isCurrent && (onDecide || showDelegateDeputy) && (
                 <div className="wf-step-actions wf-no-print">
-                  <Button size="xs" onClick={() => onDecide(step)}>{decideText}</Button>
+                  {onDecide && (
+                    <Button size="xs" onClick={() => onDecide(step)}>{decideText}</Button>
+                  )}
+
+                  {/* SUBTLE, and beside Decide rather than under it: handing the step over is a real
+                      alternative to deciding it, but it is the rarer one. The confirm names the role
+                      it is going to — "delegate to deputy" without saying to WHOM is a button people
+                      press to find out what it does. */}
+                  {showDelegateDeputy && (
+                    <Popover
+                      opened={confirmDeputyStep === step.stepNo}
+                      onChange={(o) => setConfirmDeputyStep(o ? step.stepNo : null)}
+                      position="top"
+                      withArrow
+                      shadow="md"
+                      width={280}
+                    >
+                      <Popover.Target>
+                        <Button
+                          size="xs"
+                          variant="subtle"
+                          onClick={() => setConfirmDeputyStep(step.stepNo)}
+                        >
+                          {t('requests.step.delegateToDeputy')}
+                        </Button>
+                      </Popover.Target>
+                      <Popover.Dropdown>
+                        <div>
+                          {t('requests.step.delegateConfirm', { role: step.fallbackRoleName ?? '' })}
+                        </div>
+                        <p className="hint" style={{ marginTop: 6 }}>
+                          {t('requests.step.delegateConfirmHint')}
+                        </p>
+                        <div className="form-actions">
+                          <Button
+                            size="xs"
+                            variant="default"
+                            onClick={() => setConfirmDeputyStep(null)}
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                          <Button
+                            size="xs"
+                            onClick={() => {
+                              setConfirmDeputyStep(null)
+                              onDelegateDeputy?.(step)
+                            }}
+                          >
+                            {t('requests.step.delegateConfirmYes')}
+                          </Button>
+                        </div>
+                      </Popover.Dropdown>
+                    </Popover>
+                  )}
                 </div>
               )}
 
@@ -459,6 +585,20 @@ export function RequestStepper({
                     onClick={() => onReclaim(step)}
                   >
                     {arrowReturn()} {t('requests.step.takeBack')}
+                  </button>
+                </div>
+              )}
+
+              {/* Taking it back from the DEPUTY. No confirm and no password: nothing was signed, and
+                  the act is itself the undo of an act that had one. */}
+              {showTakeBackDeputy && (
+                <div className="wf-step-withdraw wf-no-print">
+                  <button
+                    type="button"
+                    className="wf-withdraw-btn"
+                    onClick={() => onReclaimDeputy?.(step)}
+                  >
+                    {arrowReturn()} {t('requests.step.takeBackFromDeputy')}
                   </button>
                 </div>
               )}

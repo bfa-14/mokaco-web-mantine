@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { ActionIcon, Loader, Tabs } from '@mantine/core'
@@ -181,6 +181,39 @@ export default function SettingsPage() {
   const preferenceSettings = listed.filter((s) => tabOf(s.settingKey) === 'preferences')
   const attendanceSettings = listed.filter((s) => tabOf(s.settingKey) === 'attendance')
   const advancedSettings = listed.filter((s) => tabOf(s.settingKey) === 'advanced')
+
+  /**
+   * The advanced settings, split into the bands core.SETTING itself declares.
+   *
+   * WHY THE DATABASE DECIDES THIS. Everything on this tab used to be one undifferentiated list,
+   * because the only grouping the page had was a hard-coded map of the four keys somebody had
+   * written copy for. Meanwhile every row already carried a Section — the mail settings arrived as
+   * "Notifications", payroll's as "Payroll" — and the API was returning it and the client was
+   * dropping it on the floor. Reading it means a feature that adds keys tomorrow gets its own
+   * heading with no change here, which is the promise the rest of this page already makes.
+   *
+   * ORDER IS THE API'S. usp_Setting_GetAll returns rows by Section, then SortOrder — host, port,
+   * user, password — which is the order somebody fills a mail server in. A Map preserves insertion
+   * order, so nothing needs sorting again here and the two cannot disagree.
+   *
+   * A key with no Section is not dropped: it lands in the unnamed remainder below the bands, which
+   * is the same "there is always a home" rule that puts unknown keys on this tab in the first place.
+   */
+  const advancedBands = useMemo(() => {
+    const bands = new Map<string, Setting[]>()
+    const loose: Setting[] = []
+    for (const setting of advancedSettings) {
+      const section = setting.section?.trim()
+      if (!section) {
+        loose.push(setting)
+        continue
+      }
+      const existing = bands.get(section)
+      if (existing) existing.push(setting)
+      else bands.set(section, [setting])
+    }
+    return { bands: [...bands.entries()], loose }
+  }, [advancedSettings])
 
   /** One system setting as a row — the wiring is identical for every tab it appears on. */
   function renderSetting(setting: Setting) {
@@ -402,25 +435,47 @@ export default function SettingsPage() {
                     description="These values decide what a working day IS. Changing one silently re-prices every part-day and every exit permission from now on. It does not re-calculate days that have already been processed — so a change made today leaves last month exactly as it was."
                   />
 
-                  <SettingsCard
-                    title="Other settings"
-                    description="Anything on the server that has no dedicated home on this page. Each is described by the database's own wording."
-                  >
-                    {settings.length === 0 ? (
-                      <div className="empty-hint">
-                        <div className="empty-hint-main">
-                          No settings are configured on the server.
+                  {/* THE EMPTY AND NOTHING-LEFT CASES KEEP THEIR OWN CARD, because both are a
+                      sentence about the whole tab rather than about any one band. */}
+                  {settings.length === 0 || advancedSettings.length === 0 ? (
+                    <SettingsCard
+                      title="Other settings"
+                      description="Anything on the server that has no dedicated home on this page. Each is described by the database's own wording."
+                    >
+                      {settings.length === 0 ? (
+                        <div className="empty-hint">
+                          <div className="empty-hint-main">
+                            No settings are configured on the server.
+                          </div>
+                          The system is running on its built-in defaults, so every part-day and every
+                          exit permission is being priced by values nobody chose. Run the settings
+                          seed script, then press Refresh.
                         </div>
-                        The system is running on its built-in defaults, so every part-day and every
-                        exit permission is being priced by values nobody chose. Run the settings
-                        seed script, then press Refresh.
-                      </div>
-                    ) : advancedSettings.length === 0 ? (
-                      <p className="hint">Every setting on the server has a home of its own.</p>
-                    ) : (
-                      <SettingRows>{advancedSettings.map(renderSetting)}</SettingRows>
-                    )}
-                  </SettingsCard>
+                      ) : (
+                        <p className="hint">Every setting on the server has a home of its own.</p>
+                      )}
+                    </SettingsCard>
+                  ) : (
+                    <>
+                      {/* ONE CARD PER SECTION, titled by the database. The heading is data, not a
+                          translated string, for the same reason each row's explanation is: it comes
+                          from core.SETTING and is the wording whoever added the keys chose. */}
+                      {advancedBands.bands.map(([section, rows]) => (
+                        <SettingsCard key={section} title={section}>
+                          <SettingRows>{rows.map(renderSetting)}</SettingRows>
+                        </SettingsCard>
+                      ))}
+
+                      {advancedBands.loose.length > 0 && (
+                        <SettingsCard
+                          title="Other settings"
+                          description="Anything on the server that has no dedicated home on this page. Each is described by the database's own wording."
+                        >
+                          <SettingRows>{advancedBands.loose.map(renderSetting)}</SettingRows>
+                        </SettingsCard>
+                      )}
+                    </>
+                  )}
                 </>
               )}
             </div>

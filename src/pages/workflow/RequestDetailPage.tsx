@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ActionIcon, Button, Checkbox, Loader, Modal, Textarea, TextInput } from '@mantine/core'
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  Loader,
+  Modal,
+  PasswordInput,
+  Textarea,
+  TextInput,
+} from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconArrowBackUp, IconPrinter, IconRestore } from '@tabler/icons-react'
+import { IconArrowBackUp, IconBan, IconPrinter, IconRestore } from '@tabler/icons-react'
 import { DirectionalIcon } from '../../components/dxIcons'
 import { PageHelp } from '../../components/PageHelp'
 import { useLive } from '../../live/useLive'
@@ -30,6 +39,7 @@ import type {
   DraftDecision,
   ExitPermissionDetail,
   LeaveRequestPayload,
+  MyEmployee,
   MySignature,
   OnboardingPayload,
   OnboardingTask,
@@ -988,6 +998,15 @@ function OnboardingPanel({
 const REOPEN_ROLES = ['Owner', 'General Manager', 'GeneralManager']
 
 /**
+ * The roles that may cancel SOMEBODY ELSE'S request — the third of the three routes, alongside
+ * "I raised it" and "it concerns me".
+ *
+ * Compared case-insensitively, because these are role NAMES out of the database rather than
+ * permission codes, and nothing normalises their casing on the way to the token.
+ */
+const CANCEL_ROLES = ['HR', 'Admin', 'Owner']
+
+/**
  * THE TYPES A WITHDRAWAL IS ACTUALLY ACCEPTED FOR — mirrors RequestsController.
  *
  * Exit permissions have a typed wrapper that also puts ApprovedMinutes back. The other five stamp no
@@ -1068,7 +1087,39 @@ function pendingReopen(reversals: RequestReversal[] | undefined): RequestReversa
   return reversals?.find((r) => r.kind === 'Reopen' && r.completedAt == null) ?? null
 }
 
+/**
+ * The chain the page renders: the CALLER-AWARE steps, with the four deputy fields folded in.
+ *
+ * TWO PROCEDURES ANSWER ABOUT THE SAME STEPS, and neither answers everything.
+ * usp_Request_GetSteps is the one read WITH @ForUserId, so it alone knows whether THIS caller may
+ * withdraw or reclaim — which is exactly why it stays the base, per the rule on `steps` below. But
+ * it does not return delegatedToDeputyAt, who delegated it, or mainApproverAbsent.
+ * usp_Request_GetById does: working out absence means asking fn_ApproverIsAbsent about every
+ * member of a role, which is not per-caller work and is not in the caller-scoped read.
+ *
+ * MERGING RATHER THAN SWITCHING is the whole point. Taking the chain from getById instead would
+ * silently zero canWithdraw and canReclaim for everybody and quietly remove those actions; taking
+ * the deputy state from getSteps would leave it undefined and the badges would never appear. Each
+ * field comes from the read that actually computes it. Both are already fetched, so this is free.
+ */
+function withDeputyState(callerSteps: RequestStep[], inlineSteps: RequestStep[]): RequestStep[] {
+  const byStepNo = new Map(inlineSteps.map((step) => [step.stepNo, step]))
+  return callerSteps.map((step) => {
+    const inline = byStepNo.get(step.stepNo)
+    return inline
+      ? {
+          ...step,
+          delegatedToDeputyAt: inline.delegatedToDeputyAt,
+          deputyDelegatedByUserId: inline.deputyDelegatedByUserId,
+          deputyDelegatedByUsername: inline.deputyDelegatedByUsername,
+          mainApproverAbsent: inline.mainApproverAbsent,
+        }
+      : step
+  })
+}
+
 export default function RequestDetailPage() {
+  const { t } = useTranslation()
   const { id } = useParams()
   const requestId = Number(id)
   const navigate = useNavigate()
@@ -1139,6 +1190,8 @@ export default function RequestDetailPage() {
 
   // Taking back a DELEGATED step — not a withdrawal: nothing was signed, so no password.
   const [reclaimStep, setReclaimStep] = useState<RequestStep | null>(null)
+  /** One in flight at a time — the button sits in a popover that closes on its own click. */
+  const [deputyBusy, setDeputyBusy] = useState(false)
   const [reclaimReason, setReclaimReason] = useState('')
 
   // Reopening a CLOSED request — an administrative act, not a decision, so it lives here in the page
@@ -1148,8 +1201,22 @@ export default function RequestDetailPage() {
 
   // The two reversals. Both are page-header acts for the same reason as the reopen above: they act
   // on the REQUEST, not on a step somebody is being asked to decide.
+  // CANCELLING a request in flight. Not a decision — it stops the whole request rather than
+  // answering a step — so it sits in the page header beside the other request-level acts.
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  /** The server's own refusal, kept in the dialog rather than a toast — see submitCancel. */
+  const [cancelError, setCancelError] = useState<string | null>(null)
+
+  /** The caller's own employee record, for "this request concerns me". Null = no self-service. */
+  const [myEmployee, setMyEmployee] = useState<MyEmployee | null>(null)
+
   const [retractOpen, setRetractOpen] = useState(false)
   const [retractReason, setRetractReason] = useState('')
+  /** Shown only when the ORIGINAL decision was signed — see retractNeedsPassword. */
+  const [retractPassword, setRetractPassword] = useState('')
+  /** The server's refusal, kept in the dialog rather than a toast — see submitRetract's catch. */
+  const [retractError, setRetractError] = useState<string | null>(null)
   const [gmReopenOpen, setGmReopenOpen] = useState(false)
   const [gmReopenReason, setGmReopenReason] = useState('')
 
@@ -1167,7 +1234,7 @@ export default function RequestDetailPage() {
         requestsService.getDraft(requestId).catch(() => null),
       ])
       setDetail(d)
-      setSteps(callerSteps)
+      setSteps(withDeputyState(callerSteps, d.steps))
       setSignature(sig)
       setDecisions(decs)
       setDraft(drf)
@@ -1236,6 +1303,26 @@ export default function RequestDetailPage() {
       })
       .catch(() => {
         /* no image on file is a normal state; it must never stop anyone signing */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /* THE CALLER'S OWN EMPLOYEE RECORD, read once — it belongs to the person, not the request.
+     Needed only to answer "does this request concern me", which is one of the three ways somebody
+     may cancel. A pure admin login has none (a 204 → null), and that is a normal state: it costs
+     them the "concerns me" route, not the role route. A failure is swallowed for the same reason —
+     the server decides for real, and this only decides whether to offer the button. */
+  useEffect(() => {
+    let cancelled = false
+    meService
+      .employee()
+      .then((e) => {
+        if (!cancelled) setMyEmployee(e)
+      })
+      .catch(() => {
+        /* no employee record, or unreachable — the role route still works */
       })
     return () => {
       cancelled = true
@@ -1329,6 +1416,40 @@ export default function RequestDetailPage() {
   }
 
   /**
+   * Stop a request that is still in flight.
+   *
+   * The reason is mandatory because the DATABASE demands one, and because it is the only thing the
+   * history will carry to explain the cancellation later. The refusal — "Only the requester, the
+   * employee concerned, or HR may cancel this request" — is kept in the dialog rather than a toast:
+   * it names who may act, which is what the reader has to act on next.
+   */
+  async function submitCancel() {
+    if (!cancelReason.trim()) {
+      setCancelError(t('requests.cancel.reasonRequired'))
+      return
+    }
+    setCancelError(null)
+    setBusy(true)
+    try {
+      await requestsService.cancel(requestId, cancelReason.trim())
+      setCancelOpen(false)
+      setCancelReason('')
+      // Status chip, chain and history all move together — the request is closed Cancelled and the
+      // reason is now an entry in its history, so nothing short of a refetch is honest.
+      await load()
+      notifications.show({
+        message: t('requests.cancel.done'),
+        color: 'green',
+        autoClose: 4000,
+      })
+    } catch (err) {
+      setCancelError(getErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
    * Take back my own last decision, same UTC day.
    *
    * The refusals are the point of this handler. "Only the person who signed the LAST decision may
@@ -1338,28 +1459,97 @@ export default function RequestDetailPage() {
    */
   async function submitRetract() {
     if (!retractReason.trim()) {
-      notifications.show({ message: 'A reason is required.', color: 'red', autoClose: 3000 })
+      setRetractError(t('requests.retract.reasonRequired'))
       return
     }
+    // A withdrawal names a STEP; a history entry without one is not a step decision and there is
+    // nothing to hand back. canRetract already excludes these, so this is the type-level guard.
+    if (!lastDecision || lastDecision.stepNo == null) return
+    setRetractError(null)
     setBusy(true)
     try {
-      const result = await requestsService.retract(requestId, retractReason.trim())
+      /* THE WITHDRAW-DECISION ENDPOINT, not the request-level retract this used to call.
+         Retract was a different act — "the last signer takes it back, same UTC day" — and it did
+         not hand the step back for a fresh decision. This UNSIGNS the step: it returns to Pending,
+         the Decide button reappears, and the history carries a Withdrawn entry. */
+      await requestsService.withdraw(
+        requestId,
+        lastDecision.stepNo,
+        retractReason.trim(),
+        // Sent only where the ORIGINAL decision was signed — the server re-reads that requirement
+        // and drops an unrequested password rather than half-checking it.
+        retractNeedsPassword ? retractPassword : undefined,
+      )
       setRetractOpen(false)
       setRetractReason('')
+      setRetractPassword('')
       // The signature is struck, the step is unsigned and the request is back in flight at that
       // step — status, chain, history and the Decide button all move together, so refetch.
       await load()
       notifications.show({
-        message: `Signature struck. The request is back at step ${result.currentStepNo ?? '—'} for a fresh decision.`,
+        message: t('requests.retract.done', { step: lastDecision.stepNo }),
         color: 'green',
         autoClose: 4500,
       })
     } catch (err) {
-      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 9000 })
+      /* IN THE DIALOG, IN RED. "Step 2 (Finance) has already acted, so this can no longer be taken
+         back" and "That password is not correct." are both things the reader has to act on, and a
+         toast that times out is the wrong place for either. The password is cleared but the reason
+         is kept — one is a retry, the other is work they already did. */
+      setRetractPassword('')
+      setRetractError(getErrorMessage(err))
     } finally {
       setBusy(false)
     }
   }
+
+  /**
+   * Is the signed-in user this step's MAIN approver — the only person allowed to hand it over?
+   *
+   * ROLES ARE MATCHED BY NAME, because a name is what the session carries: /api/auth/me returns
+   * role names, never ids, so approverRoleName is the only comparable the client actually has. The
+   * server checks membership by RoleId and has the last word — this only decides whether offering
+   * the button is worth it, exactly as every other gate on this page does.
+   */
+  const isMainApprover = useCallback((step: RequestStep) => {
+    if (user?.userId != null && step.resolvedUserId === user.userId) return true
+    if (!step.approverRoleName) return false
+    return (user?.roles ?? []).includes(step.approverRoleName)
+  }, [user])
+
+  /**
+   * Hand the step to the deputy role, or take it back.
+   *
+   * REFETCHES EVERYTHING rather than patching the step, and that is not laziness: delegating also
+   * changes what usp_Step_GetAvailableDecisions will answer for the caller, so the Decide button
+   * itself moves. Patching the row would leave a Decide button on a step the server has just
+   * stopped accepting a decision from.
+   *
+   * THE REFUSAL IS A TOAST, not a dialog: the act was one click from a popover that has already
+   * closed, so there is no form left open to put an error into.
+   */
+  const deputyDelegation = useCallback(async (step: RequestStep, undo: boolean) => {
+    if (deputyBusy) return
+    setDeputyBusy(true)
+    try {
+      if (undo) await requestsService.reclaimFromDeputy(requestId, step.stepNo)
+      else await requestsService.delegateToDeputy(requestId, step.stepNo)
+
+      await load()
+      notifications.show({
+        message: undo
+          ? t('requests.step.takeBackFromDeputy')
+          : t('requests.step.delegatedToDeputy', { role: step.fallbackRoleName ?? '' }),
+        color: 'green',
+        autoClose: 4000,
+      })
+    } catch (err) {
+      // Verbatim: "Only the step's approver can delegate it to the deputy."
+      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 5000 })
+    } finally {
+      setDeputyBusy(false)
+    }
+  }, [deputyBusy, requestId, load, t])
 
   /**
    * Sign a GM + Owner reopen.
@@ -1459,10 +1649,23 @@ export default function RequestDetailPage() {
    */
   const canRetract =
     lastDecision != null &&
+    // A withdrawal acts on a STEP — an entry carrying none is not one this can take back.
+    lastDecision.stepNo != null &&
     lastDecision.actedByUserId != null &&
     user?.userId != null &&
     lastDecision.actedByUserId === user.userId &&
     isSameUtcDayAsNow(lastDecision.actedAt)
+
+  /**
+   * Whether THIS withdrawal must be password-signed — read off the STEP, not the request.
+   *
+   * The step carries `withdrawNeedsSignature`, which the server computes from the same rule it will
+   * enforce: a decision made with a password must be signed to undo, even where a fresh decision
+   * would no longer demand one. Mirroring DecidePopup's UX, the field appears outright rather than
+   * after a refusal.
+   */
+  const retractNeedsPassword =
+    steps.find((s) => s.stepNo === lastDecision?.stepNo)?.withdrawNeedsSignature ?? false
 
   /**
    * LIFTING A HOLD. Offered to the approver — `decisions` is non-empty only when the server says
@@ -1485,6 +1688,27 @@ export default function RequestDetailPage() {
 
   // A reopen half-signed and waiting on the other of GM/Owner.
   const awaitingSecond = pendingReopen(detail.reversals)
+
+  /*
+   * CANCELLING — offered on the same three routes the server allows, mirrored here.
+   *
+   * Only while the request is IN FLIGHT: cancelling a closed one is meaningless, and the server
+   * refuses it. The three routes are "I raised it", "it is about me" (matched on EMPLOYEE id, since
+   * the header names the employee the request concerns, not their user account), and holding one of
+   * the roles above.
+   *
+   * This is the DOOR, not the lock. usp_Request_Cancel decides for real, and its refusal is shown
+   * verbatim in the dialog — so a mirror that is slightly too generous costs a readable sentence,
+   * never an unauthorised cancellation.
+   */
+  const holdsCancelRole = (user?.roles ?? []).some((r) =>
+    CANCEL_ROLES.some((c) => c.toLowerCase() === r.toLowerCase()),
+  )
+  const canCancel =
+    (h.status === 'Pending' || h.status === 'OnHold') &&
+    (h.raisedByUserId === user?.userId ||
+      (myEmployee != null && h.employeeId === myEmployee.employeeId) ||
+      holdsCancelRole)
 
   return (
     <div>
@@ -1528,11 +1752,13 @@ export default function RequestDetailPage() {
               leftSection={<IconArrowBackUp size={16} />}
               onClick={() => {
                 setRetractReason('')
+                setRetractPassword('')
+                setRetractError(null)
                 setRetractOpen(true)
               }}
               disabled={busy}
             >
-              Retract my decision
+              {t('requests.retract.action')}
             </Button>
           )}
           {/* The GM + Owner path. Labelled with the two roles because that IS the rule — one of them
@@ -1561,6 +1787,22 @@ export default function RequestDetailPage() {
               disabled={busy}
             >
               Reopen request
+            </Button>
+          )}
+          {/* STOPPING the request. Quiet and outlined, never primary: it ends the request rather
+              than moving it forward, and it sits beside the other request-level acts. */}
+          {canCancel && (
+            <Button
+              variant="default"
+              leftSection={<IconBan size={16} />}
+              onClick={() => {
+                setCancelReason('')
+                setCancelError(null)
+                setCancelOpen(true)
+              }}
+              disabled={busy}
+            >
+              {t('requests.cancel.action')}
             </Button>
           )}
           <Button
@@ -1870,6 +2112,13 @@ export default function RequestDetailPage() {
               setReclaimReason('')
               setReclaimStep(step)
             }}
+            // DEPUTY DELEGATION. The handlers are always passed; the stepper renders them only on
+            // the waiting step, only for its main approver, and only where a deputy role exists —
+            // the same three conditions the procedure applies before it accepts the call.
+            currentUserId={user?.userId}
+            isMainApprover={isMainApprover}
+            onDelegateDeputy={(step) => void deputyDelegation(step, false)}
+            onReclaimDeputy={(step) => void deputyDelegation(step, true)}
           />
         </div>
 
@@ -2073,6 +2322,60 @@ export default function RequestDetailPage() {
         </Modal>
       )}
 
+      {/* CANCEL. Mounted only while open, so each opening starts clean. */}
+      {cancelOpen && (
+        <Modal
+          opened
+          onClose={() => {
+            setCancelOpen(false)
+            setCancelReason('')
+          }}
+          title={t('requests.cancel.title')}
+          size={480}
+          centered
+        >
+          <div className="form-field">
+            <label className="form-label" htmlFor="wf-cancel-reason">
+              {t('common.reason')} <span className="form-optional">{t('common.required')}</span>
+            </label>
+            <Textarea
+              id="wf-cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.currentTarget.value)}
+              minRows={3}
+              disabled={busy}
+            />
+            {/* The reason is not paperwork — it is what the history will carry. Saying so is what
+                stops people typing "x" into a box they think nobody reads. */}
+            <p className="hint" style={{ marginTop: 6 }}>
+              {t('requests.cancel.reasonHint')}
+            </p>
+          </div>
+
+          {cancelError && (
+            <div className="alert alert--error" role="alert">
+              {cancelError}
+            </div>
+          )}
+
+          <div className="form-actions">
+            <Button
+              variant="default"
+              onClick={() => {
+                setCancelOpen(false)
+                setCancelReason('')
+              }}
+              disabled={busy}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button color="red" onClick={() => void submitCancel()} loading={busy} disabled={busy}>
+              {busy ? t('requests.cancel.busy') : t('requests.cancel.confirm')}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {/* RETRACT. The warning is the whole dialog: it names the decision being struck and says
           plainly what happens to it, because "retract" on its own does not tell anyone that their
           signature survives on the record, struck through, with this reason attached to it. */}
@@ -2098,7 +2401,7 @@ export default function RequestDetailPage() {
           </p>
           <div className="form-field">
             <label className="form-label">
-              Why? <span className="form-optional">(required)</span>
+              Why? <span className="form-optional">{t('common.required')}</span>
             </label>
             <Textarea
               value={retractReason}
@@ -2107,19 +2410,43 @@ export default function RequestDetailPage() {
               disabled={busy}
             />
           </div>
+
+          {/* THE SIGNATURE, present outright when the original decision carried one — the same
+              shape DecidePopup uses, so undoing a signed act asks what making it asked. */}
+          {retractNeedsPassword && (
+            <div className="form-field">
+              <p className="wf-sign-explain">{t('requests.retract.signExplain')}</p>
+              <PasswordInput
+                id="wf-retract-pw"
+                label={t('requests.retract.password')}
+                autoComplete="off"
+                value={retractPassword}
+                disabled={busy}
+                onChange={(e) => setRetractPassword(e.currentTarget.value)}
+              />
+            </div>
+          )}
+
+          {retractError && (
+            <div className="alert alert--error" role="alert">
+              {retractError}
+            </div>
+          )}
+
           <div className="form-actions">
             <Button
               variant="default"
               onClick={() => {
                 setRetractOpen(false)
                 setRetractReason('')
+                setRetractPassword('')
               }}
               disabled={busy}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
-            <Button onClick={() => void submitRetract()} disabled={busy}>
-              {busy ? 'Retracting…' : 'Retract my decision'}
+            <Button onClick={() => void submitRetract()} loading={busy} disabled={busy}>
+              {busy ? t('requests.retract.busy') : t('requests.retract.confirm')}
             </Button>
           </div>
         </Modal>

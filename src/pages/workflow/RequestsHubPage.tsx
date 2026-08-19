@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Button, Loader, SegmentedControl, Select } from '@mantine/core'
+import { Button, Loader, Popover, SegmentedControl, Select } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
+import { notifications } from '@mantine/notifications'
 import {
   IconCalendar,
   IconCheck,
@@ -160,13 +161,27 @@ function RequestCard({
   onDecide,
   onWithdraw,
   onOpen,
+  onDelegateDeputy,
+  onReclaimDeputy,
 }: {
   item: ForUserRequest
   onDecide: () => void
   onWithdraw: () => void
   onOpen: () => void
+  /** Hand the CURRENT step to its deputy. Rendered on item.canDelegate and nothing else. */
+  onDelegateDeputy: () => void
+  /** Take it back. Rendered on item.canReclaim and nothing else. */
+  onReclaimDeputy: () => void
 }) {
   const { t } = useTranslation()
+  /**
+   * The "hand it over?" confirm, local to this card.
+   *
+   * Handing a step to somebody else is not undone by pressing Escape once it has happened, and the
+   * button sits beside Decide on a card the whole row is a click target for — so the confirm is
+   * doing real work here, not ceremony.
+   */
+  const [confirmDelegate, setConfirmDelegate] = useState(false)
   const held = item.status === 'OnHold'
   const open = item.status === 'Pending' || held
   const age = ageing(item.daysOpen)
@@ -266,13 +281,84 @@ function RequestCard({
         </div>
       )}
 
+      {/* WITH THE DEPUTY — said on the card, because a request that has stopped moving otherwise
+          looks exactly like one nobody has picked up yet. */}
+      {item.delegatedToDeputyAt && item.fallbackRoleName && (
+        <div className="wf-card-step">
+          <span className="wf-deputy-badge">
+            {t('requests.card.delegatedTo', { role: item.fallbackRoleName })}
+          </span>
+        </div>
+      )}
+
       {/* The Decide button follows WaitingOnMe and NOTHING else — the tab decides what is listed;
-          WaitingOnMe decides what can act. (Unchanged rule; see the PORT NOTE for where it goes.) */}
-      {item.waitingOnMe && (
+          WaitingOnMe decides what can act. (Unchanged rule; see the PORT NOTE for where it goes.)
+
+          THE DEPUTY BUTTONS FOLLOW THEIR OWN FLAGS, which is why the row opens on any of the three
+          rather than on WaitingOnMe alone: canDelegate and canReclaim ask who the step's MAIN
+          approver is, and WaitingOnMe asks who may SIGN — a question that is also true for the
+          deputy. Gating the row on WaitingOnMe would hide Take back at exactly the moment the main
+          approver wants it. */}
+      {(item.waitingOnMe || item.canDelegate || item.canReclaim) && (
         <div className="wf-card-actions" onClick={(e) => e.stopPropagation()}>
-          <Button size="sm" onClick={onDecide}>
-            {t('requests.card.decide')}
-          </Button>
+          {item.waitingOnMe && (
+            <Button size="sm" onClick={onDecide}>
+              {t('requests.card.decide')}
+            </Button>
+          )}
+
+          {/* OUTLINE, beside Decide: a real alternative to deciding, but the rarer one. The confirm
+              names the role it is going to — "delegate to deputy" without saying to WHOM is a
+              button people press to find out what it does. */}
+          {item.canDelegate && item.fallbackRoleName && (
+            <Popover
+              opened={confirmDelegate}
+              onChange={setConfirmDelegate}
+              position="top"
+              withArrow
+              shadow="md"
+              width={280}
+            >
+              <Popover.Target>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmDelegate(true)}
+                >
+                  {t('requests.card.delegateToDeputy')}
+                </Button>
+              </Popover.Target>
+              <Popover.Dropdown onClick={(e) => e.stopPropagation()}>
+                <div>
+                  {t('requests.card.delegateConfirm', { role: item.fallbackRoleName })}
+                </div>
+                <p className="hint" style={{ marginTop: 6 }}>
+                  {t('requests.card.delegateConfirmHint')}
+                </p>
+                <div className="form-actions">
+                  <Button size="xs" variant="default" onClick={() => setConfirmDelegate(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    size="xs"
+                    onClick={() => {
+                      setConfirmDelegate(false)
+                      onDelegateDeputy()
+                    }}
+                  >
+                    {t('requests.card.delegateConfirmYes')}
+                  </Button>
+                </div>
+              </Popover.Dropdown>
+            </Popover>
+          )}
+
+          {/* No confirm on the way back: nothing was signed, and this undoes an act that had one. */}
+          {item.canReclaim && (
+            <Button size="sm" variant="outline" onClick={onReclaimDeputy}>
+              {t('requests.card.takeBackFromDeputy')}
+            </Button>
+          )}
         </div>
       )}
 
@@ -341,6 +427,8 @@ export default function RequestsHubPage() {
 
   /** The request whose Decide dialog is open, or null — everything else lives in DecidePopup. */
   const [decideFor, setDecideFor] = useState<ForUserRequest | null>(null)
+  /** One delegation call in flight at a time, across every card on the page. */
+  const [deputyBusy, setDeputyBusy] = useState(false)
 
   /**
    * Whether each to-handle request must be signed, read WITH THE HUB rather than when the dialog
@@ -453,6 +541,42 @@ export default function RequestsHubPage() {
       }
     },
     [status, fromDate, toDate, typeId],
+  )
+
+  /**
+   * Hand a card’s CURRENT step to its deputy, or take it back.
+   *
+   * REFETCHES THE HUB rather than patching the row. Delegating changes canDelegate, canReclaim,
+   * delegatedToDeputyAt AND waitingOnMe together — and waitingOnMe is what decides whether the
+   * card is in "To handle" at all, so a patched row could sit in a tab it no longer belongs to,
+   * showing a Decide button the server has just stopped accepting.
+   *
+   * DECLARED AFTER fetchData deliberately. fetchData is in this callback’s dependency array, and
+   * a dependency array is evaluated the moment this line runs — putting this above it would read
+   * a const still in its temporal dead zone, which is a crash on first render, not a lint warning.
+   *
+   * THE REFUSAL IS A RED TOAST: the act is one click from a popover that has already closed, so
+   * there is no form left open to put an error into, and the sentence the procedure raises is the
+   * whole value of the 400.
+   */
+  const deputyDelegation = useCallback(
+    async (item: ForUserRequest, undo: boolean) => {
+      if (deputyBusy || item.currentStepNo == null) return
+      setDeputyBusy(true)
+      try {
+        if (undo) {
+          await requestsService.reclaimFromDeputy(item.requestInstanceId, item.currentStepNo)
+        } else {
+          await requestsService.delegateToDeputy(item.requestInstanceId, item.currentStepNo)
+        }
+        await fetchData(false)
+      } catch (err) {
+        notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 5000 })
+      } finally {
+        setDeputyBusy(false)
+      }
+    },
+    [deputyBusy, fetchData],
   )
 
   useEffect(() => {
@@ -718,6 +842,8 @@ export default function RequestsHubPage() {
               onDecide={() => setDecideFor(item)}
               onWithdraw={() => navigate(`/requests/${item.requestInstanceId}`)}
               onOpen={() => navigate(`/requests/${item.requestInstanceId}`)}
+              onDelegateDeputy={() => void deputyDelegation(item, false)}
+              onReclaimDeputy={() => void deputyDelegation(item, true)}
             />
           ))}
         </div>

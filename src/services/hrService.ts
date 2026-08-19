@@ -5,6 +5,7 @@ import type {
   ApprovalTier,
   ApprovalTierCreateRequest,
   ApprovalTierNameRequest,
+  ApprovalTierSalaryRangeRequest,
   Branch,
   ComponentType,
   Department,
@@ -288,6 +289,21 @@ export const approvalTiersService = {
   /** Renames a tier. The number never moves — it is what employees and chains point at. */
   setName: (tierNo: number, request: ApprovalTierNameRequest) =>
     apiRequest<ApprovalTier>(`/api/hr/approval-tiers/${tierNo}`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    }),
+
+  /**
+   * THE BASIC-SALARY BAND for a tier — what a basic salary at this rank may be.
+   *
+   * PAYROLL_RUN, not EMP_EDIT: renaming a tier is labelling, this decides what anybody at that rank
+   * may be paid, and a DB trigger enforces it on every salary-component write.
+   *
+   * Refusals (min above max, unknown currency) come back as a 400 carrying the procedure's own
+   * sentence — show it verbatim.
+   */
+  setSalaryRange: (tierNo: number, request: ApprovalTierSalaryRangeRequest) =>
+    apiRequest<ApprovalTier>(`/api/hr/approval-tiers/${tierNo}/salary-range`, {
       method: 'PUT',
       body: JSON.stringify(request),
     }),

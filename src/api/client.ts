@@ -90,6 +90,44 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return body as T
 }
 
+/**
+ * Is this 401 THE TOKEN BEING REJECTED, or an application saying no?
+ *
+ * THE BUG THIS EXISTS TO STOP: a signature endpoint answered a wrong password with 401, and every
+ * 401 here was taken as "your session is over" — so mistyping your password while approving logged
+ * you out of a session that was working perfectly. The two are different events that happened to
+ * share a status code.
+ *
+ * They are told apart by the BODY. A token rejection comes from the JWT middleware before any
+ * controller runs: no body, or a non-JSON one, and a `WWW-Authenticate: Bearer` challenge header.
+ * An application refusal is a controller's own answer and carries a JSON error message written for
+ * a human. Only the first kind is a session ending.
+ *
+ * Defaults to TRUE on anything it cannot read, so an unrecognised 401 still ends the session — the
+ * failure that leaves someone signed in with a dead token is worse than one extra sign-in.
+ */
+async function isTokenRejection(response: Response): Promise<boolean> {
+  // The challenge header is the middleware's own signature and settles it outright.
+  if (response.headers.get('www-authenticate')) return true
+
+  const contentType = response.headers.get('content-type') ?? ''
+  // Not JSON — nothing a controller wrote. Empty bodies land here too, which is the common case.
+  if (!contentType.includes('json')) return true
+
+  try {
+    // CLONED: the caller still has to read this response, and a body may only be consumed once.
+    const body = await response.clone().json()
+    if (!body || typeof body !== 'object') return true
+    const obj = body as Record<string, unknown>
+    // A message written for a person means a controller answered — an application refusal.
+    return !['message', 'error', 'detail', 'title'].some(
+      (k) => typeof obj[k] === 'string' && (obj[k] as string).length > 0,
+    )
+  } catch {
+    return true
+  }
+}
+
 // A single in-flight refresh shared across concurrent 401s.
 let refreshInFlight: Promise<AuthTokens | null> | null = null
 
@@ -139,7 +177,22 @@ export async function apiRequest<T = unknown>(
 
   let response = await buildRequest(path, auth, headers, init)
 
-  if (response.status === 401 && auth && !skipRefresh) {
+  /* THE SESSION IS CLEARED ON EXACTLY ONE THING: a 401 that is the TOKEN being rejected, on a call
+     that carried a token. Everything else falls through to handleResponse and is thrown as an
+     ApiError for the page to render — 400, 403 and 404 never reach this branch at all, and neither
+     does a 401 a controller wrote (a wrong signature password), which is what used to sign people
+     out mid-approval.
+
+     `hadToken` is the "previously-working session" part: with no access token there was no session
+     to end, and the ProtectedRoute already owns that case. */
+  const hadToken = auth && tokenStorage.getAccessToken() != null
+
+  if (
+    response.status === 401 &&
+    hadToken &&
+    !skipRefresh &&
+    (await isTokenRejection(response))
+  ) {
     refreshInFlight ??= performRefresh().finally(() => {
       refreshInFlight = null
     })

@@ -1,4 +1,4 @@
-import { Button, Checkbox, NumberInput, Select, TextInput } from '@mantine/core'
+import { Button, Checkbox, NumberInput, PasswordInput, Select, TextInput } from '@mantine/core'
 import { SettingRow } from './SettingsCard'
 import { SHOW_PAGE_HELP_KEY, type Setting } from '../../types/settings'
 
@@ -46,7 +46,30 @@ const KNOWN: Record<
   // toggles rather than among the values that decide what people are paid. It is still a
   // core.SETTING row behind SETTING_MANAGE — only its placement moved.
   [SHOW_PAGE_HELP_KEY]: { tab: 'preferences', title: 'Show page help' },
+
+  /* THE MAIL SERVER. Titled by hand for the one thing a derived title cannot do: say "SMTP" and
+     "URL" in capitals. The keys read Smtp*, so humanise() can only ever produce "Smtp host" —
+     and these seven sit together under their own heading, where short labels read as one form to
+     fill in rather than seven unrelated values that happen to share a prefix. */
+  SmtpHost: { tab: 'advanced', title: 'Mail server' },
+  SmtpPort: { tab: 'advanced', title: 'Port', min: 1, max: 65535, step: 1 },
+  SmtpUser: { tab: 'advanced', title: 'User name' },
+  SmtpPassword: { tab: 'advanced', title: 'Password' },
+  SmtpFromEmail: { tab: 'advanced', title: 'From address' },
+  SmtpFromName: { tab: 'advanced', title: 'From name' },
+  NotifyOnRequestClosed: { tab: 'advanced', title: 'Email on a closed request' },
 }
+
+/**
+ * Keys whose VALUE must not be readable over somebody’s shoulder.
+ *
+ * A set rather than a dataType, because "secret" is not a property of the type — SmtpPassword is
+ * an ordinary string as far as the database is concerned, and the only thing that makes it
+ * different is who is standing behind the screen. The masking is presentational and nothing more:
+ * the value still travels and is still stored in plain text, so this hides a password from a
+ * passer-by, not from anyone with the SETTING_MANAGE right or a look at core.SETTING.
+ */
+const SECRET_KEYS = new Set(['SmtpPassword'])
 
 /** Values a setting of this key may take, when it is a fixed choice rather than free text. */
 const CHOICES: Record<string, string[]> = {
@@ -58,8 +81,25 @@ export function tabOf(key: string): SettingTab {
   return KNOWN[key]?.tab ?? 'advanced'
 }
 
+/**
+ * A readable title for a key nobody has written copy for: "SmtpFromEmail" → "Smtp from email".
+ *
+ * The raw key was what showed before, and it is the one part of a data-driven settings page that
+ * reads like a database rather than a screen. Splitting on the capitals costs nothing and means a
+ * key added in SQL tomorrow arrives looking deliberate — which is the promise this page makes
+ * everywhere else. An entry in KNOWN still wins, because a hand-written title beats a derived one.
+ */
+function humanise(key: string): string {
+  const spaced = key
+    // Split ONLY where a lower-case letter or digit meets a capital, so runs of capitals survive:
+    // "NssfCeilingUsd" becomes "Nssf ceiling usd", never "N s s f".
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .trim()
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()
+}
+
 export function titleOf(setting: Setting): string {
-  return KNOWN[setting.settingKey]?.title ?? setting.settingKey
+  return KNOWN[setting.settingKey]?.title ?? humanise(setting.settingKey)
 }
 
 /**
@@ -142,8 +182,21 @@ export function SystemSettingRow({
 
   const isBool = setting.dataType === 'bool'
   const isNumber = setting.dataType === 'int' || setting.dataType === 'decimal'
+  const isSecret = SECRET_KEYS.has(setting.settingKey)
 
-  const control = isBool ? (
+  const control = isSecret ? (
+    // Masked, with Mantine’s own reveal toggle — somebody correcting a mistyped password has to be
+    // able to SEE what they typed, and a field that can only ever be overwritten blind is how the
+    // same wrong password gets entered three times in a row.
+    <PasswordInput
+      id={inputId}
+      value={draft}
+      onChange={(e) => onDraftChange(e.currentTarget.value)}
+      w={220}
+      disabled={saving}
+      autoComplete="new-password"
+    />
+  ) : isBool ? (
     <Checkbox
       id={inputId}
       checked={draft === 'true'}

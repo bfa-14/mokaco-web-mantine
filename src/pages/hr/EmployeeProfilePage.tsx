@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Button, Loader, Tabs } from '@mantine/core'
 import { IconChevronLeft, IconChevronRight, IconPencil } from '@tabler/icons-react'
@@ -36,6 +37,7 @@ export default function EmployeeProfilePage() {
   const { id } = useParams()
   const employeeId = Number(id)
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   const [profile, setProfile] = useState<EmployeeProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -147,6 +149,8 @@ export default function EmployeeProfilePage() {
               <Detail label="Employee ID" value={profile.employeeId} />
               <Detail label="National ID" value={profile.nationalId} />
               <Detail label="NSSF number" value={profile.nssfNumber} />
+              <Detail label={t('hr.employee.email')} value={profile.email} />
+              <Detail label={t('hr.employee.phoneNumber')} value={profile.phoneNumber} />
               <Detail label="Hire date" value={profile.hireDate?.slice(0, 10)} />
               <Detail
                 label="Termination date"
@@ -162,7 +166,12 @@ export default function EmployeeProfilePage() {
 
         <Tabs.Panel value="salary">
           <div style={{ marginTop: 16 }}>
-            <SalaryComponentsTab employeeId={employeeId} />
+            {/* The tier travels down for the basic-salary band hint — already loaded here, so the
+                tab does not fetch it again and cannot disagree with the header above. */}
+            <SalaryComponentsTab
+              employeeId={employeeId}
+              approvalTier={profile?.approvalTier ?? null}
+            />
           </div>
         </Tabs.Panel>
 
