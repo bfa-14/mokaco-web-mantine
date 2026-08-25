@@ -3,7 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Modal, NumberInput, Pagination, Select, Table, Textarea, TextInput } from '@mantine/core'
-import { DatePickerInput, DateTimePicker } from '@mantine/dates'
+import { DateTimePicker } from '@mantine/dates'
+import { DateRangeField } from '../../components/DateRangeField'
+import { t } from '../../i18n/t'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconPencil, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -446,25 +448,24 @@ export default function AnomaliesPage() {
         once it is approved.
       </p>
 
-      {/* The range travels in the URL and always has both ends, so clearing keeps the current
-          bound — the same guard the native inputs carried. */}
+      {/* NOT CLEARABLE. The range travels in the URL and /api/attendance/anomalies takes both
+          dates as required query parameters — there is no "unfiltered" for this endpoint to answer,
+          so an X here would only produce a broken request. The pair is one period, so it is one
+          control; the empty state is the part the API would have to grow first. */}
       <div className="filter-bar">
         <div className="filter-field">
-          <span className="filter-field-label">From</span>
-          <DatePickerInput
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={from}
-            onChange={(v) => setFrom(v || from)}
-          />
-        </div>
-        <div className="filter-field">
-          <span className="filter-field-label">To</span>
-          <DatePickerInput
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={to}
-            onChange={(v) => setTo(v || to)}
+          <span className="filter-field-label">{t('common.period')}</span>
+          <DateRangeField
+            from={from}
+            to={to}
+            onChange={(nextFrom, nextTo) => {
+              // Both or neither: a half-cleared range would send an empty bound to an endpoint that
+              // requires one, so the standing value is kept until a full range replaces it.
+              if (nextFrom && nextTo) {
+                setFrom(nextFrom)
+                setTo(nextTo)
+              }
+            }}
           />
         </div>
       </div>

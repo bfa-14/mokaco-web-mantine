@@ -151,6 +151,10 @@ export default function EmployeeProfilePage() {
               <Detail label="NSSF number" value={profile.nssfNumber} />
               <Detail label={t('hr.employee.email')} value={profile.email} />
               <Detail label={t('hr.employee.phoneNumber')} value={profile.phoneNumber} />
+              <Detail
+                label={t('hr.employee.preferredLanguage')}
+                value={profile.preferredLanguage === 'ar' ? 'العربية' : 'English'}
+              />
               <Detail label="Hire date" value={profile.hireDate?.slice(0, 10)} />
               <Detail
                 label="Termination date"

@@ -1,4 +1,5 @@
-import { Button, Checkbox, NumberInput, PasswordInput, Select, TextInput } from '@mantine/core'
+import { Button, Checkbox, NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core'
+import { useTranslation } from 'react-i18next'
 import { SettingRow } from './SettingsCard'
 import { SHOW_PAGE_HELP_KEY, type Setting } from '../../types/settings'
 
@@ -25,7 +26,20 @@ export type SettingTab = 'preferences' | 'attendance' | 'advanced'
  */
 const KNOWN: Record<
   string,
-  { tab: SettingTab; title: string; min?: number; max?: number; step?: number }
+  {
+    tab: SettingTab
+    title: string
+    min?: number
+    max?: number
+    step?: number
+    /**
+     * A bool that reads better as a SWITCH than a checkbox, and the i18n key of the sentence beside
+     * it. A checkbox says "this box is ticked"; a switch says "this behaviour is on", which is what
+     * a setting actually is — but only where there is a sentence worth putting next to it, so this
+     * is opt-in per key rather than a blanket change to every bool on the page.
+     */
+    switchLabel?: string
+  }
 > = {
   StandardWorkDayHours: {
     tab: 'attendance',
@@ -57,7 +71,27 @@ const KNOWN: Record<
   SmtpPassword: { tab: 'advanced', title: 'Password' },
   SmtpFromEmail: { tab: 'advanced', title: 'From address' },
   SmtpFromName: { tab: 'advanced', title: 'From name' },
-  NotifyOnRequestClosed: { tab: 'advanced', title: 'Email on a closed request' },
+  // The one setting on this page that turns a BACKGROUND BEHAVIOUR on and off rather than naming a
+  // value, so it is the one that gets a switch and a sentence: "Port" needs no explanation, "email
+  // on a closed request" set to false does.
+  NotifyOnRequestClosed: {
+    tab: 'advanced',
+    title: 'Email on a closed request',
+    switchLabel: 'settings.notifications.notifyOnRequestClosed',
+  },
+
+  /* WHATSAPP. Same reasoning as the SMTP block: hand-written titles because a derived one can only
+     ever produce "Whats app api url". They arrive under the same Notifications heading, from the
+     same core.SETTING rows, with no routing written here. */
+  WhatsAppEnabled: {
+    tab: 'advanced',
+    title: 'WhatsApp messages',
+    switchLabel: 'settings.notifications.whatsAppEnabled',
+  },
+  WhatsAppApiUrl: { tab: 'advanced', title: 'Cloud API URL' },
+  WhatsAppPhoneNumberId: { tab: 'advanced', title: 'Sending number id' },
+  WhatsAppAccessToken: { tab: 'advanced', title: 'Access token' },
+  WhatsAppTemplateName: { tab: 'advanced', title: 'Template name' },
 }
 
 /**
@@ -68,12 +102,69 @@ const KNOWN: Record<
  * different is who is standing behind the screen. The masking is presentational and nothing more:
  * the value still travels and is still stored in plain text, so this hides a password from a
  * passer-by, not from anyone with the SETTING_MANAGE right or a look at core.SETTING.
+ *
+ * The WhatsApp access token belongs here for the same reason and one more: it is a BEARER token, so
+ * anyone who reads it off the screen can send as this business until it is rotated.
  */
-const SECRET_KEYS = new Set(['SmtpPassword'])
+const SECRET_KEYS = new Set(['SmtpPassword', 'WhatsAppAccessToken'])
 
-/** Values a setting of this key may take, when it is a fixed choice rather than free text. */
+/**
+ * THE TWO DIALECTS core.SETTING actually stores a bool in.
+ *
+ * The table holds both: AllowSystemReset and NotifyOnRequestClosed are '1', while ShowPageHelp and
+ * MachinePullEnabled are 'true'. Reading only 'true' as on — which is what this file did — shows
+ * every '1' row as OFF and, worse, writes 'true' the first time somebody touches it. That is not
+ * cosmetic for NotifyOnRequestClosed: core.usp_Email_QueueClosedRequests tests `<> '1'` and RETURNS,
+ * so a switch that saved 'true' would silently turn the automatic mail OFF while displaying it as on.
+ */
+const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on'])
+
+/** Is this stored value the ON state, in either dialect? */
+function isOn(value: string): boolean {
+  return TRUE_VALUES.has(value.trim().toLowerCase())
+}
+
+/**
+ * The new value to store, IN THE DIALECT THE ROW ALREADY USES — read from what the server holds, not
+ * from the draft, so toggling twice returns the row to exactly the string it started with. A key
+ * with no value yet has no dialect to keep, and gets 'true'/'false'.
+ */
+function boolValue(stored: string, on: boolean): string {
+  const current = stored.trim()
+  const numeric = current === '1' || current === '0'
+  return numeric ? (on ? '1' : '0') : on ? 'true' : 'false'
+}
+
+/**
+ * Values a setting of this key may take, when it is a fixed choice rather than free text.
+ *
+ * A CLOSED SET TYPED FREE-HAND IS A BROKEN SETTING, not a typo. "official" or "Offical" in
+ * PayrollRateType does not match any rate the payroll run looks for, so the run finds no rate and
+ * the failure surfaces days later as a number nobody can explain. A dropdown removes the state.
+ *
+ * This map is the fallback. Where the API describes the set itself — DataType 'enum:A|B|C' — that
+ * wins, because a set the database declares cannot drift from the one the database enforces.
+ */
 const CHOICES: Record<string, string[]> = {
   ExitLeaveBasis: ['Actual', 'Approved'],
+  PayrollRateType: ['Official', 'Market', 'NonOfficial'],
+}
+
+/**
+ * 'enum:Official|Market|NonOfficial' → the three values; null for every other DataType.
+ *
+ * Nothing sends this yet. It is here so that when something does, the setting arrives as a dropdown
+ * with no frontend change at all — the same promise the rest of this file makes, where a new setting
+ * is a database row rather than a code edit.
+ */
+function enumChoices(dataType: string): string[] | null {
+  if (!dataType.startsWith('enum:')) return null
+  const values = dataType
+    .slice('enum:'.length)
+    .split('|')
+    .map((v) => v.trim())
+    .filter(Boolean)
+  return values.length > 0 ? values : null
 }
 
 /** Which tab a key belongs on. Unrecognised keys land on Advanced — that is the point of it. */
@@ -174,8 +265,23 @@ export function SystemSettingRow({
   onDraftChange: (value: string) => void
   onSave: () => void
 }) {
+  const { t } = useTranslation()
   const known = KNOWN[setting.settingKey]
-  const choices = CHOICES[setting.settingKey]
+  // The API's own declaration wins over the local fallback — see enumChoices.
+  const choices = enumChoices(setting.dataType) ?? CHOICES[setting.settingKey]
+
+  /**
+   * The label for one choice. THE VALUE IS STORED AS-IS — only what the reader sees is translated,
+   * so 'NonOfficial' stays 'NonOfficial' in core.SETTING however it is displayed.
+   *
+   * i18next returns the KEY when there is no translation, which is what makes an unrecognised enum
+   * value from the API render as its own stored text rather than as a blank row.
+   */
+  const choiceLabel = (value: string): string => {
+    const path = `settings.choices.${setting.settingKey}.${value}`
+    const label = t(path)
+    return label === path ? value : label
+  }
   const dirty = draft !== setting.settingValue
   const example = describeValue(setting.settingKey, draft, standardHours)
   const inputId = `setting-${setting.settingKey}`
@@ -196,18 +302,26 @@ export function SystemSettingRow({
       disabled={saving}
       autoComplete="new-password"
     />
+  ) : isBool && known?.switchLabel ? (
+    <Switch
+      id={inputId}
+      checked={isOn(draft)}
+      onChange={(e) => onDraftChange(boolValue(setting.settingValue, e.currentTarget.checked))}
+      label={t(known.switchLabel)}
+      disabled={saving}
+    />
   ) : isBool ? (
     <Checkbox
       id={inputId}
-      checked={draft === 'true'}
-      onChange={(e) => onDraftChange(e.currentTarget.checked ? 'true' : 'false')}
-      label={draft === 'true' ? 'On' : 'Off'}
+      checked={isOn(draft)}
+      onChange={(e) => onDraftChange(boolValue(setting.settingValue, e.currentTarget.checked))}
+      label={isOn(draft) ? 'On' : 'Off'}
       disabled={saving}
     />
   ) : choices ? (
     <Select
       id={inputId}
-      data={choices}
+      data={choices.map((value) => ({ value, label: choiceLabel(value) }))}
       value={draft}
       onChange={(v) => onDraftChange(v ?? '')}
       allowDeselect={false}

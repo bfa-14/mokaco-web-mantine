@@ -1,14 +1,9 @@
 import { useState } from 'react'
-import { Checkbox, Radio, Stack } from '@mantine/core'
+import { useTranslation } from 'react-i18next'
+import { Checkbox, Switch } from '@mantine/core'
 import { getErrorMessage } from '../../api/errorMessage'
 import { rolesService } from '../../services/securityService'
 import type { RoleRejectionBehaviour, RoleSignatureRequirement } from '../../types/security'
-
-/** The two positions of the rejection control. `ends` maps to rejectionEndsRequest = true. */
-const REJECTION_OPTIONS = [
-  { key: 'advice', text: 'It is a recommendation — the next approver still decides' },
-  { key: 'ends', text: 'The request ends immediately' },
-]
 
 /** The default reading of an absent rejection row — the API returns one only for approver roles. */
 const DEFAULT_MEANING = 'A rejection by this role is advice; the next approver still decides.'
@@ -43,6 +38,7 @@ export function RoleWorkflowBehaviour({
   onSigChanged: (updated: RoleSignatureRequirement) => void
   onRejectionChanged: (updated: RoleRejectionBehaviour) => void
 }) {
+  const { t } = useTranslation()
   const [busy, setBusy] = useState<null | 'approver' | 'signature' | 'rejection'>(null)
   const [saved, setSaved] = useState<null | 'approver' | 'signature' | 'rejection'>(null)
   const [error, setError] = useState<string | null>(null)
@@ -83,8 +79,7 @@ export function RoleWorkflowBehaviour({
     }
   }
 
-  async function chooseRejection(key: string) {
-    const next = key === 'ends'
+  async function chooseRejection(next: boolean) {
     const current = rejection?.rejectionEndsRequest ?? false
     if (next === current) return
     setBusy('rejection')
@@ -100,7 +95,7 @@ export function RoleWorkflowBehaviour({
     }
   }
 
-  const rejectionSelected = (rejection?.rejectionEndsRequest ?? false) ? 'ends' : 'advice'
+  const rejectionEnds = rejection?.rejectionEndsRequest ?? false
   const meaning = rejection?.meaning ?? DEFAULT_MEANING
 
   return (
@@ -154,22 +149,19 @@ export function RoleWorkflowBehaviour({
         </div>
         {sig.usableAsApprover ? (
           <>
-            <Radio.Group
-              value={rejectionSelected}
-              onChange={(value) => void chooseRejection(value)}
-            >
-              <Stack gap="xs">
-                {REJECTION_OPTIONS.map((option) => (
-                  <Radio
-                    key={option.key}
-                    value={option.key}
-                    label={option.text}
-                    disabled={busy !== null}
-                  />
-                ))}
-              </Stack>
-            </Radio.Group>
-            {/* The database's own reading of the flag, verbatim. */}
+            {/* A SWITCH, because this is one behaviour being turned on and off rather than a choice
+                between two peers — and the hint carries what the OFF position means, which is the
+                half a switch cannot show on its own face. */}
+            <Switch
+              checked={rejectionEnds}
+              label={t('security.roles.rejectionEnds')}
+              disabled={busy !== null}
+              onChange={(e) => void chooseRejection(e.currentTarget.checked)}
+            />
+            <div className="hint wf-rb-help">{t('security.roles.rejectionEndsHint')}</div>
+            {/* The database's own reading of the flag, verbatim and kept BELOW the fixed hint: it
+                states what is true for this role right now, where the line above states what the
+                control does. */}
             <div className="hint wf-rb-help">{meaning}</div>
           </>
         ) : (

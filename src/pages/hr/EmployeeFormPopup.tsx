@@ -64,6 +64,7 @@ interface FormState {
   nssfNumber: string
   email: string
   phoneNumber: string
+  preferredLanguage: string
   userId: number | null
   terminationDate: string
   /**
@@ -88,6 +89,7 @@ const EMPTY: FormState = {
   nssfNumber: '',
   email: '',
   phoneNumber: '',
+  preferredLanguage: 'en',
   userId: null,
   terminationDate: '',
   approvalTier: null,
@@ -288,6 +290,9 @@ export function EmployeeFormPopup({
         nssfNumber: employee.nssfNumber ?? '',
         email: employee.email ?? '',
         phoneNumber: employee.phoneNumber ?? '',
+        // Defaulted rather than blanked: the column is NOT NULL, so an employee loaded without one
+        // is a read that predates the column, not a person with no language.
+        preferredLanguage: employee.preferredLanguage ?? 'en',
         userId: employee.userId,
         terminationDate: employee.terminationDate?.slice(0, 10) ?? '',
         approvalTier: employee.approvalTier ?? null,
@@ -437,6 +442,7 @@ export function EmployeeFormPopup({
           nssfNumber: form.nssfNumber.trim() || null,
           email: form.email.trim() || null,
           phoneNumber: form.phoneNumber.trim() || null,
+          preferredLanguage: form.preferredLanguage,
           hireDate: form.hireDate,
           terminationDate: form.terminationDate || null,
         })
@@ -482,6 +488,7 @@ export function EmployeeFormPopup({
           nssfNumber: form.nssfNumber.trim() || null,
           email: form.email.trim() || null,
           phoneNumber: form.phoneNumber.trim() || null,
+          preferredLanguage: form.preferredLanguage,
           hireDate: form.hireDate,
         })
         // Create defaults everyone to Staff; set the tier straight after only when it differs.
@@ -771,6 +778,34 @@ export function EmployeeFormPopup({
               }}
               disabled={saving}
             />
+          </div>
+
+          {/* BESIDE THE TWO ADDRESSES, because it is a fact about them: it decides which language the
+              mail and the WhatsApp message are written in, not which language this person sees when
+              they sign in. Not clearable — every employee is written to in one language or the other,
+              and 'none' is not a third option. The labels are in their own scripts on purpose: an
+              Arabic option written "Arabic" is chosen by the person configuring, not by the person
+              who reads it. */}
+          <div className="form-field">
+            <label className="form-label" htmlFor="emp-language">
+              {t('hr.employee.preferredLanguage')}
+            </label>
+            <Select
+              id="emp-language"
+              data={[
+                { value: 'en', label: 'English' },
+                { value: 'ar', label: 'العربية' },
+              ]}
+              value={form.preferredLanguage}
+              onChange={(value) =>
+                setForm((f) => ({ ...f, preferredLanguage: value ?? 'en' }))
+              }
+              allowDeselect={false}
+              disabled={saving}
+            />
+            <p className="hint" style={{ marginTop: 6 }}>
+              {t('hr.employee.preferredLanguageHint')}
+            </p>
           </div>
 
           {isEdit && (

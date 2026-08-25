@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Select, Textarea } from '@mantine/core'
-import { DatePickerInput } from '@mantine/dates'
-import { IconCalendar } from '@tabler/icons-react'
+import { DateRangeField } from '../../components/DateRangeField'
 import { leaveRequestsService } from '../../services/workflowService'
 import { leaveTypesService } from '../../services/hrService'
 import type { LeaveRelationEntitlement, LeaveType } from '../../types/hr'
@@ -91,17 +90,18 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
       ? `${leaveTypeName} leave ${fromYMD} to ${toYMD} (${days} days)`
       : null
 
+  /*
+   * ONE MESSAGE FOR THE DATES, because there is now one control and one way to be wrong about it.
+   * `days` is null exactly when the period is incomplete — the range picker cannot produce an
+   * inverted one — so the three old messages collapse into the single thing left to say.
+   */
   const missing = !leaveTypeId
     ? t('body.leave.missingType')
     : needsRelation && !relation
       ? t('body.leave.missingRelation')
-      : !fromDate
-        ? t('body.leave.missingFrom')
-        : !toDate
-          ? t('body.leave.missingTo')
-          : days == null
-            ? t('body.leave.missingOrder')
-            : null
+      : days == null
+        ? t('body.leave.missingPeriod')
+        : null
 
   /** More days asked for than are left. Amber, and only amber: the approver decides. */
   const overBalance = balance != null && days != null && days > balance.currentBalance
@@ -167,30 +167,33 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
         </div>
       )}
 
-      {/* Both dates are REQUIRED (the `missing` guard below refuses without them), so neither is
-          clearable — the way to change one is to pick another day, not to empty it. State stays
-          'yyyy-MM-dd', which is what DatePickerInput speaks natively. */}
-      <div className="form-grid">
-        <div className="form-field">
-          <DatePickerInput
-            label={t('common.from')}
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={fromYMD}
-            disabled={saving}
-            onChange={(v) => setFromDate(v || null)}
-          />
-        </div>
-        <div className="form-field">
-          <DatePickerInput
-            label={t('common.to')}
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={toYMD}
-            disabled={saving}
-            onChange={(v) => setToDate(v || null)}
-          />
-        </div>
+      {/* ONE CONTROL, ONE CALENDAR — click the first day, hover to see the span light up, click the
+          last.
+
+          TWO INPUTS MADE AN INVERTED RANGE TYPEABLE: pick the 20th, then the 5th, and the form had
+          to catch it afterwards and explain it. They also left three separate ways to be incomplete
+          — no start, no end, end before start — each with its own message. A range picker cannot
+          express any of them: the first click is the start and the second is the end, so
+          `missingOrder` is gone as a STATE rather than merely unreported.
+
+          NO minDate. Leave is routinely raised for days already past — sick leave is reported the
+          morning after — and a picker that refuses yesterday would block the commonest entry of all.
+
+          THE CONTRACT IS UNCHANGED. Mantine 8 speaks 'YYYY-MM-DD' natively, so the value here is a
+          tuple of the very strings the state and the payload already hold: the only conversion at
+          this boundary is one tuple to two fields. No Date is constructed, so no timezone can shift
+          a day underneath it. */}
+      <div className="form-field">
+        <DateRangeField
+          label={t('body.leave.period')}
+          from={fromYMD}
+          to={toYMD}
+          disabled={saving}
+          onChange={(nextFrom, nextTo) => {
+            setFromDate(nextFrom)
+            setToDate(nextTo)
+          }}
+        />
       </div>
 
       {/* The day count, live — inclusive calendar days, same arithmetic as the procedure. */}

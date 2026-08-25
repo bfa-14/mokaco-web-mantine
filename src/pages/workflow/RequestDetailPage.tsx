@@ -8,11 +8,12 @@ import {
   Loader,
   Modal,
   PasswordInput,
+  Text,
   Textarea,
   TextInput,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconArrowBackUp, IconBan, IconPrinter, IconRestore } from '@tabler/icons-react'
+import { IconArrowBackUp, IconBan, IconMail, IconPrinter, IconRestore } from '@tabler/icons-react'
 import { DirectionalIcon } from '../../components/dxIcons'
 import { PageHelp } from '../../components/PageHelp'
 import { useLive } from '../../live/useLive'
@@ -46,6 +47,7 @@ import type {
   OvertimePayload,
   PayrollAdjustmentPayload,
   RequestDetail,
+  RequestEmailStatus,
   RequestReversal,
   RequestStep,
   SalaryAdvancePayload,
@@ -1220,6 +1222,11 @@ export default function RequestDetailPage() {
   const [gmReopenOpen, setGmReopenOpen] = useState(false)
   const [gmReopenReason, setGmReopenReason] = useState('')
 
+  /** One send at a time. The button is the only way in, so disabling it is the whole guard. */
+  const [emailBusy, setEmailBusy] = useState(false)
+/** The outbox rows for this request — one per channel, empty when nothing was ever queued. */
+  const [emailStatus, setEmailStatus] = useState<RequestEmailStatus[]>([])
+
   const load = useCallback(async () => {
     try {
       // Header + history from getById; the CHAIN from the caller-aware endpoint (@ForUserId) so
@@ -1504,6 +1511,21 @@ export default function RequestDetailPage() {
   }
 
   /**
+   * DOES THIS REQUEST CONCERN ME — am I the employee it is about?
+   *
+   * Matched on EMPLOYEE id, not user id: the header names the employee the request was raised for,
+   * never their user account, and the person reading the page may hold both that record and an
+   * approver role on one of its steps. One definition, because two gates read it — cancelling, a
+   * route the server grants the subject, and delegating, one it withholds from them.
+   *
+   * DECLARED HERE, above isMainApprover, and not beside the cancel gate further down: it is in that
+   * callback's dependency array, and a dependency array is evaluated the moment the line runs — a
+   * const declared later would be read in its temporal dead zone, which is a crash on first render.
+   */
+  const concernsMe =
+    detail != null && myEmployee != null && detail.header.employeeId === myEmployee.employeeId
+
+  /**
    * Is the signed-in user this step's MAIN approver — the only person allowed to hand it over?
    *
    * ROLES ARE MATCHED BY NAME, because a name is what the session carries: /api/auth/me returns
@@ -1512,10 +1534,18 @@ export default function RequestDetailPage() {
    * the button is worth it, exactly as every other gate on this page does.
    */
   const isMainApprover = useCallback((step: RequestStep) => {
+    /*
+     * NOT MINE TO HAND OVER WHEN IT IS ABOUT ME — the same eligibility deciding already follows.
+     * usp_Step_GetAvailableDecisions comes back empty on a request I am the subject of, so no
+     * Decide button appears; handing that step to my deputy is an act on my own request by the same
+     * measure, and holding the step's approver role does not change whose request it is. Without
+     * this the two gates disagree on screen: no Decide, and a Delegate sitting beside where it was.
+     */
+    if (concernsMe) return false
     if (user?.userId != null && step.resolvedUserId === user.userId) return true
     if (!step.approverRoleName) return false
     return (user?.roles ?? []).includes(step.approverRoleName)
-  }, [user])
+  }, [user, concernsMe])
 
   /**
    * Hand the step to the deputy role, or take it back.
@@ -1550,6 +1580,63 @@ export default function RequestDetailPage() {
       setDeputyBusy(false)
     }
   }, [deputyBusy, requestId, load, t])
+
+  /**
+   * Read where this request's mail got to.
+   *
+   * SWALLOWS ITS OWN FAILURE. This line is an extra beside a button, and a status endpoint that is
+   * unreachable must not take the request detail down with it — null simply means no line, which is
+   * also what "nothing was ever queued" looks like.
+   */
+  const loadEmailStatus = useCallback(async () => {
+    try {
+      setEmailStatus(await requestsService.emailStatus(requestId))
+    } catch {
+      setEmailStatus([])
+    }
+  }, [requestId])
+
+  /*
+   * Read with the page, and again whenever the request's STATUS moves. Closing a request is what
+   * makes the automatic pass write a row, so the status that follows a decision is the one worth
+   * re-asking for — and it is the only change on this page that can create a row without the button.
+   */
+  useEffect(() => {
+    void loadEmailStatus()
+  }, [loadEmailStatus, detail?.header.status])
+
+  /**
+   * Mail the employee the outcome — by hand, on top of the pass that mails every request as it closes.
+   *
+   * NOTHING IS REFETCHED. The outbox is not on this page: the act writes a row the worker will pick
+   * up within the minute, and the request itself is untouched by it. Reloading would redraw the same
+   * screen and suggest something here had changed.
+   *
+   * THE TOAST NAMES THE ADDRESS the server actually queued to, never the one this page believes in.
+   * A stale employee record is exactly the case the button exists for, and the answer has to come
+   * from the write.
+   */
+  async function submitSendEmail() {
+    setEmailBusy(true)
+    try {
+      const queued = await requestsService.sendEmail(requestId)
+      notifications.show({
+        message: t('requests.email.queued', { address: queued.toAddress }),
+        color: 'green',
+        autoClose: 5000,
+      })
+      // The row this just wrote is Pending, and the line below the button has to say so — otherwise
+      // a resend after a failure leaves the OLD failure on screen, reading as if it failed again.
+      await loadEmailStatus()
+    } catch (err) {
+      /* THE PROCEDURE'S OWN SENTENCE, IN RED: "The request has not ended yet…", "This employee has
+         no email address - add it on the employee page first." Each names the fix, so it is shown
+         verbatim and given long enough to read. */
+      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 9000 })
+    } finally {
+      setEmailBusy(false)
+    }
+  }
 
   /**
    * Sign a GM + Owner reopen.
@@ -1681,6 +1768,68 @@ export default function RequestDetailPage() {
     (decisions.length > 0 ||
       (heldStep?.waitingOnRequester === true && h.raisedByUserId === user?.userId))
 
+  /*
+   * MAILING THE EMPLOYEE THE OUTCOME. Offered on an ENDED request only — the mail describes how the
+   * request finished, and there is nothing to describe while it is still moving. Cancelled counts:
+   * it is an outcome, and it is the one the automatic pass deliberately skips, so by hand is the
+   * only way it is ever sent.
+   *
+   * NO PERMISSION CHECK, matching the endpoint: anyone who got this page open may tell the employee
+   * how their own request ended. Being able to SEE the request is the gate, and the router and the
+   * detail read enforced it long before this button rendered — repeating it here as a permission
+   * would only hide the act from people the server would have allowed.
+   *
+   * The button STAYS after a send, because it is also the resend — a mail that bounced, or one sent
+   * before somebody fixed the address, has no other way back out.
+   */
+  const canEmailEmployee =
+    h.status === 'Approved' || h.status === 'Rejected' || h.status === 'Cancelled'
+
+  /*
+   * WHERE THE MAIL GOT TO, as one line under the button — or nothing at all.
+   *
+   * NOTHING IS THE COMMON CASE and it is deliberate: a request nobody has mailed about says nothing,
+   * rather than "no email", which would read as a problem on every request that never needed one.
+   *
+   * The three states are three different things to do. Sent is a fact and needs no action; Failed
+   * carries the mail server's own sentence, because "failed" without the reason sends whoever reads
+   * it to the database; Pending is a promise with a deadline, which is what stops somebody pressing
+   * the button again ten seconds later.
+   */
+  const emailLines = emailStatus.map((row) => {
+    // The channel is NAMED on every line, including the queued one. With two messages in flight for
+    // the same request, a line that says only "queued" leaves the reader to guess which.
+    const channel =
+      row.channel === 'WhatsApp'
+        ? t('requests.email.channelWhatsApp')
+        : t('requests.email.channelEmail')
+
+    if (row.status === 'Sent')
+      return {
+        key: row.channel,
+        text: t('requests.email.sent', { channel, date: shortDate(row.sentUtc) }),
+        colour: 'green',
+      }
+
+    if (row.status === 'Failed')
+      return {
+        key: row.channel,
+        // A Failed row without an Error is not a state the worker writes — but a dash beats an
+        // empty "Email failed: " if one ever arrives.
+        text: t('requests.email.failed', { channel, error: row.error ?? '—' }),
+        colour: 'red',
+      }
+
+    // STILL PENDING, and the attempt count is the whole information: attempt 1 of 3 has not been
+    // tried yet, attempt 2 means one send already failed and the procedure is holding it back for a
+    // few minutes. Both look identical without the number.
+    return {
+      key: row.channel,
+      text: t('requests.email.pending', { channel, attempt: Math.max(row.attemptCount + 1, 1) }),
+      colour: 'dimmed',
+    }
+  })
+
   // Reopen is the GM + Owner path, and it covers APPROVED requests — which the HR reopen above
   // refuses outright, because an approved request has already done something.
   const holdsReopenRole = (user?.roles ?? []).some((r) => REOPEN_ROLES.includes(r))
@@ -1706,9 +1855,7 @@ export default function RequestDetailPage() {
   )
   const canCancel =
     (h.status === 'Pending' || h.status === 'OnHold') &&
-    (h.raisedByUserId === user?.userId ||
-      (myEmployee != null && h.employeeId === myEmployee.employeeId) ||
-      holdsCancelRole)
+    (h.raisedByUserId === user?.userId || concernsMe || holdsCancelRole)
 
   return (
     <div>
@@ -1788,6 +1935,32 @@ export default function RequestDetailPage() {
             >
               Reopen request
             </Button>
+          )}
+          {/* TELLING THE EMPLOYEE. Quiet and outlined: it changes nothing about the request, and on
+              a closed one it must not compete with the reversals beside it. No confirm — the worst
+              case is one duplicate mail, and the procedure replaces rather than appends, so a second
+              press cannot even manage that. */}
+          {canEmailEmployee && (
+            <div
+              style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'stretch', gap: 4 }}
+            >
+              <Button
+                variant="default"
+                leftSection={<IconMail size={16} />}
+                onClick={() => void submitSendEmail()}
+                disabled={emailBusy}
+              >
+                {t('requests.email.action')}
+              </Button>
+              {/* Under the button, in the button's own width — the status belongs TO the act, and a
+                  line floating beside it would read as a fact about the request instead. One line per
+                  channel, because one channel arriving says nothing about the other. */}
+              {emailLines.map((line) => (
+                <Text key={line.key} size="xs" c={line.colour} style={{ maxWidth: 260 }}>
+                  {line.text}
+                </Text>
+              ))}
+            </div>
           )}
           {/* STOPPING the request. Quiet and outlined, never primary: it ends the request rather
               than moving it forward, and it sits beside the other request-level acts. */}

@@ -9,6 +9,8 @@ import {
   Select,
 } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
+import { DateRangeField } from '../../components/DateRangeField'
+import { t } from '../../i18n/t'
 import { notifications } from '@mantine/notifications'
 import {
   IconCalendar,
@@ -1218,18 +1220,19 @@ export default function RosterPage() {
 
         <div className="form-grid">
           <div className="form-field">
-            <label className="form-label" htmlFor="roster-gen-from">
-              From
+            <label className="form-label" htmlFor="roster-gen-period">
+              {t('common.period')}
             </label>
-            {/* The generate range must always have both ends, so clearing keeps the day already
-                chosen — the same `|| f.fromDate` guard the native input carried. */}
-            <DatePickerInput
-              id="roster-gen-from"
-              valueFormat="DD/MM/YYYY"
-              leftSection={<IconCalendar size={14} />}
-              value={generateForm.fromDate}
-              onChange={(v) => {
-                setGenerateForm((f) => ({ ...f, fromDate: v || f.fromDate }))
+            {/* NOT CLEARABLE: generating a roster over "no period" is not a thing to ask for, so
+                the standing range is kept until a complete one replaces it. */}
+            <DateRangeField
+              id="roster-gen-period"
+              from={generateForm.fromDate}
+              to={generateForm.toDate}
+              onChange={(nextFrom, nextTo) => {
+                if (nextFrom && nextTo) {
+                  setGenerateForm((f) => ({ ...f, fromDate: nextFrom, toDate: nextTo }))
+                }
               }}
               disabled={saving}
             />

@@ -3,9 +3,10 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Loader, Modal, NumberInput, Pagination, Select, Table, Textarea, TextInput } from '@mantine/core'
-import { DatePickerInput } from '@mantine/dates'
+import { DateRangeField } from '../../components/DateRangeField'
+import { t } from '../../i18n/t'
 import { notifications } from '@mantine/notifications'
-import { IconCalendar, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconRefresh, IconSearch } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { PageHelp } from '../../components/PageHelp'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
@@ -557,30 +558,20 @@ export default function ExitVariancesPage() {
 
       <div className="filter-bar">
         <div className="filter-field">
-          <label className="filter-field-label" htmlFor="variance-from">
-            From
+          <label className="filter-field-label" htmlFor="variance-period">
+            {t('common.period')}
           </label>
-          {/* The range travels in the URL and always has both ends, so clearing keeps the current
-              bound — the same guard the native inputs carried. */}
-          <DatePickerInput
-            id="variance-from"
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={from}
-            onChange={(v) => setFrom(v || from)}
-          />
-        </div>
-
-        <div className="filter-field">
-          <label className="filter-field-label" htmlFor="variance-to">
-            To
-          </label>
-          <DatePickerInput
-            id="variance-to"
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={to}
-            onChange={(v) => setTo(v || to)}
+          {/* NOT CLEARABLE — the range travels in the URL and the endpoint requires both ends. */}
+          <DateRangeField
+            id="variance-period"
+            from={from}
+            to={to}
+            onChange={(nextFrom, nextTo) => {
+              if (nextFrom && nextTo) {
+                setFrom(nextFrom)
+                setTo(nextTo)
+              }
+            }}
           />
         </div>
 

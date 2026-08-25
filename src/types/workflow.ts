@@ -437,6 +437,45 @@ export interface DeputyDelegationResult {
   deputyDelegatedByUserId: number | null
 }
 
+/**
+ * What POST /api/requests/{id}/send-email hands back — the outbox row and where it is addressed.
+ *
+ * THE ADDRESS IS WHY THIS IS NOT A 204. Whoever presses the button is almost never the employee,
+ * and "Queued" alone does not say whether it is going to the address they meant. Naming it back puts
+ * that in front of them while the mail is still a row and correcting it costs one edit.
+ */
+export interface QueuedEmailResult {
+  emailId: number
+  toAddress: string
+}
+
+/**
+ * Where this request's messages got to — GET /api/requests/{id}/email-status, ONE PER CHANNEL.
+ *
+ * A LIST, because an Email row and a WhatsApp row for the same request are two messages with two
+ * outcomes: the address can bounce while the WhatsApp arrives, and neither retries the other.
+ *
+ * AN EMPTY LIST IS THE COMMON ANSWER and it is not an error: nothing has ever been queued for this
+ * request, so there is nothing to say. The endpoint answers 204 and the screen shows no line at all,
+ * rather than a status meaning "none".
+ */
+export interface RequestEmailStatus {
+  /** 'Email' or 'WhatsApp' — which message this line is about. */
+  channel: string
+  /** Pending, Sent or Failed — core.EMAIL_OUTBOX.Status verbatim. */
+  status: string
+  /**
+   * Sends attempted so far, against a ceiling of 3 that the procedure enforces. Shown while a row is
+   * still Pending: "attempt 2/3" is the difference between a message that is retrying after a
+   * failure and one that has simply not been picked up yet.
+   */
+  attemptCount: number
+  /** The mail server's or the API's own reason. Null unless the status is Failed. */
+  error: string | null
+  /** When it actually left. Null until it does. */
+  sentUtc: string | null
+}
+
 export interface SignatureLogEntry {
   signatureId: number
   stepNo: number | null

@@ -215,7 +215,8 @@
     "hoursOnly": "{{hours}}h",
     "clear": "Clear.",
     "inactiveOption": "{{name}} (inactive)",
-    "required": "(required)"
+    "required": "(required)",
+    "period": "Period"
   },
   "workflow": {
     "leaveNotice": {
@@ -227,7 +228,10 @@
       "hintOn": "Nothing is deducted: the {{type}} balance stays at {{balance}}. Every approver can set this, and the final approver's choice is the one that takes effect.",
       "outcome": "Discretionary — nothing was deducted, so the {{type}} balance is still {{balance}}.",
       "badge": "Discretionary — balance not deducted",
-      "panelNote": "Granted at the approver's discretion — nothing was deducted, and nothing will be."
+      "panelNote": "Granted at the approver's discretion — nothing was deducted, and nothing will be.",
+      "noteRequiredLabel": "required — why the days are not deducted",
+      "noteRequiredError": "Say why these days are not being deducted.",
+      "noteRequiredHint": "Required: nothing comes out of the balance, so the record has to say why it was granted."
     },
     "status": {
       "Pending": "Pending",
@@ -309,7 +313,8 @@
       "clearType": "Clear type",
       "chipFrom": "From {{date}}",
       "chipTo": "To {{date}}",
-      "typeFallback": "Type"
+      "typeFallback": "Type",
+      "period": "Period"
     },
     "needsAnswer_one": "{{count}} needs your answer",
     "needsAnswer_other": "{{count}} need your answer",
@@ -456,6 +461,15 @@
       "confirm": "Retract my decision",
       "busy": "Retracting…",
       "done": "Decision withdrawn. Step {{step}} is waiting for a fresh decision."
+    },
+    "email": {
+      "action": "Email the employee",
+      "queued": "Queued to {{address}} — sends within a minute",
+      "sent": "{{channel}} sent {{date}}",
+      "failed": "{{channel}} failed: {{error}}",
+      "pending": "{{channel}} queued — attempt {{attempt}}/3",
+      "channelEmail": "Email",
+      "channelWhatsApp": "WhatsApp"
     }
   },
   "body": {
@@ -496,11 +510,10 @@
       "overBalance": "That is more than the {{type}} balance of {{days}}. You can still submit — the approver decides whether to grant it, and may grant fewer days.",
       "missingType": "a leave type",
       "missingRelation": "the relation",
-      "missingFrom": "a start date",
-      "missingTo": "an end date",
-      "missingOrder": "an end date on or after the start date",
       "noticeShortWithPreferred": "This was raised at short notice — sooner than the {{count}} days’ notice this leave type prefers, so your approver may ask about it.",
-      "noticeShort": "This was raised at short notice — sooner than preferred, so your approver may ask about it."
+      "noticeShort": "This was raised at short notice — sooner than preferred, so your approver may ask about it.",
+      "period": "Leave period",
+      "missingPeriod": "the leave period"
     },
     "tip": {
       "branchPlaceholder": "Which branch?",
@@ -904,6 +917,10 @@
       "CORE_MANAGE": "Manage currencies & exchange rates",
       "PAYROLL_VIEW": "View payroll runs & payslips",
       "REPORT_VIEW": "View reports"
+    },
+    "roles": {
+      "rejectionEnds": "Rejection ends the request",
+      "rejectionEndsHint": "Off = the rejection is recorded as advice and the request continues"
     }
   },
   "core": {
@@ -931,7 +948,9 @@
       "emailPlaceholder": "name@company.com",
       "emailHint": "Where the system sends the notice when one of their requests is approved or rejected. Leave empty and none is sent.",
       "emailInvalid": "That does not look like an email address.",
-      "phoneNumber": "Phone number"
+      "phoneNumber": "Phone number",
+      "preferredLanguage": "Preferred language",
+      "preferredLanguageHint": "The language this person is written to in. Notifications about their requests are composed in it — it does not change the language they see when they sign in."
     },
     "employeeForm": {
       "tierPlaceholder": "Select the tier…",
@@ -1034,6 +1053,21 @@
       "footnote": "Applies when punches are processed. Changing this does not rewrite past days — use Re-process day on the <daily>Daily page</daily> to re-derive a day.",
       "missingMain": "Punch interpretation is not configured on the server.",
       "missingBody": "The PunchDirection settings are missing from core.SETTING. Run <code>14_punch_direction.sql</code>, then press Refresh."
+    },
+    "notifications": {
+      "notifyOnRequestClosed": "Automatic email when a request ends",
+      "whatsAppEnabled": "Also send a WhatsApp message when a request ends"
+    },
+    "choices": {
+      "PayrollRateType": {
+        "Official": "Official",
+        "Market": "Market",
+        "NonOfficial": "Non-official"
+      },
+      "ExitLeaveBasis": {
+        "Actual": "Actual",
+        "Approved": "Approved"
+      }
     }
   }
 }

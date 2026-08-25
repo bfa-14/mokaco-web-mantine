@@ -656,6 +656,20 @@ export function DecidePopup({
         setError('This decision needs a note.')
         return
       }
+      /*
+       * A DISCRETIONARY GRANT MUST SAY WHY. Waiving the deduction is the one decision here that
+       * leaves no trace in any figure — the balance simply does not move — so the note is the only
+       * record that it was a choice rather than an oversight, and the only thing anybody auditing
+       * the balance months later has to read.
+       *
+       * Checked here rather than by disabling the button: the reason has to be NAMED, and a button
+       * that quietly will not depress does not name it. The procedure refuses this too, so a stale
+       * tab that gets past the client still lands on the same rule with the same explanation.
+       */
+      if (discretionaryNoteRequired && !text) {
+        setError(t('workflow.leaveDiscretionary.noteRequiredError'))
+        return
+      }
     }
     if (isExpense && selected?.engineAction === 'Approve' && grantAmount == null) {
       setError('State the amount to grant.')
@@ -773,6 +787,19 @@ export function DecidePopup({
     (!splitBalances || zeroShare)
 
   const redistributingNow = isTip && redistribute && selected?.engineAction === 'Approve'
+
+  /**
+   * Whether ticking "grant as discretionary" has made the note mandatory.
+   *
+   * GATED ON THE SAME THREE CONDITIONS THAT RENDER THE BOX, not on the tick alone. The tick survives
+   * a change of decision — switching to Reject hides the checkbox without clearing it — and a note
+   * demanded by a control the user can no longer see is a dead end with no way out of it.
+   *
+   * Unticking restores "(optional)" the instant it happens: the requirement belongs to the waiver,
+   * and asking for a reason for something nobody is doing any more is just a stuck form.
+   */
+  const discretionaryNoteRequired =
+    isLeave && leave != null && selected?.engineAction === 'Approve' && makeDiscretionary
 
   const minutesMissing =
     (isOvertime && selected?.engineAction === 'Approve' && grantMinutes == null) ||
@@ -926,7 +953,10 @@ export function DecidePopup({
                 <NumberInput
                   id="wf-grant-exit-minutes"
                   value={grantExitMinutes ?? ''}
-                  min={0}
+                  // MIN 1, not 0: approving zero minutes away is not an approval, it is a refusal
+                  // written as one — and it would push a zero into attendance as an authorised
+                  // absence of nothing. Somebody who means to refuse has Reject beside this.
+                  min={1}
                   max={standingExitMinutes}
                   step={15}
                   disabled={submitting}
@@ -1224,9 +1254,14 @@ export function DecidePopup({
                 <>
                   {isWithdrawOnly ? 'Why are you withdrawing?' : 'Note'}{' '}
                   <span className="form-optional">
-                    {isWithdrawOnly || selected?.requiresComment || redistributingNow
-                      ? '(required)'
-                      : '(optional)'}
+                    {/* The discretionary case says WHAT the note is for, not just that it is
+                        required — "(required)" on its own beside a box somebody has just ticked
+                        reads as a rule, where this reads as the question being asked. */}
+                    {discretionaryNoteRequired
+                      ? `(${t('workflow.leaveDiscretionary.noteRequiredLabel')})`
+                      : isWithdrawOnly || selected?.requiresComment || redistributingNow
+                        ? '(required)'
+                        : '(optional)'}
                   </span>
                 </>
               }
@@ -1239,6 +1274,11 @@ export function DecidePopup({
               <div className="hint">
                 Required: you are changing the split, so the record has to say why.
               </div>
+            )}
+            {/* Said under the box as well as in the label, because the label changed while the
+                reader was looking at the checkbox above it, not at the note. */}
+            {discretionaryNoteRequired && (
+              <div className="hint">{t('workflow.leaveDiscretionary.noteRequiredHint')}</div>
             )}
           </div>
 

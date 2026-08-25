@@ -5,6 +5,7 @@ import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, g
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Drawer, Group, Loader, Modal, NumberInput, Pagination, SegmentedControl, Select, Table, Textarea, TextInput } from '@mantine/core'
 import { DatePickerInput, DateTimePicker } from '@mantine/dates'
+import { DateRangeField } from '../../components/DateRangeField'
 import { notifications } from '@mantine/notifications'
 import { IconAlertTriangle, IconBriefcase, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
@@ -1813,32 +1814,21 @@ export default function DailyAttendancePage() {
 
       <div className="filter-bar">
         <div className="filter-field">
-          <label className="filter-field-label" htmlFor="filter-from">
-            From
+          <label className="filter-field-label" htmlFor="filter-period">
+            {t('common.period')}
           </label>
-          {/* The range travels in the URL and always has both ends, so clearing is a no-op that
-              keeps the current bound — the same guard the native input carried. */}
-          <DatePickerInput
-            id="filter-from"
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={from}
-            w={150}
-            onChange={(v) => setFrom(v || from)}
-          />
-        </div>
-
-        <div className="filter-field">
-          <label className="filter-field-label" htmlFor="filter-to">
-            To
-          </label>
-          <DatePickerInput
-            id="filter-to"
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={to}
-            w={150}
-            onChange={(v) => setTo(v || to)}
+          {/* NOT CLEARABLE — the range travels in the URL and the day read requires both ends. */}
+          <DateRangeField
+            id="filter-period"
+            w={230}
+            from={from}
+            to={to}
+            onChange={(nextFrom, nextTo) => {
+              if (nextFrom && nextTo) {
+                setFrom(nextFrom)
+                setTo(nextTo)
+              }
+            }}
           />
         </div>
 

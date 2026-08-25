@@ -2,10 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button, Loader, Popover, SegmentedControl, Select } from '@mantine/core'
-import { DatePickerInput } from '@mantine/dates'
+import { DateRangeField } from '../../components/DateRangeField'
 import { notifications } from '@mantine/notifications'
 import {
-  IconCalendar,
   IconCheck,
   IconLayoutGrid,
   IconLayoutList,
@@ -185,6 +184,16 @@ function RequestCard({
   const held = item.status === 'OnHold'
   const open = item.status === 'Pending' || held
   const age = ageing(item.daysOpen)
+  /**
+   * MAY I HAND THIS ONE OVER? The server's canDelegate answers "am I this step's MAIN approver",
+   * and that stays true on a request raised FOR me — so it is narrowed here by the rule the Decide
+   * button already follows: never on a request I am the subject of, whatever role I hold on its
+   * step. isMine is that question answered for this caller ("raised FOR me — I am the employee").
+   *
+   * Take back is deliberately NOT narrowed: it undoes a delegation that already happened, and a
+   * step nobody can reclaim is worse than one that should never have been handed over.
+   */
+  const canDelegate = item.canDelegate && !item.isMine
 
   const noteBubble =
     item.noteCount > 0 ? (
@@ -299,7 +308,7 @@ function RequestCard({
           approver is, and WaitingOnMe asks who may SIGN — a question that is also true for the
           deputy. Gating the row on WaitingOnMe would hide Take back at exactly the moment the main
           approver wants it. */}
-      {(item.waitingOnMe || item.canDelegate || item.canReclaim) && (
+      {(item.waitingOnMe || canDelegate || item.canReclaim) && (
         <div className="wf-card-actions" onClick={(e) => e.stopPropagation()}>
           {item.waitingOnMe && (
             <Button size="sm" onClick={onDecide}>
@@ -310,7 +319,7 @@ function RequestCard({
           {/* OUTLINE, beside Decide: a real alternative to deciding, but the rarer one. The confirm
               names the role it is going to — "delegate to deputy" without saying to WHOM is a
               button people press to find out what it does. */}
-          {item.canDelegate && item.fallbackRoleName && (
+          {canDelegate && item.fallbackRoleName && (
             <Popover
               opened={confirmDelegate}
               onChange={setConfirmDelegate}
@@ -674,28 +683,22 @@ export default function RequestsHubPage() {
             allowDeselect={false}
           />
         </div>
-        {/* FILTERS, so both are clearable — an empty date means "no bound", which is the state
-            these two start in and the one a user has to be able to get back to. */}
+{/* A FILTER, and one whose two ends were ALREADY nullable and already optional in the query —
+            so this is the one sweep site where "cleared" has somewhere to go: both ends null is the
+            state the page starts in, and the fetch below already omits the bounds for it. Clearing
+            reloads the hub unfiltered, which is why `clearable` is on here and off on the
+            attendance toolbars, where the endpoint requires both dates. */}
         <div className="wf-filter-field">
-          <span className="wf-filter-label">{t('requests.filters.from')}</span>
-          <DatePickerInput
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
+          <span className="wf-filter-label">{t('requests.filters.period')}</span>
+          <DateRangeField
             clearable
-            w={150}
-            value={fromDate}
-            onChange={(v) => setFromDate(v || null)}
-          />
-        </div>
-        <div className="wf-filter-field">
-          <span className="wf-filter-label">{t('requests.filters.to')}</span>
-          <DatePickerInput
-            valueFormat="DD/MM/YYYY"
-            leftSection={<IconCalendar size={14} />}
-            clearable
-            w={150}
-            value={toDate}
-            onChange={(v) => setToDate(v || null)}
+            w={230}
+            from={fromDate}
+            to={toDate}
+            onChange={(nextFrom, nextTo) => {
+              setFromDate(nextFrom)
+              setToDate(nextTo)
+            }}
           />
         </div>
         {types.length > 1 && (

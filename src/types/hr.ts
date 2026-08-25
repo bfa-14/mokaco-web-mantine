@@ -242,6 +242,14 @@ export interface EmployeeProfile {
    */
   email: string | null
   phoneNumber: string | null
+  /**
+   * 'en' or 'ar' — WHICH LANGUAGE THIS PERSON IS WRITTEN TO IN, not the one they browse in.
+   *
+   * A property of the EMPLOYEE, not of the session: the closing notification is composed by a
+   * background worker at a moment when nobody is signed in, so there is no UI language to borrow.
+   * It is copied onto the outbox row when the message is queued and frozen there.
+   */
+  preferredLanguage: string
   /** A tier NUMBER (1 = head) — set via its own PUT, not the update body. Named by the dictionary. */
   approvalTier: number
   /** Who this person reports to — set via its own PUT. Null for the top of a reporting line. */
@@ -272,6 +280,8 @@ export interface EmployeeCreateRequest {
   /** Optional. Send null, never "" — the procedure NULLIFs a blank anyway, but null is the honest wire value. */
   email: string | null
   phoneNumber: string | null
+  /** 'en' or 'ar'. The procedure defaults it to 'en' and folds anything unrecognised down to it. */
+  preferredLanguage: string
 }
 
 /** PUT /api/employees/{id}. */
@@ -287,6 +297,8 @@ export interface EmployeeUpdateRequest {
   /** Optional. Sending null CLEARS what was there — emptying the box is a real edit. */
   email: string | null
   phoneNumber: string | null
+  /** 'en' or 'ar'. Never null: the column is NOT NULL and every employee has one. */
+  preferredLanguage: string
 }
 
 /**

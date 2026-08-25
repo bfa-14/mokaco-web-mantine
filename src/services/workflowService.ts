@@ -38,6 +38,8 @@ import type {
   MoveVersionResult,
   MyEmployee,
   MyExitPermission,
+  QueuedEmailResult,
+  RequestEmailStatus,
   PostLeaveResult,
   MyLeaveRequest,
   MyRequest,
@@ -433,6 +435,33 @@ export const requestsService = {
   reclaimFromDeputy: (id: number, stepNo: number) =>
     apiRequest<DeputyDelegationResult>(
       `/api/requests/${id}/steps/${stepNo}/delegate-deputy`, { method: 'DELETE' }),
+
+  /**
+   * Mail the employee the outcome of a request that has ENDED — and the resend, which is the same
+   * call: the procedure replaces any previous mail for the request rather than adding a second.
+   *
+   * QUEUES, DOES NOT SEND. The row goes to the outbox and the worker takes it within the minute,
+   * so the toast promises a minute rather than claiming the mail has left.
+   *
+   * EMP_EDIT. The refusals are the procedure's own sentences arriving as 400 — the request is still
+   * open, the employee has no address — and both name the fix, so they are shown verbatim.
+   */
+  sendEmail: (id: number) =>
+    apiRequest<QueuedEmailResult>(`/api/requests/${id}/send-email`, { method: 'POST' }),
+
+  /**
+   * Where this request's messages got to — one entry per channel, EMPTY when none was ever queued.
+   *
+   * The 204 arrives as null and is flattened to [] here rather than at the call site: "no messages"
+   * and "one message" are the same kind of answer to the screen, and a caller that has to test for
+   * null before mapping will eventually forget to.
+   *
+   * Read AFTER sending as well as with the page: the send only writes a Pending row, and whether it
+   * left is the worker's answer a minute later, not the button's.
+   */
+  emailStatus: (id: number) =>
+    apiRequest<RequestEmailStatus[] | null>(`/api/requests/${id}/email-status`)
+      .then((v) => v ?? []),
 
   /** HR only. Reopen a REJECTED or CANCELLED request to the step that closed it. Approved cannot be reopened. */
   reopen: (id: number, reason: string) =>

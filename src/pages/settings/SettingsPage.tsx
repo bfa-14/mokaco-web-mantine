@@ -20,7 +20,6 @@ import { SettingRows, SettingsCard } from './SettingsCard'
 import { SystemSettingRow, tabOf, titleOf } from './SystemSettingRow'
 import { AttendanceMachinesSection } from './AttendanceMachinesSection'
 import { PunchDirectionRows } from './PunchDirectionSection'
-import { RejectionBehaviourSection } from './RejectionBehaviourSection'
 import { DangerZone } from './DangerZone'
 import { LiveUpdatesRows } from './LiveUpdatesSection'
 import { LanguageRow } from './LanguageSection'
@@ -28,14 +27,12 @@ import './settings.css'
 
 /** Only SETTING_MANAGE may read the full list or write any of it — these values decide what people are paid. */
 const SETTING_MANAGE = 'SETTING_MANAGE'
-/** The rejection-behaviour section answers to ROLE_MANAGE, a different trust from the settings themselves. */
-const ROLE_MANAGE = 'ROLE_MANAGE'
 
 /**
  * The tab a `?tab=` value may name. Kept as a union so a URL somebody typed by hand cannot select
  * a panel that does not exist.
  */
-const TAB_IDS = ['preferences', 'attendance', 'workflow', 'advanced', 'danger'] as const
+const TAB_IDS = ['preferences', 'attendance', 'advanced', 'danger'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 /**
@@ -57,9 +54,6 @@ export default function SettingsPage() {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = hasPermission(SETTING_MANAGE)
-  // A SEPARATE trust: rejection behaviour is role administration, so someone may hold it WITHOUT
-  // SETTING_MANAGE. The page must open for either permission, not only the settings one.
-  const canManageRoles = hasPermission(ROLE_MANAGE)
   // Read here as well as inside the Danger zone, which still gates itself: the TAB has to know
   // whether it has anything to show before it renders a label somebody would click into an empty
   // panel.
@@ -259,7 +253,6 @@ export default function SettingsPage() {
   const visible: { id: TabId; label: string; danger?: boolean }[] = [
     { id: 'preferences', label: t('settings.tabs.preferences') },
     ...(canManage ? [{ id: 'attendance' as TabId, label: t('settings.tabs.attendance') }] : []),
-    ...(canManageRoles ? [{ id: 'workflow' as TabId, label: t('settings.tabs.workflow') }] : []),
     ...(canManage ? [{ id: 'advanced' as TabId, label: t('settings.tabs.advanced') }] : []),
     // LAST, always — it belongs to a different kind of act than everything before it.
     ...(canReset ? [{ id: 'danger' as TabId, label: t('settings.tabs.danger'), danger: true }] : []),
@@ -351,7 +344,7 @@ export default function SettingsPage() {
 
             {/* The one thing a user with neither system trust needs to be told, kept exactly as
                 it read before: not an error, an explanation of whose settings those are. */}
-            {!canManage && !canManageRoles && (
+            {!canManage && (
               <SettingsCard title="System settings">
                 <div className="empty-hint">
                   <div className="empty-hint-main">
@@ -402,17 +395,6 @@ export default function SettingsPage() {
                   <AttendanceMachinesSection settings={settings} onSaved={load} />
                 </>
               )}
-            </div>
-          </Tabs.Panel>
-        )}
-
-        {/* ── WORKFLOW — how requests behave ──────────────────────────────────────────────────
-            Role administration, on ROLE_MANAGE rather than SETTING_MANAGE. The section still
-            self-gates; this tab exists only when it would render something. */}
-        {canManageRoles && (
-          <Tabs.Panel value="workflow" className="set-panel">
-            <div className="set-stack">
-              <RejectionBehaviourSection />
             </div>
           </Tabs.Panel>
         )}
