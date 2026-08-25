@@ -17,7 +17,7 @@ import {
   type Setting,
 } from '../../types/settings'
 import { SettingRows, SettingsCard } from './SettingsCard'
-import { SystemSettingRow, tabOf, titleOf } from './SystemSettingRow'
+import { SystemSettingRow, tabOfSection, titleOf } from './SystemSettingRow'
 import { AttendanceMachinesSection } from './AttendanceMachinesSection'
 import { PunchDirectionRows } from './PunchDirectionSection'
 import { DangerZone } from './DangerZone'
@@ -32,7 +32,14 @@ const SETTING_MANAGE = 'SETTING_MANAGE'
  * The tab a `?tab=` value may name. Kept as a union so a URL somebody typed by hand cannot select
  * a panel that does not exist.
  */
-const TAB_IDS = ['preferences', 'attendance', 'advanced', 'danger'] as const
+const TAB_IDS = [
+  'preferences',
+  'attendance',
+  'workflow',
+  'notifications',
+  'advanced',
+  'danger',
+] as const
 type TabId = (typeof TAB_IDS)[number]
 
 /**
@@ -172,31 +179,63 @@ export default function SettingsPage() {
       !MACHINE_PULL_KEYS.includes(s.settingKey) &&
       !PUNCH_DIRECTION_KEYS.includes(s.settingKey),
   )
-  const preferenceSettings = listed.filter((s) => tabOf(s.settingKey) === 'preferences')
-  const attendanceSettings = listed.filter((s) => tabOf(s.settingKey) === 'attendance')
-  const advancedSettings = listed.filter((s) => tabOf(s.settingKey) === 'advanced')
+  /**
+   * EVERY listed setting, filed by the tab its SECTION names — and filed exactly once.
+   *
+   * The page used to ask a per-key map which tab each setting belonged to, then band the leftovers
+   * by Section inside Advanced. Two routers, so a key could reach two places: an Attendance row the
+   * map did not name appeared under an "Attendance" heading inside Advanced, next to a real
+   * Attendance tab. One bucket per key, chosen by one field, makes that unrepresentable.
+   */
+  const byTab = useMemo(() => {
+    const buckets = new Map<TabId, Setting[]>()
+    for (const setting of listed) {
+      const tab = tabOfSection(setting.section)
+      const existing = buckets.get(tab)
+      if (existing) existing.push(setting)
+      else buckets.set(tab, [setting])
+    }
+    return buckets
+  }, [listed])
 
   /**
-   * The advanced settings, split into the bands core.SETTING itself declares.
+   * THE DUPLICATE ALARM — development only, and it should never fire.
    *
-   * WHY THE DATABASE DECIDES THIS. Everything on this tab used to be one undifferentiated list,
-   * because the only grouping the page had was a hard-coded map of the four keys somebody had
-   * written copy for. Meanwhile every row already carried a Section — the mail settings arrived as
-   * "Notifications", payroll's as "Payroll" — and the API was returning it and the client was
-   * dropping it on the floor. Reading it means a feature that adds keys tomorrow gets its own
-   * heading with no change here, which is the promise the rest of this page already makes.
-   *
-   * ORDER IS THE API'S. usp_Setting_GetAll returns rows by Section, then SortOrder — host, port,
-   * user, password — which is the order somebody fills a mail server in. A Map preserves insertion
-   * order, so nothing needs sorting again here and the two cannot disagree.
-   *
-   * A key with no Section is not dropped: it lands in the unnamed remainder below the bands, which
-   * is the same "there is always a home" rule that puts unknown keys on this tab in the first place.
+   * Routing is now a pure function of one field, so a key CANNOT reach two tabs by construction.
+   * What this still catches is the other half of the same symptom: the API returning the same
+   * SettingKey twice. That would render two rows whose Save buttons overwrite each other, which on
+   * screen looks exactly like the bug this replaced.
    */
-  const advancedBands = useMemo(() => {
+  useEffect(() => {
+    if (!import.meta.env.DEV || settings.length === 0) return
+    const seen = new Set<string>()
+    const duplicates = settings
+      .map((s) => s.settingKey)
+      .filter((key) => (seen.has(key) ? true : (seen.add(key), false)))
+    if (duplicates.length > 0) {
+      console.warn(
+        '[settings] duplicate SettingKey from the API — each renders its own row and they will ' +
+          'overwrite one another on save:',
+        [...new Set(duplicates)],
+      )
+    }
+  }, [settings])
+
+  /**
+   * One tab's settings, split into the bands core.SETTING declares.
+   *
+   * ORDER IS THE API'S. usp_Setting_GetAll returns rows by Section then SortOrder — host, port,
+   * user, password — which is the order somebody fills a mail server in. A Map preserves insertion
+   * order, so nothing is sorted again here and the two cannot disagree.
+   *
+   * MOST TABS HAVE ONE BAND, because a tab is a section. Advanced is the exception by design: it
+   * holds its own section plus every section nobody has mapped — Payroll today — each under its own
+   * name rather than in one undifferentiated list.
+   */
+  const bandsOf = (tab: TabId): { bands: [string, Setting[]][]; loose: Setting[] } => {
     const bands = new Map<string, Setting[]>()
     const loose: Setting[] = []
-    for (const setting of advancedSettings) {
+    for (const setting of byTab.get(tab) ?? []) {
       const section = setting.section?.trim()
       if (!section) {
         loose.push(setting)
@@ -207,7 +246,15 @@ export default function SettingsPage() {
       else bands.set(section, [setting])
     }
     return { bands: [...bands.entries()], loose }
-  }, [advancedSettings])
+  }
+
+  const preferenceSettings = byTab.get('preferences') ?? []
+  const attendanceSettings = byTab.get('attendance') ?? []
+
+  const advancedSettings = byTab.get('advanced') ?? []
+  const advancedBands = bandsOf('advanced')
+  const workflowBands = bandsOf('workflow')
+  const notificationBands = bandsOf('notifications')
 
   /** One system setting as a row — the wiring is identical for every tab it appears on. */
   function renderSetting(setting: Setting) {
@@ -253,6 +300,14 @@ export default function SettingsPage() {
   const visible: { id: TabId; label: string; danger?: boolean }[] = [
     { id: 'preferences', label: t('settings.tabs.preferences') },
     ...(canManage ? [{ id: 'attendance' as TabId, label: t('settings.tabs.attendance') }] : []),
+    // A TAB PER SECTION, and only when that section actually has rows: an empty tab behind a label
+    // somebody clicked reads as a page that failed to load.
+    ...(canManage && workflowBands.bands.length + workflowBands.loose.length > 0
+      ? [{ id: 'workflow' as TabId, label: t('settings.tabs.workflow') }]
+      : []),
+    ...(canManage && notificationBands.bands.length + notificationBands.loose.length > 0
+      ? [{ id: 'notifications' as TabId, label: t('settings.tabs.notifications') }]
+      : []),
     ...(canManage ? [{ id: 'advanced' as TabId, label: t('settings.tabs.advanced') }] : []),
     // LAST, always — it belongs to a different kind of act than everything before it.
     ...(canReset ? [{ id: 'danger' as TabId, label: t('settings.tabs.danger'), danger: true }] : []),
@@ -393,6 +448,60 @@ export default function SettingsPage() {
                       core.SETTING rows — a DEVICE_MANAGE-only user cannot read them at all. The
                       Test / Pull now buttons inside gate separately on DEVICE_MANAGE. */}
                   <AttendanceMachinesSection settings={settings} onSaved={load} />
+                </>
+              )}
+            </div>
+          </Tabs.Panel>
+        )}
+
+        {/* ── WORKFLOW — how requests behave ──────────────────────────────────────────────────
+            Its own tab now, fed by Section = 'Workflow'. Nothing is listed here by name: the rows
+            arrive from the API and the tab exists only while there are some. */}
+        {canManage && (
+          <Tabs.Panel value="workflow" className="set-panel">
+            <div className="set-stack">
+              {errorBanner}
+              {loading ? (
+                spinner
+              ) : (
+                <>
+                  {workflowBands.bands.map(([section, rows]) => (
+                    <SettingsCard key={section} title={section}>
+                      <SettingRows>{rows.map(renderSetting)}</SettingRows>
+                    </SettingsCard>
+                  ))}
+                  {workflowBands.loose.length > 0 && (
+                    <SettingsCard title={t('settings.tabs.workflow')}>
+                      <SettingRows>{workflowBands.loose.map(renderSetting)}</SettingRows>
+                    </SettingsCard>
+                  )}
+                </>
+              )}
+            </div>
+          </Tabs.Panel>
+        )}
+
+        {/* ── NOTIFICATIONS — how the system writes to people ─────────────────────────────────
+            The mail server and WhatsApp, which used to appear as bands inside Advanced purely
+            because no per-key entry had claimed them. Section says Notifications, so they are. */}
+        {canManage && (
+          <Tabs.Panel value="notifications" className="set-panel">
+            <div className="set-stack">
+              {errorBanner}
+              {loading ? (
+                spinner
+              ) : (
+                <>
+                  {notificationBands.bands.map(([section, rows]) => (
+                    <SettingsCard key={section} title={section}>
+                      <SettingRows>{rows.map(renderSetting)}</SettingRows>
+                    </SettingsCard>
+                  ))}
+                  {notificationBands.loose.length > 0 && (
+                    <SettingsCard title={t('settings.tabs.notifications')}>
+                      <SettingRows>{notificationBands.loose.map(renderSetting)}</SettingRows>
+                    </SettingsCard>
+                  )}
                 </>
               )}
             </div>

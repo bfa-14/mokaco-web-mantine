@@ -1114,7 +1114,8 @@
       "attendance": "الحضور",
       "workflow": "سير العمل",
       "advanced": "إعدادات متقدّمة",
-      "danger": "منطقة الخطر"
+      "danger": "منطقة الخطر",
+      "notifications": "الإشعارات"
     },
     "punchDirection": {
       "title": "اتجاه البصمة",

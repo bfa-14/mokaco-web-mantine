@@ -1038,7 +1038,8 @@
       "attendance": "Attendance",
       "workflow": "Workflow",
       "advanced": "Advanced",
-      "danger": "Danger zone"
+      "danger": "Danger zone",
+      "notifications": "Notifications"
     },
     "punchDirection": {
       "title": "Punch direction",

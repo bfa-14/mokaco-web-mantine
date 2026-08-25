@@ -13,8 +13,37 @@ import { SHOW_PAGE_HELP_KEY, type Setting } from '../../types/settings'
  * title than its key, and the bounds of its number box.
  */
 
-/** The tabs a known key can be filed under. Anything unlisted falls to Advanced. */
-export type SettingTab = 'preferences' | 'attendance' | 'advanced'
+/** The tabs a SECTION can be filed under. Anything unlisted falls to Advanced. */
+export type SettingTab =
+  | 'preferences'
+  | 'attendance'
+  | 'workflow'
+  | 'notifications'
+  | 'advanced'
+  | 'danger'
+
+/**
+ * SECTION → TAB, and the ONLY thing that decides where a setting renders.
+ *
+ * THIS REPLACED A PER-KEY MAP, and the per-key map was the bug. It listed the handful of keys
+ * somebody had written copy for and sent everything else to Advanced — where the page then grouped
+ * by Section anyway. So an Attendance row nobody had listed appeared under an "Attendance" heading
+ * INSIDE Advanced, beside a real Attendance tab holding the two keys that were listed. The same
+ * kind of setting rendered in two places, and which one you got depended on whether a developer had
+ * happened to name it here.
+ *
+ * A key now has exactly one home, derived from one field, with no second opinion to disagree with.
+ * An UNKNOWN section is not an error and is not dropped: it lands in Advanced with its own name as
+ * the band heading, which is what keeps "a new setting is a database row" true.
+ */
+const SECTION_TABS: Record<string, SettingTab> = {
+  preferences: 'preferences',
+  attendance: 'attendance',
+  workflow: 'workflow',
+  notifications: 'notifications',
+  advanced: 'advanced',
+  danger: 'danger',
+}
 
 /**
  * Extra guidance for the keys we know about today.
@@ -27,7 +56,6 @@ export type SettingTab = 'preferences' | 'attendance' | 'advanced'
 const KNOWN: Record<
   string,
   {
-    tab: SettingTab
     title: string
     min?: number
     max?: number
@@ -42,40 +70,36 @@ const KNOWN: Record<
   }
 > = {
   StandardWorkDayHours: {
-    tab: 'attendance',
     title: 'Standard work day',
     min: 1,
     max: 24,
     step: 0.5,
   },
-  ExitLeaveBasis: { tab: 'attendance', title: 'Exit leave basis' },
+  ExitLeaveBasis: { title: 'Exit leave basis' },
   FullDayThreshold: {
-    tab: 'attendance',
     title: 'Full day threshold',
     min: 0,
     max: 1,
     step: 0.05,
   },
-  // A per-person choice about the reader's own screen, so it belongs with the other personal
-  // toggles rather than among the values that decide what people are paid. It is still a
-  // core.SETTING row behind SETTING_MANAGE — only its placement moved.
-  [SHOW_PAGE_HELP_KEY]: { tab: 'preferences', title: 'Show page help' },
+  // A per-person choice about the reader's own screen. Its PLACEMENT is core.SETTING's to state —
+  // the row's Section is 'Preferences' — and this entry now only supplies the friendlier title.
+  [SHOW_PAGE_HELP_KEY]: { title: 'Show page help' },
 
   /* THE MAIL SERVER. Titled by hand for the one thing a derived title cannot do: say "SMTP" and
      "URL" in capitals. The keys read Smtp*, so humanise() can only ever produce "Smtp host" —
      and these seven sit together under their own heading, where short labels read as one form to
      fill in rather than seven unrelated values that happen to share a prefix. */
-  SmtpHost: { tab: 'advanced', title: 'Mail server' },
-  SmtpPort: { tab: 'advanced', title: 'Port', min: 1, max: 65535, step: 1 },
-  SmtpUser: { tab: 'advanced', title: 'User name' },
-  SmtpPassword: { tab: 'advanced', title: 'Password' },
-  SmtpFromEmail: { tab: 'advanced', title: 'From address' },
-  SmtpFromName: { tab: 'advanced', title: 'From name' },
+  SmtpHost: { title: 'Mail server' },
+  SmtpPort: { title: 'Port', min: 1, max: 65535, step: 1 },
+  SmtpUser: { title: 'User name' },
+  SmtpPassword: { title: 'Password' },
+  SmtpFromEmail: { title: 'From address' },
+  SmtpFromName: { title: 'From name' },
   // The one setting on this page that turns a BACKGROUND BEHAVIOUR on and off rather than naming a
   // value, so it is the one that gets a switch and a sentence: "Port" needs no explanation, "email
   // on a closed request" set to false does.
   NotifyOnRequestClosed: {
-    tab: 'advanced',
     title: 'Email on a closed request',
     switchLabel: 'settings.notifications.notifyOnRequestClosed',
   },
@@ -84,14 +108,13 @@ const KNOWN: Record<
      ever produce "Whats app api url". They arrive under the same Notifications heading, from the
      same core.SETTING rows, with no routing written here. */
   WhatsAppEnabled: {
-    tab: 'advanced',
     title: 'WhatsApp messages',
     switchLabel: 'settings.notifications.whatsAppEnabled',
   },
-  WhatsAppApiUrl: { tab: 'advanced', title: 'Cloud API URL' },
-  WhatsAppPhoneNumberId: { tab: 'advanced', title: 'Sending number id' },
-  WhatsAppAccessToken: { tab: 'advanced', title: 'Access token' },
-  WhatsAppTemplateName: { tab: 'advanced', title: 'Template name' },
+  WhatsAppApiUrl: { title: 'Cloud API URL' },
+  WhatsAppPhoneNumberId: { title: 'Sending number id' },
+  WhatsAppAccessToken: { title: 'Access token' },
+  WhatsAppTemplateName: { title: 'Template name' },
 }
 
 /**
@@ -167,9 +190,16 @@ function enumChoices(dataType: string): string[] | null {
   return values.length > 0 ? values : null
 }
 
-/** Which tab a key belongs on. Unrecognised keys land on Advanced — that is the point of it. */
-export function tabOf(key: string): SettingTab {
-  return KNOWN[key]?.tab ?? 'advanced'
+/**
+ * Which tab a setting belongs on — read from its SECTION and from nothing else.
+ *
+ * Matched case-insensitively on the trimmed value, because 'Attendance' and 'attendance' are the
+ * same section to everyone except a lookup table. A blank or unrecognised section lands in Advanced,
+ * which is the "there is always a home" rule that keeps an unlisted setting visible.
+ */
+export function tabOfSection(section: string | null | undefined): SettingTab {
+  const key = (section ?? '').trim().toLowerCase()
+  return SECTION_TABS[key] ?? 'advanced'
 }
 
 /**
