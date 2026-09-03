@@ -51,6 +51,10 @@ import PayslipPage from './pages/payroll/PayslipPage'
 import AdvancesPage from './pages/payroll/AdvancesPage'
 import AdjustmentsPage from './pages/payroll/AdjustmentsPage'
 import TiersCeilingsPage from './pages/payroll/TiersCeilingsPage'
+import BookingCalendarPage from './pages/bookings/BookingCalendarPage'
+import BookingsListPage from './pages/bookings/BookingsListPage'
+import RoomsPage from './pages/bookings/RoomsPage'
+import BookingReportPage from './pages/bookings/BookingReportPage'
 import MonthlyAttendanceReportPage from './pages/reports/MonthlyAttendanceReportPage'
 import DailyAttendanceReportPage from './pages/reports/DailyAttendanceReportPage'
 import LeaveBalanceReportPage from './pages/reports/LeaveBalanceReportPage'
@@ -232,6 +236,29 @@ export default function App() {
                     <Route
                       path="/payroll/tiers"
                       element={guard('/payroll/tiers', <TiersCeilingsPage />)}
+                    />
+
+                    {/* Bookings — the calendar is the landing page, because it is the one this
+                        area exists for and the one somebody arriving from the nav wants. */}
+                    <Route
+                      path="/bookings"
+                      element={<Navigate to="/bookings/calendar" replace />}
+                    />
+                    <Route
+                      path="/bookings/calendar"
+                      element={guard('/bookings/calendar', <BookingCalendarPage />)}
+                    />
+                    <Route
+                      path="/bookings/list"
+                      element={guard('/bookings/list', <BookingsListPage />)}
+                    />
+                    <Route
+                      path="/bookings/rooms"
+                      element={guard('/bookings/rooms', <RoomsPage />)}
+                    />
+                    <Route
+                      path="/bookings/report"
+                      element={guard('/bookings/report', <BookingReportPage />)}
                     />
 
                     <Route

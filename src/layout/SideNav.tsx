@@ -130,6 +130,20 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
+    /* Bookings. Three leaves are BOOKING_VIEW and Rooms is BOOKING_MANAGE, so a view-only user sees
+       a three-item group rather than a fourth link that would refuse them — the same per-leaf
+       filtering every other group here relies on. */
+    labelKey: 'nav.bookings.group',
+    icon: 'event',
+    basePath: '/bookings',
+    children: [
+      { to: '/bookings/calendar', labelKey: 'nav.bookings.calendar', icon: 'event' },
+      { to: '/bookings/list', labelKey: 'nav.bookings.list', icon: 'detailslayout' },
+      { to: '/bookings/rooms', labelKey: 'nav.bookings.rooms', icon: 'home' },
+      { to: '/bookings/report', labelKey: 'nav.bookings.report', icon: 'chart' },
+    ],
+  },
+  {
     labelKey: 'nav.core.group',
     icon: 'preferences',
     basePath: '/core',

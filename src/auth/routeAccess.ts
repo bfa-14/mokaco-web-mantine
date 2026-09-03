@@ -26,6 +26,12 @@
  */
 export const PERMISSION = {
   ATTENDANCE_VIEW: 'ATTENDANCE_VIEW',
+  /* ROOM BOOKING, split the same way everything else here is: a read trust and a write trust.
+     BOOKING_VIEW opens the calendar, the list, a receipt and the report; BOOKING_MANAGE takes and
+     decides bookings, collects payments, blocks rooms and edits the catalogue. The split is what
+     lets a receptionist see today without being able to cancel it. */
+  BOOKING_VIEW: 'BOOKING_VIEW',
+  BOOKING_MANAGE: 'BOOKING_MANAGE',
   /* The two attendance WRITE trusts. Neither opens a page of its own — they gate the affordances
      inside pages ATTENDANCE_VIEW already opened, which is what lets a viewer read a roster they may
      not edit instead of being turned away from it. */
@@ -173,6 +179,20 @@ export const ROUTE_ACCESS: RouteRule[] = [
   { path: '/reports/monthly-attendance', anyOf: [PERMISSION.REPORT_VIEW] },
   { path: '/reports/daily-attendance', anyOf: [PERMISSION.REPORT_VIEW] },
   { path: '/reports/leave-balance', anyOf: [PERMISSION.REPORT_VIEW] },
+
+  /* ── Bookings ─────────────────────────────────────────────────────────────────────────────────
+     The calendar, the list and the report are BOOKING_VIEW: all three read endpoints the API gates
+     on that code, and each is useful to somebody who may not change anything — a receptionist
+     answering "is Mokha free on Thursday" needs the calendar, not the right to cancel a booking.
+
+     ROOMS FOLLOWS ITS WRITES, exactly as the HR setup tables do. The page exists only to edit the
+     catalogue: gated on BOOKING_VIEW it would be a wall of cards whose every button 403s. Its GET
+     is deliberately still BOOKING_VIEW server-side, because the calendar has to draw a column per
+     room — it is the PAGE that is restricted here, not the data. */
+  { path: '/bookings/calendar', anyOf: [PERMISSION.BOOKING_VIEW] },
+  { path: '/bookings/list', anyOf: [PERMISSION.BOOKING_VIEW] },
+  { path: '/bookings/rooms', anyOf: [PERMISSION.BOOKING_MANAGE] },
+  { path: '/bookings/report', anyOf: [PERMISSION.BOOKING_VIEW] },
 
   // ── Security ──────────────────────────────────────────────────────────────────────────────────
   { path: '/security/users', anyOf: [PERMISSION.USER_MANAGE] },

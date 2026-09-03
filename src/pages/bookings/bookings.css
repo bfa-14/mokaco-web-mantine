@@ -1,0 +1,482 @@
+/* ── Bookings ──
+   The calendar, the room cards, and the printable receipt. Imported once from the calendar page
+   and once from the report page, so a screen that needs none of it pays for none of it.
+
+   THE CALENDAR IS ABSOLUTELY POSITIONED INSIDE A RELATIVE COLUMN, not a CSS grid. A booking is a
+   span of MINUTES, not a whole number of rows: 10:30–12:15 has to start and end where it actually
+   does, and a grid quantised to the hour would round it into a lie. So each column is a
+   position:relative box of a known height and every event is placed with top/height computed from
+   its minutes. The hour lines behind it are decoration. */
+
+.bk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.bk-toolbar-spacer {
+  margin-inline-start: auto;
+}
+
+/* ── the grid ── */
+
+.bk-cal {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: auto;
+}
+
+/* One gutter column of clock labels, then one equal column per room (or per day). */
+.bk-cal-head,
+.bk-cal-body {
+  display: grid;
+  /* Set inline by the page: `gridTemplateColumns: 64px repeat(n, minmax(140px, 1fr))`. */
+  min-width: max-content;
+}
+
+.bk-cal-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.bk-cal-head-cell {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  border-inline-start: 1px solid var(--border);
+  text-align: center;
+}
+
+.bk-cal-head-cell:first-child {
+  border-inline-start: 0;
+}
+
+.bk-cal-head-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+/* The clock gutter. Each label sits at the TOP of its hour, nudged up half a line so the text is
+   centred on the rule rather than hanging below it. */
+.bk-cal-gutter {
+  position: relative;
+}
+
+.bk-cal-hour-label {
+  position: absolute;
+  inset-inline-end: 8px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.bk-cal-col {
+  position: relative;
+  border-inline-start: 1px solid var(--border);
+}
+
+/* The hour rules, drawn behind the events. */
+.bk-cal-rule {
+  position: absolute;
+  inset-inline: 0;
+  border-top: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.bk-cal-rule--half {
+  border-top-style: dotted;
+  opacity: 0.6;
+}
+
+/* Outside the room's opening hours: not bookable, and visibly not part of the day. */
+.bk-cal-closed {
+  position: absolute;
+  inset-inline: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(110, 107, 98, 0.06),
+    rgba(110, 107, 98, 0.06) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  pointer-events: none;
+}
+
+/* The click target for an empty slot. One button per hour, behind the events so a booking always
+   wins the click. */
+.bk-cal-slot {
+  position: absolute;
+  inset-inline: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bk-cal-slot:hover {
+  background: var(--accent-tint);
+}
+
+.bk-cal-slot:disabled {
+  cursor: default;
+  background: transparent;
+}
+
+/* ── events ── */
+
+.bk-ev {
+  position: absolute;
+  inset-inline: 3px;
+  z-index: 1;
+  overflow: hidden;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-inline-start-width: 3px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  line-height: 1.25;
+  text-align: start;
+  cursor: pointer;
+}
+
+.bk-ev-time {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bk-ev-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Amber: waiting for somebody. The one status the calendar exists to make findable. */
+.bk-ev--pending {
+  background: #fdf3dd;
+  border-color: #e8c765;
+  border-inline-start-color: #d9a327;
+  color: #6b5310;
+}
+
+.bk-ev--confirmed {
+  background: #e3f3e6;
+  border-color: #91c79c;
+  border-inline-start-color: #3f9a55;
+  color: #1f5c30;
+}
+
+.bk-ev--completed {
+  background: #ececea;
+  border-color: #c9c7c1;
+  border-inline-start-color: #8d8a83;
+  color: #55524b;
+}
+
+/* Cancelled and NoShow share the colour and are told apart by the strike — see bookingShared. */
+.bk-ev--cancelled,
+.bk-ev--noshow {
+  background: #fbe9e6;
+  border-color: #dda79c;
+  border-inline-start-color: #b4442f;
+  color: #8a3323;
+}
+
+.bk-ev--struck .bk-ev-name,
+.bk-ev--struck .bk-ev-time {
+  text-decoration: line-through;
+}
+
+/* A staff block is DARK AND HATCHED so it reads as "not a booking" before the word is read: it has
+   no guest, no money and no status, and colouring it like a status would invite the wrong action. */
+.bk-ev--block {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0.16) 5px,
+      transparent 5px,
+      transparent 10px
+    ),
+    var(--brand-graphite);
+  border-color: var(--brand-black);
+  border-inline-start-color: var(--brand-black);
+  color: #fff;
+}
+
+.bk-ev-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ── legend ── */
+
+.bk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.bk-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bk-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+/* ── drawer ── */
+
+.bk-detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  font-size: 13px;
+}
+
+.bk-detail-label {
+  color: var(--ink-muted);
+}
+
+.bk-detail-value {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.bk-money-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+.bk-money-row--total {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 7px;
+  font-weight: 600;
+}
+
+.bk-money-row--due {
+  color: #b4442f;
+  font-weight: 600;
+}
+
+/* ── room cards ── */
+
+.bk-room-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.bk-room-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.bk-room-card--inactive {
+  opacity: 0.62;
+}
+
+.bk-room-hours {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 10px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.bk-hours-editor {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: end;
+  gap: 8px 10px;
+}
+
+/* ── report ── */
+
+.bk-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.bk-report-table th,
+.bk-report-table td {
+  border: 1px solid var(--border);
+  padding: 6px 9px;
+  text-align: start;
+}
+
+.bk-report-table th {
+  background: var(--brand-offwhite);
+  font-weight: 600;
+}
+
+.bk-report-table td.num,
+.bk-report-table th.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the printable receipt ──
+   Same technique the reports use, and for the same reason: the receipt must come off the printer as
+   a DOCUMENT, not a screenshot of a drawer with a nav bar attached. Everything is hidden, then the
+   print root alone is made visible and lifted to the top of the page. */
+
+.bk-receipt {
+  background: #fff;
+  color: #000;
+  padding: 8px 4px;
+  font-size: 13px;
+}
+
+.bk-receipt-head {
+  border-bottom: 2px solid var(--brand-graphite);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+.bk-receipt-brand {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--brand-graphite);
+}
+
+.bk-receipt-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.bk-receipt-section {
+  margin-bottom: 14px;
+}
+
+.bk-receipt-section h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+.bk-receipt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.bk-receipt-table th,
+.bk-receipt-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 5px 4px;
+  text-align: start;
+}
+
+.bk-receipt-table td.num,
+.bk-receipt-table th.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The one line the reader is looking for. Big, ruled off, and it says which of the two it is. */
+.bk-receipt-footer {
+  margin-top: 16px;
+  border-top: 2px solid var(--brand-graphite);
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.bk-receipt-footer--due {
+  color: #b4442f;
+}
+
+.bk-receipt-policy {
+  margin-top: 16px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .bk-print-root,
+  .bk-print-root * {
+    visibility: visible;
+  }
+
+  .bk-print-root {
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* Belt and braces: anything explicitly marked is gone even when it sits inside the print root —
+     the drawer's own action buttons, for instance. */
+  .bk-no-print {
+    display: none !important;
+  }
+
+  .bk-report-table thead,
+  .bk-receipt-table thead {
+    /* Repeat the column heads across the pages of a long report. */
+    display: table-header-group;
+  }
+
+  .bk-report-table th,
+  .bk-report-table td,
+  .bk-receipt-table th,
+  .bk-receipt-table td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
