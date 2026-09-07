@@ -46,6 +46,7 @@ export function NewBookingModal({
   initialRoomId,
   initialDate,
   initialStart,
+  initialEnd,
 }: {
   opened: boolean
   onClose: () => void
@@ -56,6 +57,8 @@ export function NewBookingModal({
   initialRoomId?: number | null
   initialDate?: string | null
   initialStart?: string | null
+  /** The end of a span DRAGGED on the calendar. Absent for a plain click, which proposes an hour. */
+  initialEnd?: string | null
 }) {
   const { t } = useTranslation()
 
@@ -84,7 +87,7 @@ export function NewBookingModal({
     setRoomId(room)
     setBookDate(initialDate ?? today())
     setStartTime(initialStart ?? '09:00')
-    setEndTime(initialStart ? shiftHour(initialStart) : '10:00')
+    setEndTime(initialEnd ?? (initialStart ? shiftHour(initialStart) : '10:00'))
     setPersons(catalog.rooms.find((r) => r.roomId === room)?.minPersons ?? 1)
     setGuestName('')
     setGuestPhone('')
@@ -93,7 +96,7 @@ export function NewBookingModal({
     setAddonIds([])
     setError(null)
     // Seeding on open is the point; the caller's prefill props are the deps that matter.
-  }, [opened, initialRoomId, initialDate, initialStart, catalog.rooms])
+  }, [opened, initialRoomId, initialDate, initialStart, initialEnd, catalog.rooms])
 
   const room = catalog.rooms.find((r) => r.roomId === roomId) ?? null
 

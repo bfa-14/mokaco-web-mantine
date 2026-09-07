@@ -24,42 +24,171 @@
   margin-inline-start: auto;
 }
 
-/* ── the grid ── */
+/* ── the toolbar's own controls ── */
+
+.bk-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The chevrons mean BACKWARDS and FORWARDS, not left and right, so they mirror with the page.
+   Everything else in the grid uses logical properties and needs no help; an icon glyph cannot. */
+[dir='rtl'] .bk-chevron-back,
+[dir='rtl'] .bk-chevron-forward {
+  transform: scaleX(-1);
+}
+
+.bk-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bk-quick-chip {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.bk-quick-chip:hover {
+  background: var(--brand-offwhite);
+}
+
+/* The chip that matches the range on screen. It is a READOUT as much as a button — it says which
+   of the four the current range happens to be, which is otherwise only legible from two dates. */
+.bk-quick-chip--on {
+  border-color: var(--brand-desert);
+  background: var(--accent-tint);
+  font-weight: 600;
+}
+
+/* ── the legend row, and the room switches ── */
+
+.bk-legend-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+
+.bk-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bk-room-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+/* A room switched off is still LISTED, greyed and struck. Removing it from the legend would leave
+   no way back — the chip is both the state and the switch. */
+.bk-room-chip--off {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.bk-room-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.bk-day-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+/* ── the grid ──
+   THE COLUMNS DIVIDE THE WIDTH AND NEVER EXCEED IT. `minmax(0, 1fr)` with no minimum is the whole
+   reason this grid does not scroll sideways: a floor of 150px made twenty-eight columns 4200px wide
+   and pushed the week off the screen. The 31-day cap in the page is what keeps "thinner" from
+   becoming "unreadable". */
+
+.bk-cal-wrap {
+  position: relative;
+}
 
 .bk-cal {
+  /* Height is set inline from the viewport — see the measuring effect. This is the scroll box. */
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
   overflow: auto;
 }
 
-/* One gutter column of clock labels, then one equal column per room (or per day). */
+/* No text selection while a span is being dragged out; the browser's own selection would fight it. */
+.bk-cal--dragging {
+  user-select: none;
+}
+
+/* And nothing on top of the slots takes the pointer mid-drag. A card left in the way swallows the
+   pointerenter that extends the span, so the highlight would stop dead at the first booking and
+   then jump past it — the selection has to follow the pointer, not the gaps between events. */
+.bk-cal--dragging .bk-ev {
+  pointer-events: none;
+}
+
 .bk-cal-head,
 .bk-cal-body {
   display: grid;
-  /* Set inline by the page: `gridTemplateColumns: 64px repeat(n, minmax(140px, 1fr))`. */
-  min-width: max-content;
+  /* Set inline by the page: `56px repeat(n, minmax(0, 1fr))`. */
 }
 
 .bk-cal-head {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 3;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 
 .bk-cal-head-cell {
-  padding: 8px 10px;
+  padding: 8px 6px;
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
   border-inline-start: 1px solid var(--border);
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.bk-cal-head-cell:first-child {
+/* The corner. Sticky on BOTH axes so it covers the clock gutter's labels as they scroll under the
+   heading row — without it the hours would read through the day names. */
+.bk-cal-corner {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 4;
+  background: var(--surface);
   border-inline-start: 0;
+}
+
+.bk-cal-head-cell--today {
+  background: var(--accent-tint);
 }
 
 .bk-cal-head-sub {
@@ -67,17 +196,25 @@
   font-size: 11px;
   font-weight: 400;
   color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* The clock gutter. Each label sits at the TOP of its hour, nudged up half a line so the text is
-   centred on the rule rather than hanging below it. */
+/* The clock gutter. Sticky on the LEADING edge — which `inset-inline-start` puts on the right in
+   Arabic with no JavaScript — so the hours stay readable whatever the grid does horizontally.
+   Each label sits at the top of its hour, nudged up half a line so the text is centred on the rule
+   rather than hanging below it. */
 .bk-cal-gutter {
-  position: relative;
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  background: var(--surface);
 }
 
 .bk-cal-hour-label {
   position: absolute;
-  inset-inline-end: 8px;
+  inset-inline-end: 6px;
   transform: translateY(-50%);
   font-size: 11px;
   color: var(--ink-muted);
@@ -97,9 +234,11 @@
   pointer-events: none;
 }
 
-.bk-cal-rule--half {
+/* Every BookingSlotMinutes, so the grid is ruled in the unit a room is actually sold in. Faint on
+   purpose: it is a guide for the eye and the drag, not a second set of hour lines. */
+.bk-cal-rule--slot {
   border-top-style: dotted;
-  opacity: 0.6;
+  opacity: 0.45;
 }
 
 /* Outside the room's opening hours: not bookable, and visibly not part of the day. */
@@ -116,36 +255,76 @@
   pointer-events: none;
 }
 
-/* The click target for an empty slot. One button per hour, behind the events so a booking always
-   wins the click. */
+/* The click target for an empty slot. One per BookingSlotMinutes, behind the events so a booking
+   always wins the click. */
 .bk-cal-slot {
   position: absolute;
   inset-inline: 0;
   border: 0;
   padding: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: cell;
 }
 
 .bk-cal-slot:hover {
   background: var(--accent-tint);
 }
 
-.bk-cal-slot:disabled {
-  cursor: default;
-  background: transparent;
+.bk-cal-slot:focus-visible {
+  outline: 2px solid var(--brand-desert);
+  outline-offset: -2px;
 }
 
-/* ── events ── */
+/* The span being dragged out. Above the slots so it is visible, but transparent to the pointer or
+   it would swallow the pointerenter that extends it. */
+.bk-cal-drag {
+  position: absolute;
+  inset-inline: 3px;
+  z-index: 2;
+  border: 1px dashed var(--brand-desert);
+  border-radius: 5px;
+  background: var(--accent-tint);
+  color: var(--brand-desert-strong);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 5px;
+  pointer-events: none;
+}
+
+/* Now, in today's column. Red and thin, and it does not take the pointer. */
+.bk-cal-now {
+  position: absolute;
+  inset-inline: 0;
+  z-index: 2;
+  border-top: 2px solid #d6402a;
+  pointer-events: none;
+}
+
+.bk-cal-now::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: -4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d6402a;
+}
+
+/* ── events ──
+   POSITION AND WIDTH ARE BOTH INLINE. A day column can hold four rooms busy at the same hour, so
+   every card is given a lane — a share of the column's width and an offset into it — by the layout
+   in bookingShared. That is why nothing here sets `inset-inline`: doing so would over-constrain the
+   box and one of the two edges would be dropped, differently in each direction. */
 
 .bk-ev {
   position: absolute;
-  inset-inline: 3px;
   z-index: 1;
   overflow: hidden;
-  padding: 3px 6px;
+  padding: 3px 5px;
+  /* Room for the room stripe, on whichever side the page starts. */
+  padding-inline-start: 9px;
   border: 1px solid transparent;
-  border-inline-start-width: 3px;
   border-radius: 5px;
   font-size: 11.5px;
   line-height: 1.25;
@@ -153,9 +332,32 @@
   cursor: pointer;
 }
 
+/* The room's colour, as a stripe down the leading edge. It is a SECOND channel beside the status
+   colour, not a replacement for it: the card says what the booking IS by its fill, and which room
+   it is in by this. In the resource view the column heading already says the room, and the stripe
+   simply agrees with it. */
+.bk-ev-stripe {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
 .bk-ev-time {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* The room's short code, on a day column where the stripe alone would need the legend to decode. */
+.bk-ev-room {
+  font-weight: 700;
+  opacity: 0.75;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bk-ev-name {
@@ -169,30 +371,35 @@
 .bk-ev--pending {
   background: #fdf3dd;
   border-color: #e8c765;
-  border-inline-start-color: #d9a327;
   color: #6b5310;
 }
 
 .bk-ev--confirmed {
   background: #e3f3e6;
   border-color: #91c79c;
-  border-inline-start-color: #3f9a55;
   color: #1f5c30;
 }
 
+/* Blue-grey, not the plain grey it used to be. Completed is DONE, not cancelled and not inert, and
+   a neutral grey put it in the same family as the hatching behind it. */
 .bk-ev--completed {
-  background: #ececea;
-  border-color: #c9c7c1;
-  border-inline-start-color: #8d8a83;
-  color: #55524b;
+  background: #e7ecf2;
+  border-color: #a8b7c6;
+  color: #3f4d5c;
 }
 
-/* Cancelled and NoShow share the colour and are told apart by the strike — see bookingShared. */
-.bk-ev--cancelled,
-.bk-ev--noshow {
+.bk-ev--cancelled {
   background: #fbe9e6;
   border-color: #dda79c;
-  border-inline-start-color: #b4442f;
+  color: #8a3323;
+}
+
+/* NoShow is an OUTLINE, not a fill — the guest never came, so the room was empty, and a solid card
+   claims a room that was standing free. It is also what tells NoShow from Cancelled at a glance,
+   which two shades of red never did. */
+.bk-ev--noshow {
+  background: var(--surface);
+  border: 1px dashed #b4442f;
   color: #8a3323;
 }
 
@@ -201,27 +408,30 @@
   text-decoration: line-through;
 }
 
-/* A staff block is DARK AND HATCHED so it reads as "not a booking" before the word is read: it has
-   no guest, no money and no status, and colouring it like a status would invite the wrong action. */
+/* A staff block is GREY AND STRIPED so it reads as "not a booking" before the word is read: it has
+   no guest, no money and no status, and colouring it like a status would invite the wrong action.
+   It carries its reason, because "why is this room held" is the only question it can answer. */
 .bk-ev--block {
   background:
     repeating-linear-gradient(
       45deg,
-      rgba(255, 255, 255, 0.16),
-      rgba(255, 255, 255, 0.16) 5px,
+      rgba(110, 107, 98, 0.18),
+      rgba(110, 107, 98, 0.18) 5px,
       transparent 5px,
       transparent 10px
     ),
-    var(--brand-graphite);
-  border-color: var(--brand-black);
-  border-inline-start-color: var(--brand-black);
-  color: #fff;
+    #dedcd7;
+  border-color: #b6b3aa;
+  color: #4a473f;
 }
 
 .bk-ev-badge {
-  display: inline-block;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -232,7 +442,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px 16px;
-  margin-top: 10px;
   font-size: 12px;
   color: var(--ink-muted);
 }
@@ -244,10 +453,23 @@
 }
 
 .bk-legend-swatch {
+  position: relative;
   width: 12px;
   height: 12px;
   border-radius: 3px;
   border: 1px solid var(--border);
+  flex: none;
+}
+
+/* The hatching, at the size a 12px swatch can actually show. */
+.bk-legend-swatch--closed {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(110, 107, 98, 0.35),
+    rgba(110, 107, 98, 0.35) 2px,
+    transparent 2px,
+    transparent 4px
+  );
 }
 
 /* ── drawer ── */

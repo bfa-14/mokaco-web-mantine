@@ -112,3 +112,19 @@ export interface SystemResetSummaryRow {
   kept?: string
   rows: number
 }
+
+/**
+ * The two booking keys the CALENDAR reads, and the only reason it touches settings at all.
+ *
+ * BookingSlotMinutes is the step a room is sold in — the faint rules between the hour lines, and
+ * the granularity a drag over empty time snaps to. BookingMinHours is the shortest booking the
+ * server will take, and therefore how long the slot a single click proposes should be; a room's own
+ * `minHours` overrides it where the room sets one.
+ *
+ * READ BEST-EFFORT. /api/settings is SETTING_MANAGE and the people who live on the calendar do not
+ * have it, so the fetch is expected to 403 for most of them and the defaults in bookingShared stand.
+ * That is why neither value is allowed to decide anything a booking depends on: they shape the grid
+ * and seed a form, and the server still owns every rule.
+ */
+export const BOOKING_SLOT_MINUTES_KEY = 'BookingSlotMinutes'
+export const BOOKING_MIN_HOURS_KEY = 'BookingMinHours'

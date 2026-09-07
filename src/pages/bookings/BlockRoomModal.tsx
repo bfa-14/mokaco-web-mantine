@@ -28,6 +28,7 @@ export function BlockRoomModal({
   initialRoomId,
   initialDate,
   initialStart,
+  initialEnd,
 }: {
   opened: boolean
   onClose: () => void
@@ -36,6 +37,8 @@ export function BlockRoomModal({
   initialRoomId?: number | null
   initialDate?: string | null
   initialStart?: string | null
+  /** The end of a span dragged on the calendar. Absent for a plain click, which proposes an hour. */
+  initialEnd?: string | null
 }) {
   const { t } = useTranslation()
 
@@ -53,10 +56,10 @@ export function BlockRoomModal({
     setRoomId(initialRoomId ?? catalog.rooms.find((r) => r.isActive)?.roomId ?? null)
     setBlockDate(initialDate ?? today())
     setStartTime(initialStart ?? '09:00')
-    setEndTime(initialStart ? plusHour(initialStart) : '10:00')
+    setEndTime(initialEnd ?? (initialStart ? plusHour(initialStart) : '10:00'))
     setReason('')
     setError(null)
-  }, [opened, initialRoomId, initialDate, initialStart, catalog.rooms])
+  }, [opened, initialRoomId, initialDate, initialStart, initialEnd, catalog.rooms])
 
   const missing =
     roomId == null || !blockDate || minutesOf(endTime) <= minutesOf(startTime)

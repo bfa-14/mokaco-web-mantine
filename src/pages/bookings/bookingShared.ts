@@ -240,3 +240,154 @@ export function hoursLabel(value: number | null | undefined): string {
   if (value == null) return t('common.dash')
   return `${Number(value)}`
 }
+
+/* ── the range the calendar draws ────────────────────────────────────────────────────────────── */
+
+/**
+ * The most days the grid will draw.
+ *
+ * ONE COLUMN PER DAY is what stops the calendar scrolling sideways, and it is also what puts a
+ * ceiling on it: past a month those columns are too thin to hold a guest's name, and the range
+ * fetch stops being a screenful and starts being a report. So the grid refuses beyond this and
+ * points at the list, which is the screen built for long periods.
+ */
+export const MAX_GRID_DAYS = 31
+
+/**
+ * Inclusive day count between two ISO days. 'from' === 'to' is one day, not zero.
+ *
+ * SUBTRACTED AT UTC MIDNIGHT, never from two local Dates — the same trap `inclusiveDays` documents
+ * on the leave form. A week that crosses a spring-forward boundary is 6 days and 23 hours apart in
+ * local time, which floors to six: the calendar would draw a Monday-to-Sunday week with the Sunday
+ * missing, and only in the fortnight after the clocks change.
+ */
+export function dayCount(from: string, to: string): number {
+  const start = Date.parse(`${from.slice(0, 10)}T00:00:00Z`)
+  const end = Date.parse(`${to.slice(0, 10)}T00:00:00Z`)
+  if (Number.isNaN(start) || Number.isNaN(end)) return 1
+  return Math.round((end - start) / 86_400_000) + 1
+}
+
+/** Every ISO day from `from` to `to`, inclusive. */
+export function eachDay(from: string, to: string): string[] {
+  const count = Math.max(1, dayCount(from, to))
+  return Array.from({ length: count }, (_, i) => addDays(from, i))
+}
+
+/** The FIRST of the month containing this day. */
+export function startOfMonth(value: string): string {
+  return `${value.slice(0, 7)}-01`
+}
+
+/** The LAST day of the month containing this day — day 0 of the next month, which JS resolves. */
+export function endOfMonth(value: string): string {
+  const date = fromIso(value)
+  return isoDate(new Date(date.getFullYear(), date.getMonth() + 1, 0))
+}
+
+/** Minutes since local midnight, right now. What the calendar's red line is drawn from. */
+export function nowMinutes(): number {
+  const now = new Date()
+  return now.getHours() * 60 + now.getMinutes()
+}
+
+/* ── the slot grid ───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The bookable step, in minutes, when core.SETTING BookingSlotMinutes is unreadable.
+ *
+ * READABLE ONLY BY SETTING_MANAGE, and the people who live on this calendar deliberately do not
+ * have it — so the calendar does not even ask unless they do, and this is what stands otherwise.
+ * Half an hour is the step the rooms are actually sold in, so the fallback is the common case
+ * rather than a placeholder.
+ */
+export const DEFAULT_SLOT_MINUTES = 30
+
+/** Fallback for core.SETTING BookingMinHours, on the same terms. A room's own minHours wins over both. */
+export const DEFAULT_MIN_HOURS = 1
+
+/* ── room colours ────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The Mantine palettes a room's colour is drawn from, assigned BY POSITION IN SortOrder.
+ *
+ * NOT CONFIGURABLE, and not derived from the room's name or id either. SortOrder is the one
+ * property that already decides the order rooms appear in everywhere else, so colouring by it means
+ * the colour a room wears is the same on every screen and every session — and adding a room at the
+ * end never repaints the ones above it. Hashing an id would survive reordering but would hand two
+ * rooms adjacent hues at random, which is the one thing a legend cannot survive.
+ *
+ * The desert primary is absent on purpose: it is the app's accent, and a room wearing it would read
+ * as "selected" beside the buttons.
+ */
+export const ROOM_PALETTE = [
+  'indigo',
+  'teal',
+  'grape',
+  'orange',
+  'cyan',
+  'pink',
+  'lime',
+  'violet',
+] as const
+
+/** The palette name for the Nth room in SortOrder. Wraps, so a ninth room repeats the first. */
+export function roomPalette(index: number): string {
+  return ROOM_PALETTE[((index % ROOM_PALETTE.length) + ROOM_PALETTE.length) % ROOM_PALETTE.length]
+}
+
+/* ── overlapping events ──────────────────────────────────────────────────────────────────────── */
+
+/** What a lane layout hands back: which of how many side-by-side lanes an event occupies. */
+export interface Lane {
+  lane: number
+  lanes: number
+}
+
+/**
+ * Side-by-side placement for events that share minutes in one column.
+ *
+ * NEEDED NOW IN A WAY IT WAS NOT BEFORE. When a column was one room's day, two events overlapping
+ * meant a double booking; now a column can be a whole DAY across four rooms, and four rooms busy at
+ * 10:00 is the ordinary case. Stacked cards would hide three of them completely.
+ *
+ * The algorithm is the usual one: walk the events in start order, close off a CLUSTER whenever the
+ * clock passes every event in it, and give every event in a cluster the same lane count so the
+ * cards line up as a block rather than each choosing its own width.
+ */
+export function laneLayout(events: { start: number; end: number }[]): Lane[] {
+  const order = events
+    .map((event, index) => ({ ...event, index }))
+    .sort((a, b) => a.start - b.start || a.end - b.end || a.index - b.index)
+
+  const result: Lane[] = events.map(() => ({ lane: 0, lanes: 1 }))
+
+  /** The events of the cluster being built, and the end minute each open lane reaches to. */
+  let cluster: number[] = []
+  let laneEnds: number[] = []
+
+  function closeCluster() {
+    for (const index of cluster) result[index].lanes = laneEnds.length || 1
+    cluster = []
+    laneEnds = []
+  }
+
+  for (const event of order) {
+    // Nothing in the cluster still runs at this event's start, so it belongs to a fresh one.
+    if (laneEnds.length > 0 && laneEnds.every((end) => end <= event.start)) closeCluster()
+
+    let lane = laneEnds.findIndex((end) => end <= event.start)
+    if (lane === -1) {
+      lane = laneEnds.length
+      laneEnds.push(event.end)
+    } else {
+      laneEnds[lane] = event.end
+    }
+
+    result[event.index].lane = lane
+    cluster.push(event.index)
+  }
+
+  closeCluster()
+  return result
+}
