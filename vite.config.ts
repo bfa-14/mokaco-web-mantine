@@ -10,7 +10,7 @@ export default defineConfig({
     // backend's self-signed HTTPS certificate (secure: false).
     proxy: {
       '/api': {
-        target: 'https://localhost:44332',
+        target: 'http://localhost:5078',
         changeOrigin: true,
         secure: false,
       },
