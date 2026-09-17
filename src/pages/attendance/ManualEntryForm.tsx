@@ -12,7 +12,7 @@ import { getErrorMessage } from '../../api/errorMessage'
 import type { AttendanceRecord } from '../../types/attendance'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import { branchOptions } from '../../hr/assignableOptions'
-import { formatDate, formatMinutes } from './attendanceFormat'
+import { formatDate, formatDayFraction, formatMinutes } from './attendanceFormat'
 
 /** Present / Absent / Leave / RestDay — the four states a day can be told to be. */
 const STATUS_OPTIONS = [
@@ -63,7 +63,7 @@ function ComputedResult({ record }: { record: AttendanceRecord }) {
           <div className="result-tile-label">Worked</div>
         </div>
         <div className="result-tile">
-          <div className="result-tile-value">{record.dayFraction.toFixed(2)}</div>
+          <div className="result-tile-value">{formatDayFraction(record.dayFraction)}</div>
           <div className="result-tile-label">Of a day</div>
         </div>
         <div className="result-tile">

@@ -76,6 +76,16 @@ const KNOWN: Record<
     step: 0.5,
   },
   ExitLeaveBasis: { title: 'Exit leave basis' },
+  /* THE TOLERANCE. A punch this many minutes or more past the shift start (or before its end) is
+     an anomaly for HR to decide; inside it, nothing is flagged. A shift's own Grace overrides it
+     when set. The row itself comes from core.SETTING (Section = Attendance, DataType = int); this
+     entry only supplies the title and stops a typo like 600 from flagging nobody ever. */
+  AttendanceToleranceMinutes: {
+    title: 'Attendance tolerance (minutes)',
+    min: 0,
+    max: 240,
+    step: 1,
+  },
   FullDayThreshold: {
     title: 'Full day threshold',
     min: 0,
@@ -246,6 +256,15 @@ export function describeValue(
     const mins = Math.round((numeric - hours) * 60)
     const label = mins === 0 ? `${hours}h` : `${hours}h ${mins}m`
     return `A ${label} day. A 2-hour exit permission costs ${(2 / numeric).toFixed(2)} of a leave day.`
+  }
+
+  if (key === 'AttendanceToleranceMinutes') {
+    const n = Math.round(numeric)
+    if (n <= 0) return 'Zero: every minute past the shift start or before its end becomes an anomaly for HR to decide.'
+    // Worked on a 07:00–15:00 example so the number is seen as a clock time, not an abstraction.
+    const clock = (minutesOfDay: number) =>
+      `${String(Math.floor(minutesOfDay / 60)).padStart(2, '0')}:${String(minutesOfDay % 60).padStart(2, '0')}`
+    return `On a 07:00–15:00 shift: punching in at ${clock(7 * 60 + n)} or later, or out at ${clock(15 * 60 - n)} or earlier, becomes an anomaly for HR to decide. A shift with its own Grace uses that instead.`
   }
 
   if (key === 'FullDayThreshold') {

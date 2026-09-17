@@ -34,6 +34,15 @@ export function formatMinutes(minutes: number | null | undefined): string {
   return sign + t('common.hoursMinutes', { hours, minutes: mins })
 }
 
+/**
+ * A day fraction as the 2dp figure every screen prints, or the dash for a row that has none.
+ * null is a RestDay / Leave / Holiday row — there is no standard day to divide by, and "0.00"
+ * there would read as "earned nothing", which is a different (and wrong) statement.
+ */
+export function formatDayFraction(value: number | null | undefined): string {
+  return value == null ? t('common.dash') : value.toFixed(2)
+}
+
 /** An API timestamp as a clock time: '2026-06-03T08:05:00' → '08:05'. */
 export function formatTime(value: string | null | undefined): string {
   if (!value) return t('common.dash')

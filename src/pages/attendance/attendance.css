@@ -937,3 +937,41 @@ a.pipeline-stat:hover {
   color: #cfcbc3;
   margin: 0 4px;
 }
+
+/* ── Anomalies: the three types, told apart at a glance. A late arrival and an early departure are
+   both "minutes to decide" (amber); a missing punch is a hole in the day (red) that only a corrected
+   time can fill. */
+.badge--late,
+.badge--early {
+  color: #8a5a00;
+  background: #fbebc7;
+}
+
+.badge--missing {
+  color: #b91c1c;
+  background: #f6e0da;
+}
+
+/* The punch next to the shift it is measured against: "07:10" bold, "shift 07:00" quiet. */
+.punch-vs-shift {
+  white-space: nowrap;
+}
+
+.punch-vs-shift .punch-vs-shift-flagged {
+  font-weight: 600;
+}
+
+.punch-vs-shift .punch-vs-shift-shift {
+  color: #6f6b62;
+  font-size: 12px;
+  margin-inline-start: 6px;
+}
+
+/* Who decided and when, under the decision badge. */
+.decision-meta {
+  display: block;
+  color: #6f6b62;
+  font-size: 12px;
+  margin-top: 2px;
+  white-space: nowrap;
+}

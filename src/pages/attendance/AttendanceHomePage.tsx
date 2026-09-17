@@ -46,7 +46,7 @@ function recentPeriods(): string[] {
 }
 
 /**
- * The six counters, in the order they occur in the pipeline: a punch has to be ingested,
+ * The seven counters, in the order they occur in the pipeline: a punch has to be ingested,
  * attributed to a person, read confidently and settled before payroll can trust the day.
  */
 function blockersOf(readiness: PayrollReadiness): Blocker[] {
@@ -97,6 +97,12 @@ function blockersOf(readiness: PayrollReadiness): Blocker[] {
       key: 'undecidedExitVariances',
       count: readiness.undecidedExitVariances,
       to: `/attendance/exit-variances${range}`,
+    },
+    {
+      key: 'undecidedAnomalies',
+      count: readiness.undecidedAnomalies,
+      // Straight onto the worklist: this month, undecided rows only.
+      to: `/attendance/anomalies${range}&decision=undecided`,
     },
   ].map((b) => ({ ...b, label: label(b.key), hint: hint(b.key) }))
 }

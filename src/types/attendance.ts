@@ -248,8 +248,8 @@ export interface Shift {
   name: string
   startTime: string
   endTime: string
-  /** Arriving within this many minutes of the start is not late at all. */
-  graceMinutes: number
+  /** Arriving within this many minutes of the start is not late at all. null = use the AttendanceToleranceMinutes setting. */
+  graceMinutes: number | null
   /** An overnight shift (22:00–06:00) belongs to the day it STARTS on. */
   crossesMidnight: boolean
   /** Unpaid break, charged once: from the mid-day gap if there was one, otherwise off gross. */
@@ -284,7 +284,8 @@ export interface ShiftCreateRequest {
   name: string
   startTime: string
   endTime: string
-  graceMinutes: number
+  /** null = use the AttendanceToleranceMinutes setting. */
+  graceMinutes: number | null
   crossesMidnight: boolean
   breakMinutes: number
 }
@@ -458,8 +459,11 @@ export interface AttendanceRecord {
   workedMinutes: number
   /** What a full day means for THIS person on THIS date: the rostered shift minus its break. */
   standardMinutes: number
-  /** worked / standard, capped at 1.00. Payroll sums these, so leaving 2h early counts 0.75 of a day. */
-  dayFraction: number
+  /**
+   * worked / standard, capped at 1.00. Payroll sums these, so leaving 2h early counts 0.75 of a day.
+   * null on a RestDay / Leave / Holiday row — there is no standard to divide by, so render "—".
+   */
+  dayFraction: number | null
   isFullDay: boolean
   shortfallMinutes: number
   /** Minutes past (shift start + grace). Zero with no rostered shift — you cannot be late for a shift nobody assigned. */
@@ -584,7 +588,115 @@ export interface HrAdjustDayRequest {
   hrNote: string
 }
 
+/* ── Anomalies (tolerance-based late / early / missing punch, decided by HR) ── */
+
+/** LateArrival | EarlyDeparture | MissingPunch. */
+export type AnomalyType = 'LateArrival' | 'EarlyDeparture' | 'MissingPunch'
+
+/** null = undecided (the minutes are covered in pay meanwhile) | Excused | Deducted | Corrected. */
+export type AnomalyDecision = 'Excused' | 'Deducted' | 'Corrected'
+
+/**
+ * One row of attendance.ATTENDANCE_ANOMALY joined to its day — GET /api/attendance/anomalies.
+ *
+ * A late arrival or early departure at or beyond the tolerance (the shift's grace, else the
+ * AttendanceToleranceMinutes setting), or a missing punch, for HR to decide. The first block is
+ * the day as the anomalies list has always shown it; the rest is the anomaly itself. A DAY CAN
+ * CARRY SEVERAL ROWS (one per type), so the row key is `anomalyId`, never the attendance id.
+ */
+export interface AttendanceAnomaly {
+  attendanceId: number
+  employeeId: number
+  fullName: string
+  workDate: string
+  firstInUtc: string | null
+  lastOutUtc: string | null
+  punchPairs: number
+  status: string
+  source: string
+
+  anomalyId: number
+  type: AnomalyType
+  /** The late or early minutes, measured from the shift; zero for a missing punch. */
+  minutes: number
+  shiftStart: string | null
+  shiftEnd: string | null
+  punchIn: string | null
+  punchOut: string | null
+
+  decision: AnomalyDecision | null
+  decidedByUserId: number | null
+  /** The decider's name; null for an automatic decision (an exit permission covering the early departure). */
+  decidedBy: string | null
+  decidedAt: string | null
+  note: string | null
+
+  dayFraction: number | null
+  workedMinutes: number
+  coveredMinutes: number
+  standardMinutes: number
+  isManual: boolean
+  hasAnomaly: boolean
+  branchId: number | null
+  branchName: string | null
+}
+
+/** POST /api/attendance/anomalies/{id}/decide. */
+export interface AnomalyDecisionRequest {
+  /** Excuse | Deduct | Correct. */
+  decision: 'Excuse' | 'Deduct' | 'Correct'
+  /** Required for Correct: the In of a late arrival, the Out of an early departure, the missing side of a missing punch. */
+  correctedTime?: string | null
+  note?: string | null
+}
+
+/** What the decide endpoint returns: the decided row and the day as re-derived with the decision. */
+export interface AnomalyDecisionResult {
+  anomalyId: number
+  attendanceId: number
+  employeeId: number
+  workDate: string
+  type: AnomalyType
+  minutes: number
+  decision: AnomalyDecision | null
+  decidedByUserId: number | null
+  decidedAt: string | null
+  note: string | null
+  firstInUtc: string | null
+  lastOutUtc: string | null
+  workedMinutes: number
+  coveredMinutes: number
+  standardMinutes: number
+  dayFraction: number | null
+  isFullDay: boolean
+  lateMinutes: number
+  lateDeductMinutes: number
+  earlyExitMinutes: number
+  earlyDeductMinutes: number
+  isManual: boolean
+  hasAnomaly: boolean
+  status: string
+}
+
+/** POST /api/attendance/anomalies/decide-all — every undecided late arrival / early departure of a month. */
+export interface AnomalyDecideAllRequest {
+  /** 'yyyy-MM'. */
+  month: string
+  branchId?: number | null
+  /** Excuse | Deduct — a correction needs a time per anomaly, so it is not offered in bulk. */
+  decision: 'Excuse' | 'Deduct'
+  note?: string | null
+}
+
+export interface AnomalyDecideAllResult {
+  decided: number
+  /** Missing-punch anomalies left alone: each needs its own corrected time. */
+  skipped: number
+  daysRecomputed: number
+}
+
 /* ── Corrections ── */
+
 
 /**
  * attendance.ATTENDANCE_CORRECTION. A LOGGED change, not an edit: old and new values,
@@ -718,7 +830,12 @@ export interface PayrollReadiness {
   rosteredDaysWithNoRecord: number
   /** HR has not said whether the extra time is unpaid, offset, or ignored. */
   undecidedExitVariances: number
-  /** True only when all six are zero. */
+  /**
+   * Late arrivals, early departures and missing punches HR has not excused, deducted or corrected.
+   * Until each is decided, payroll does not know what the day is worth.
+   */
+  undecidedAnomalies: number
+  /** True only when every counter is zero. */
   isReady: boolean
 }
 

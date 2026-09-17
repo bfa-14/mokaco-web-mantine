@@ -162,7 +162,7 @@ export interface PaymentSheetRow {
 /**
  * The attendance gate — GET /api/payroll/readiness?period=2026-08.
  *
- * Six counts and a verdict. `isReady` is true only when every count is zero, and the create
+ * Seven counts and a verdict. `isReady` is true only when every count is zero, and the create
  * procedure runs this same check itself: the panel exists to make the refusal UNDERSTANDABLE before
  * anyone hits it, not to replace it. Never enable Create on a client-side re-derivation.
  */
@@ -176,6 +176,8 @@ export interface AttendanceReadiness {
   pendingCorrections: number
   rosteredDaysWithNoRecord: number
   undecidedExitVariances: number
+  /** Late / early / missing-punch anomalies HR has not excused, deducted or corrected. */
+  undecidedAnomalies: number
   isReady: boolean
 }
 

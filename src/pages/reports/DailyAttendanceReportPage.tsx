@@ -239,7 +239,7 @@ export default function DailyAttendanceReportPage() {
                         <td className="num">{r.workedHours.toFixed(2)}</td>
                         <td className="num">{reportMinutes(r.overtimeMinutes)}</td>
                         <td className="num">{reportMinutes(r.exitActualMinutes)}</td>
-                        <td className="num">{r.dayFraction.toFixed(2)}</td>
+                        <td className="num">{r.dayFraction == null ? '—' : r.dayFraction.toFixed(2)}</td>
                         <td>{r.status === 'RestDay' ? 'Rest day' : r.status}</td>
                         <td>{r.source}</td>
                       </tr>

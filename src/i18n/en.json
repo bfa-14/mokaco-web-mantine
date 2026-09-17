@@ -750,11 +750,120 @@
       "unpaired": "Punches at {{in}} and {{out}} could not be paired into a worked interval.",
       "leftOver": "The ins and outs do not match up — {{count}} complete interval(s) were found, but some punches were left over."
     },
+    "anomalies": {
+      "title": "Anomalies",
+      "subtitle": "Late arrivals, early departures and missing punches, for HR to decide.",
+      "help": "A punch at or beyond the tolerance (the shift's grace, else the Attendance tolerance setting) is not an error — it is a question for HR. Until it is decided the minutes stay covered in pay, and payroll will not run for the month while any are undecided. Excuse keeps the minutes paid, Deduct takes them off the day, Correct time enters the punch as it should have been.",
+      "blockNote": "Undecided anomalies <strong>block payroll</strong> — the month cannot be paid while any are left. A decision applies immediately; a corrected time goes on the day as a manual entry.",
+      "type": {
+        "LateArrival": "Late arrival",
+        "EarlyDeparture": "Early departure",
+        "MissingPunch": "Missing punch"
+      },
+      "decision": {
+        "Undecided": "Undecided",
+        "Excused": "Excused",
+        "Deducted": "Deducted",
+        "Corrected": "Corrected"
+      },
+      "automatic": "automatic",
+      "decidedLine": "{{who}} · {{when}}",
+      "filters": {
+        "month": "Month",
+        "type": "Type",
+        "decision": "Decision",
+        "branch": "Branch",
+        "allTypes": "All types",
+        "allBranches": "All branches",
+        "allDecisions": "All (decided and undecided)",
+        "undecidedOnly": "Undecided only"
+      },
+      "columns": {
+        "employee": "Employee",
+        "date": "Date",
+        "type": "Type",
+        "minutes": "Minutes",
+        "in": "In",
+        "out": "Out",
+        "branch": "Branch",
+        "decision": "Decision",
+        "actions": "Actions"
+      },
+      "shiftAt": "shift {{time}}",
+      "noShift": "no shift",
+      "actions": {
+        "excuse": "Excuse",
+        "deduct": "Deduct",
+        "correctTime": "Correct time",
+        "final": "Final — the punch was corrected",
+        "missingOnlyCorrect": "A missing punch can only be corrected",
+        "needsPermission": "Needs the ‘correct attendance’ permission"
+      },
+      "toolbar": {
+        "decideAllExcuse": "Decide all → Excuse",
+        "decideAllDeduct": "Decide all → Deduct",
+        "nothingToDecide": "No undecided late arrivals or early departures in what is shown"
+      },
+      "bulk": {
+        "titleExcuse": "Excuse every undecided anomaly shown",
+        "titleDeduct": "Deduct every undecided anomaly shown",
+        "scope": "{{month}}{{branch}} — {{count}} undecided late arrival(s) / early departure(s) shown.",
+        "branchScope": ", {{branch}}",
+        "skipped_one": "{{count}} missing punch is skipped — it needs its own corrected time.",
+        "skipped_other": "{{count}} missing punches are skipped — each needs its own corrected time.",
+        "excuseEffect": "Every one keeps its minutes covered: the day is paid in full.",
+        "deductEffect": "Every one loses its minutes: they come off the day, and the day fraction drops.",
+        "note": "Note (optional)",
+        "notePlaceholder": "One note stored on every decision, e.g. ‘Month-end ruling, agreed with operations.’",
+        "confirmExcuse": "Excuse {{count}}",
+        "confirmDeduct": "Deduct {{count}}",
+        "done": "{{decided}} decided{{skipped}}.",
+        "doneSkipped": ", {{count}} missing punch(es) skipped",
+        "partial": "{{decided}} decided, {{failed}} failed: {{error}}"
+      },
+      "dialog": {
+        "titleExcuse": "Excuse — {{name}}, {{date}}",
+        "titleDeduct": "Deduct — {{name}}, {{date}}",
+        "titleCorrect": "Correct time — {{name}}, {{date}}",
+        "excuseEffect": "The {{minutes}} stay covered. The day is paid in full and stops blocking payroll.",
+        "deductEffect": "The {{minutes}} come off the day. The day fraction drops accordingly and the day stops blocking payroll.",
+        "correctEffectIn": "Enter the time they actually arrived. It is stored as the In punch through the manual path (the original punch is kept), the day is re-derived, and this anomaly is closed for good.",
+        "correctEffectOut": "Enter the time they actually left. It is stored as the Out punch through the manual path (the original punch is kept), the day is re-derived, and this anomaly is closed for good.",
+        "onRecord": "On record now",
+        "shiftStart": "Shift start",
+        "shiftEnd": "Shift end",
+        "punchIn": "Punched in",
+        "punchOut": "Punched out",
+        "correctedIn": "Actual arrival",
+        "correctedOut": "Actual departure",
+        "correctedTimeRequired": "The corrected time is required.",
+        "correctedTimeHint": "Must fall on the work date. Overnight shifts may end the next morning.",
+        "note": "Note (optional)",
+        "notePlaceholder": "Why you decided it this way. Somebody will ask.",
+        "reDecide": "Changing an earlier ruling of {{decision}}. A corrected time cannot be changed afterwards.",
+        "confirmExcuse": "Excuse",
+        "confirmDeduct": "Deduct",
+        "confirmCorrect": "Save corrected time"
+      },
+      "saved": {
+        "Excused": "{{name}}, {{date}}: excused — {{minutes}} stay covered.",
+        "Deducted": "{{name}}, {{date}}: deducted — {{minutes}} come off the day.",
+        "Corrected": "{{name}}, {{date}}: time corrected. The day now shows {{worked}} worked."
+      },
+      "empty": {
+        "undecidedTitle": "Nothing to decide for {{month}}.",
+        "undecidedText": "Every late arrival, early departure and missing punch in this month{{branch}} has been decided, so nothing here is blocking payroll. Switch the decision filter to ‘All’ to see the rulings already made.",
+        "allTitle": "No anomalies for {{month}}.",
+        "allText": "No punch in this month{{branch}} fell outside the tolerance and none is missing. If you expected one, check the month above — a day is only listed once its punches have been processed.",
+        "forBranch": " for {{branch}}",
+        "noMatch": "Nothing matches the search."
+      }
+    },
     "home": {
       "title": "Attendance",
       "subtitle": "Whether this month is safe to hand to payroll, and what is still open if it is not.",
       "periodHint": "Which payroll month to check",
-      "help": "Payroll reads attendance. If attendance is incomplete, pay is wrong. This page lists everything still open for the month. Clear all six and the month is safe to pay.",
+      "help": "Payroll reads attendance. If attendance is incomplete, pay is wrong. This page lists everything still open for the month. Clear every one and the month is safe to pay.",
       "ready": "{{period}} is ready to pay",
       "notReady_one": "{{period}} is NOT ready — {{count}} thing to fix",
       "notReady_other": "{{period}} is NOT ready — {{count}} things to fix",
@@ -777,7 +886,9 @@
         "rosteredDaysWithNoRecord": "Rostered days with no record",
         "rosteredDaysWithNoRecordHint": "Rostered days that produced no record at all — nothing to pay or deduct against.",
         "undecidedExitVariances": "Undecided exit variances",
-        "undecidedExitVariancesHint": "Nobody has said whether the extra time is unpaid, offset, or ignored."
+        "undecidedExitVariancesHint": "Nobody has said whether the extra time is unpaid, offset, or ignored.",
+        "undecidedAnomalies": "Undecided anomalies",
+        "undecidedAnomaliesHint": "Late arrivals, early departures and missing punches nobody has excused, deducted or corrected. Until then payroll does not know what the day is worth."
       },
       "grid": {
         "employee": "Employee",

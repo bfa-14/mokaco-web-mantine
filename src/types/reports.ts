@@ -65,7 +65,8 @@ export interface DailyAttendanceRow {
   workedHours: number
   overtimeMinutes: number
   exitActualMinutes: number
-  dayFraction: number
+  /** null on a RestDay / Leave / Holiday row — nothing to divide by. */
+  dayFraction: number | null
   status: string
   /** The punches did not add up — this row's hours are not yet trustworthy. */
   hasAnomaly: boolean

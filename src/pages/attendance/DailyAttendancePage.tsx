@@ -38,6 +38,7 @@ import {
   currentPeriod,
   describeAnomaly,
   formatDate,
+  formatDayFraction,
   formatDayLabel,
   formatMinutes,
   formatTime,
@@ -202,7 +203,7 @@ function DayTimeline({ detail }: { detail: AttendanceDetail }) {
           className="metric"
           title="Worked divided by the standard day for this person on this date, capped at 1."
         >
-          {detail.dayFraction.toFixed(2)} of a day
+          {formatDayFraction(detail.dayFraction)} of a day
         </span>
       </div>
     </div>
@@ -259,7 +260,7 @@ function DayNumbers({ detail }: { detail: AttendanceDetail }) {
       />
       <Metric
         label="Day fraction"
-        value={detail.dayFraction.toFixed(2)}
+        value={formatDayFraction(detail.dayFraction)}
         rule="Worked divided by standard, capped at 1.00. Payroll sums these, so somebody who left two hours early counts 0.75 of a day, not 1."
       />
       <Metric
@@ -572,7 +573,7 @@ function AdjustDayForm({
           max={1}
           step={0.05}
           disabled={saving}
-          placeholder={`Currently ${detail.dayFraction.toFixed(2)}`}
+          placeholder={`Currently ${formatDayFraction(detail.dayFraction)}`}
           onChange={(v) => setDayFraction(typeof v === 'number' ? v : null)}
         />
       </div>
@@ -1541,7 +1542,7 @@ export default function DailyAttendancePage() {
           <DayFractionBar value={info.row.original.dayFraction} />
         ),
         // The bar prints the same 2dp figure beside itself; that figure is what the filter takes.
-        meta: { filterText: (v) => v.toFixed(2) },
+        meta: { filterText: formatDayFraction },
       }),
 
       columnHelper.accessor('lateMinutes', {

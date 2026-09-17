@@ -22,25 +22,32 @@ interface ShiftFormState {
   name: string
   startTime: string
   endTime: string
-  graceMinutes: number
+  /** null = use the AttendanceToleranceMinutes setting. */
+  graceMinutes: number | null
   breakMinutes: number
   crossesMidnight: boolean
   isActive: boolean
 }
 
 /**
- * A plain day shift with a short grace and an hour for lunch. These are only the values a
- * new shift OPENS with — every one of them decides pay, so the user is expected to look at
- * each before saving rather than accept a blank form.
+ * A plain day shift with an hour for lunch. These are only the values a new shift OPENS with —
+ * every one of them decides pay, so the user is expected to look at each before saving rather
+ * than accept a blank form. Grace starts EMPTY: empty means the tolerance setting, which is the
+ * one rule HR set for the whole company, and a shift only overrides it on purpose.
  */
 const EMPTY_FORM: ShiftFormState = {
   name: '',
   startTime: '08:00:00',
   endTime: '16:00:00',
-  graceMinutes: 10,
+  graceMinutes: null,
   breakMinutes: 60,
   crossesMidnight: false,
   isActive: true,
+}
+
+/** The Grace cell: a number of minutes, or the words for "no override" — null is the tolerance setting, not zero. */
+function graceText(minutes: number | null): string {
+  return minutes == null ? 'Tolerance setting' : `${minutes} min`
 }
 
 /**
@@ -284,11 +291,11 @@ export default function ShiftsPage() {
       columnHelper.accessor('graceMinutes', {
         header: 'Grace',
         cell: (info) => (
-          <span title="Arriving within this many minutes of the start is not late at all.">
-            {info.row.original.graceMinutes} min
+          <span title="Arriving within this many minutes of the start is not late at all. Empty uses the Attendance tolerance setting.">
+            {graceText(info.row.original.graceMinutes)}
           </span>
         ),
-        meta: { filterText: (v) => `${v} min` },
+        meta: { filterText: graceText },
       }),
       columnHelper.accessor('breakMinutes', {
         header: 'Break',
@@ -598,15 +605,22 @@ export default function ShiftsPage() {
           <label className="form-label" htmlFor="shift-grace">
             Grace (minutes)
           </label>
+          {/* OPTIONAL, unlike the break: a blank box is null, and null tells the processor to use
+              the company-wide AttendanceToleranceMinutes setting. A settled number overrides it
+              for this shift alone. */}
           <NumberInput
             id="shift-grace"
-            value={form.graceMinutes}
-            onChange={(v) => setForm((f) => ({ ...f, graceMinutes: num(v) }))}
+            value={form.graceMinutes ?? ''}
+            onChange={(v) =>
+              setForm((f) => ({ ...f, graceMinutes: typeof v === 'number' ? v : null }))
+            }
             min={0}
+            placeholder="Tolerance setting"
             disabled={saving}
           />
           <p className="hint">
-            Arriving within this many minutes of the start is not late at all.
+            Arriving within this many minutes of the start is not late at all. Empty = use the
+            tolerance setting (Settings → Attendance).
           </p>
         </div>
 

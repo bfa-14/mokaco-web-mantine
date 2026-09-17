@@ -43,15 +43,33 @@ const RUN_TYPES: { value: PayrollRunType; text: string }[] = [
   { value: 'Supplemental', text: 'Supplemental (off-cycle)' },
 ]
 
-/** Each readiness count links to the page where it gets fixed. */
-const READINESS_ITEMS: { key: keyof AttendanceReadiness; label: string; to: string }[] = [
-  { key: 'unprocessedPunches', label: 'Unprocessed punches', to: '/attendance/import' },
-  { key: 'unresolvedPinPunches', label: 'Unresolved PINs', to: '/attendance/unresolved' },
-  { key: 'openAnomalies', label: 'Open anomalies', to: '/attendance/anomalies' },
-  { key: 'pendingCorrections', label: 'Pending corrections', to: '/attendance/corrections' },
-  { key: 'rosteredDaysWithNoRecord', label: 'Rostered days with no record', to: '/attendance/daily' },
-  { key: 'undecidedExitVariances', label: 'Undecided exit variances', to: '/attendance/exit-variances' },
+/**
+ * Each readiness count links to the page where it gets fixed. The link is built FROM the readiness
+ * row, so a count can carry its own period into the page it opens: "3 undecided anomalies" must land
+ * on THIS month's undecided rows, not on whatever month that page defaults to.
+ */
+const READINESS_ITEMS: {
+  key: keyof AttendanceReadiness
+  label: string
+  to: (ready: AttendanceReadiness) => string
+}[] = [
+  { key: 'unprocessedPunches', label: 'Unprocessed punches', to: () => '/attendance/import' },
+  { key: 'unresolvedPinPunches', label: 'Unresolved PINs', to: () => '/attendance/unresolved' },
+  { key: 'openAnomalies', label: 'Open anomalies', to: (r) => `/attendance/anomalies${periodQuery(r)}` },
+  { key: 'pendingCorrections', label: 'Pending corrections', to: () => '/attendance/corrections' },
+  { key: 'rosteredDaysWithNoRecord', label: 'Rostered days with no record', to: () => '/attendance/daily' },
+  { key: 'undecidedExitVariances', label: 'Undecided exit variances', to: () => '/attendance/exit-variances' },
+  {
+    key: 'undecidedAnomalies',
+    label: 'Undecided anomalies',
+    to: (r) => `/attendance/anomalies${periodQuery(r)}&decision=undecided`,
+  },
 ]
+
+/** The readiness period as the `?from&to` the Anomalies page reads. */
+function periodQuery(ready: AttendanceReadiness): string {
+  return `?from=${encodeURIComponent(ready.periodStart.slice(0, 10))}&to=${encodeURIComponent(ready.periodEnd.slice(0, 10))}`
+}
 
 const columnHelper = createColumnHelper<PayrollRunListItem>()
 const PAGE_SIZES = ['12', '24', '48']
@@ -439,7 +457,7 @@ export default function PayrollRunsPage() {
                 const n = ready[it.key] as number
                 return (
                   <span key={it.key} className={n > 0 ? 'pr-ready-item pr-ready-item-bad' : 'pr-ready-item'}>
-                    {n > 0 ? <Link to={it.to}>{it.label}: {n}</Link> : <>{it.label}: 0</>}
+                    {n > 0 ? <Link to={it.to(ready)}>{it.label}: {n}</Link> : <>{it.label}: 0</>}
                   </span>
                 )
               })}

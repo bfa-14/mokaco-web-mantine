@@ -14,7 +14,11 @@ import { statusText } from './attendanceFormat'
  * "nearly a full day", and a bar says that instantly. The raw value is still shown beside
  * it for anyone who needs to reconcile against payroll.
  */
-export function DayFractionBar({ value }: { value: number }) {
+export function DayFractionBar({ value }: { value: number | null }) {
+  // No fraction at all (a rest day, leave, a holiday): a dash, not an empty bar — an empty bar
+  // says "earned nothing", and nothing was owed.
+  if (value == null) return <span className="frac-value">{t('common.dash')}</span>
+
   const percent = Math.round(Math.min(Math.max(value, 0), 1) * 100)
 
   return (

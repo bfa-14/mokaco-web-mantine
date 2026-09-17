@@ -1,5 +1,10 @@
 import { apiRequest } from '../api/client'
 import type {
+  AnomalyDecideAllRequest,
+  AnomalyDecideAllResult,
+  AnomalyDecisionRequest,
+  AnomalyDecisionResult,
+  AttendanceAnomaly,
   AttendanceBranchSummary,
   AttendanceDetail,
   AttendanceRecord,
@@ -260,10 +265,33 @@ export const attendanceService = {
     ),
   /** The day plus the paired intervals that explain its worked time. */
   getById: (id: number) => apiRequest<AttendanceDetail>(`/api/attendance/${id}`),
-  getAnomalies: (from: string, to: string) =>
-    apiRequest<AttendanceRecord[]>(
-      `/api/attendance/anomalies?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  /**
+   * One row PER ANOMALY (a day can carry several). ATTENDANCE_CORRECT, not VIEW: the list exists
+   * to be decided from. `onlyUndecided` is the worklist; the full list shows who ruled what.
+   */
+  getAnomalies: (from: string, to: string, onlyUndecided = false, branchId?: number | null) =>
+    apiRequest<AttendanceAnomaly[]>(
+      `/api/attendance/anomalies?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+        `&onlyUndecided=${onlyUndecided}` +
+        (branchId ? `&branchId=${branchId}` : ''),
     ),
+  /**
+   * HR's ruling on one anomaly. Excuse keeps the minutes covered, Deduct takes them off the day,
+   * Correct stores the punch as it should have been (through the manual path) and re-derives the
+   * day. The procedure's refusals ("a missing punch can only be corrected") arrive as a 400 whose
+   * text is the whole message — never flatten it.
+   */
+  decideAnomaly: (anomalyId: number, request: AnomalyDecisionRequest) =>
+    apiRequest<AnomalyDecisionResult>(`/api/attendance/anomalies/${anomalyId}/decide`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+  /** The same ruling for every undecided late / early of a month (optionally one branch). Missing punches are skipped and counted. */
+  decideAllAnomalies: (request: AnomalyDecideAllRequest) =>
+    apiRequest<AnomalyDecideAllResult>('/api/attendance/anomalies/decide-all', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
   /** What the machine actually recorded, before processing or correction. */
   getRaw: (employeeId: number, date: string) =>
     apiRequest<RawLog[]>(`/api/attendance/raw/${employeeId}/${date}`),
@@ -324,7 +352,7 @@ export const attendanceService = {
       `/api/attendance/exit-variances?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&onlyUndecided=${onlyUndecided}`,
     ),
 
-  /** Is this month safe to pay? Six counters and a verdict. */
+  /** Is this month safe to pay? Seven counters and a verdict. */
   getPayrollReadiness: (period: string) =>
     apiRequest<PayrollReadiness>(
       `/api/attendance/payroll-readiness?period=${encodeURIComponent(period)}`,

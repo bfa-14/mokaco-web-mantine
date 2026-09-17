@@ -116,6 +116,8 @@ export interface AttendanceReadiness {
   pendingCorrections: number
   rosteredDaysWithNoRecord: number
   undecidedExitVariances: number
+  /** Late / early / missing-punch anomalies HR has not excused, deducted or corrected. */
+  undecidedAnomalies: number
   isReady: boolean
 }
 
