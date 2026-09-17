@@ -12,6 +12,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'
+import { FormErrorBoundary } from '../workflow/FormErrorBoundary'
 import type { RoomCatalog } from '../../types/booking'
 import {
   dayOfWeek,
@@ -37,6 +38,17 @@ import {
  * than one that steers. The actual refusal is still the server's — the room could be closed, the
  * slot taken a second ago, or the length outside the room's min/max — and it arrives as a sentence
  * this dialog shows verbatim.
+ *
+ * ADD-ONS ARE A Checkbox.Group, NOT ONE HANDLER PER BOX. Mantine hands the group's onChange the full
+ * list of checked values, so there is no event object to read late. The first version read
+ * `e.currentTarget.checked` INSIDE a setState updater, by which point React had released the
+ * synthetic event and currentTarget was null — one tick on a box took the whole page down. The
+ * general rule for every handler in here: read the event synchronously, never inside a deferred
+ * callback.
+ *
+ * THE BODY SITS IN A FormErrorBoundary so a future render error of that kind is shown INSIDE the
+ * dialog — message and component stack — instead of unmounting the calendar behind it. The key
+ * advances on every open, so a caught crash is cleared by closing and reopening.
  */
 export function NewBookingModal({
   opened,
@@ -74,6 +86,8 @@ export function NewBookingModal({
   const [addonIds, setAddonIds] = useState<number[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Bumped on every open: the error boundary's reset key, so a caught crash does not outlive it. */
+  const [openSeq, setOpenSeq] = useState(0)
 
   /* Re-seed every time the dialog OPENS. A dialog that kept the previous guest's name because it
      was never unmounted is the classic version of this bug; the reset is keyed on `opened` rather
@@ -95,6 +109,7 @@ export function NewBookingModal({
     setNote('')
     setAddonIds([])
     setError(null)
+    setOpenSeq((n) => n + 1)
     // Seeding on open is the point; the caller's prefill props are the deps that matter.
   }, [opened, initialRoomId, initialDate, initialStart, initialEnd, catalog.rooms])
 
@@ -190,223 +205,225 @@ export function NewBookingModal({
       size={560}
       centered
     >
-      {error && (
-        <div className="alert alert--error" role="alert">
-          {error}
-        </div>
-      )}
-
-      <div className="form-grid">
-        <div className="form-field full">
-          <label className="form-label" htmlFor="bk-new-room">
-            {t('booking.fields.room')}
-          </label>
-          <Select
-            id="bk-new-room"
-            data={catalog.rooms
-              .filter((r) => r.isActive)
-              .map((r) => ({ value: String(r.roomId), label: r.name }))}
-            value={roomId == null ? null : String(roomId)}
-            onChange={(value) => {
-              const next = value ? Number(value) : null
-              setRoomId(next)
-              // The add-on list belongs to the room, so a room change invalidates the selection
-              // rather than silently carrying ids the new room will ignore.
-              setAddonIds([])
-              const nextRoom = catalog.rooms.find((r) => r.roomId === next)
-              if (nextRoom) setPersons(nextRoom.minPersons)
-            }}
-            allowDeselect={false}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="bk-new-date">
-            {t('booking.fields.date')}
-          </label>
-          <TextInput
-            id="bk-new-date"
-            type="date"
-            value={bookDate}
-            onChange={(e) => setBookDate(e.currentTarget.value)}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="bk-new-persons">
-            {t('booking.fields.persons')}
-          </label>
-          <NumberInput
-            id="bk-new-persons"
-            min={1}
-            max={room?.seats}
-            value={persons}
-            onChange={(v) => setPersons(typeof v === 'number' ? v : 1)}
-          />
-          {room && (
-            <div className="hint">
-              {t('booking.new.personsHint', {
-                min: room.minPersons,
-                max: room.seats,
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="bk-new-start">
-            {t('booking.fields.start')}
-          </label>
-          <TextInput
-            id="bk-new-start"
-            type="time"
-            value={startTime}
-            min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
-            max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
-            onChange={(e) => setStartTime(e.currentTarget.value)}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="bk-new-end">
-            {t('booking.fields.end')}
-          </label>
-          <TextInput
-            id="bk-new-end"
-            type="time"
-            value={endTime}
-            min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
-            max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
-            onChange={(e) => setEndTime(e.currentTarget.value)}
-          />
-        </div>
-
-        <div className="form-field full">
-          {/* `dayHours` is re-tested rather than leaning on `closedDay`: a boolean derived from a
-              nullable does not narrow it, so the compiler still needs to see the check here. */}
-          {dayHours && !dayHours.isClosed ? (
-            <div className="hint">
-              {t('booking.new.hoursHint', {
-                day: weekdayName(bookDate),
-                open: hhmm(dayHours.openTime),
-                close: hhmm(dayHours.closeTime),
-              })}
-            </div>
-          ) : (
-            <div className="hint">
-              {t('booking.new.closedDay', { day: weekdayName(bookDate) })}
-            </div>
-          )}
-          {hours <= 0 && (
-            <div className="hint">{t('booking.new.endAfterStart')}</div>
-          )}
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="bk-new-name">
-            {t('booking.fields.guest')}
-          </label>
-          <TextInput
-            id="bk-new-name"
-            value={guestName}
-            onChange={(e) => setGuestName(e.currentTarget.value)}
-            maxLength={120}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label" htmlFor="bk-new-phone">
-            {t('booking.fields.phone')}
-          </label>
-          <TextInput
-            id="bk-new-phone"
-            value={guestPhone}
-            onChange={(e) => setGuestPhone(e.currentTarget.value)}
-            maxLength={30}
-          />
-        </div>
-
-        <div className="form-field full">
-          <label className="form-label" htmlFor="bk-new-email">
-            {t('booking.fields.email')} {t('common.optional')}
-          </label>
-          <TextInput
-            id="bk-new-email"
-            type="email"
-            value={guestEmail}
-            onChange={(e) => setGuestEmail(e.currentTarget.value)}
-            maxLength={150}
-          />
-          <div className="hint">{t('booking.new.emailHint')}</div>
-        </div>
-
-        <div className="form-field full">
-          <label className="form-label" htmlFor="bk-new-note">
-            {t('booking.fields.note')} {t('common.optional')}
-          </label>
-          <Textarea
-            id="bk-new-note"
-            minRows={2}
-            value={note}
-            onChange={(e) => setNote(e.currentTarget.value)}
-            maxLength={500}
-          />
-        </div>
-
-        {roomAddons.length > 0 && (
-          <div className="form-field full">
-            <span className="form-label">{t('booking.fields.addons')}</span>
-            {roomAddons.map((addon) => (
-              <Checkbox
-                key={addon.addonId}
-                mt={6}
-                checked={addonIds.includes(addon.addonId)}
-                onChange={(e) =>
-                  setAddonIds((current) =>
-                    e.currentTarget.checked
-                      ? [...current, addon.addonId]
-                      : current.filter((id) => id !== addon.addonId),
-                  )
-                }
-                label={
-                  addon.priceType === 'PerHour'
-                    ? t('booking.new.addonPerHour', {
-                        name: addon.name,
-                        price: money(addon.price, room?.currencyCode ?? ''),
-                      })
-                    : t('booking.new.addonFixed', {
-                        name: addon.name,
-                        price: money(addon.price, room?.currencyCode ?? ''),
-                      })
-                }
-              />
-            ))}
+      <FormErrorBoundary resetKey={String(openSeq)}>
+        {error && (
+          <div className="alert alert--error" role="alert">
+            {error}
           </div>
         )}
 
-        {preview && (
+        <div className="form-grid">
           <div className="form-field full">
-            <div className="bk-money-row bk-money-row--total">
-              <span>{t('booking.fields.total')}</span>
-              <span>{money(preview.total, preview.currency)}</span>
-            </div>
-            <div className="bk-money-row">
-              <span>{t('booking.fields.deposit')}</span>
-              <span>{money(preview.deposit, preview.currency)}</span>
-            </div>
-            <div className="hint">{t('booking.new.previewHint')}</div>
+            <label className="form-label" htmlFor="bk-new-room">
+              {t('booking.fields.room')}
+            </label>
+            <Select
+              id="bk-new-room"
+              data={catalog.rooms
+                .filter((r) => r.isActive)
+                .map((r) => ({ value: String(r.roomId), label: r.name }))}
+              value={roomId == null ? null : String(roomId)}
+              onChange={(value) => {
+                const next = value ? Number(value) : null
+                setRoomId(next)
+                // The add-on list belongs to the room, so a room change invalidates the selection
+                // rather than silently carrying ids the new room will ignore.
+                setAddonIds([])
+                const nextRoom = catalog.rooms.find((r) => r.roomId === next)
+                if (nextRoom) setPersons(nextRoom.minPersons)
+              }}
+              allowDeselect={false}
+            />
           </div>
-        )}
-      </div>
 
-      <div className="form-actions">
-        <Button variant="default" onClick={onClose} disabled={saving}>
-          {t('common.cancel')}
-        </Button>
-        <Button onClick={submit} loading={saving} disabled={missing}>
-          {t('booking.new.submit')}
-        </Button>
-      </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-new-date">
+              {t('booking.fields.date')}
+            </label>
+            <TextInput
+              id="bk-new-date"
+              type="date"
+              value={bookDate}
+              onChange={(e) => setBookDate(e.currentTarget.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-new-persons">
+              {t('booking.fields.persons')}
+            </label>
+            <NumberInput
+              id="bk-new-persons"
+              min={1}
+              max={room?.seats}
+              value={persons}
+              onChange={(v) => setPersons(typeof v === 'number' ? v : 1)}
+            />
+            {room && (
+              <div className="hint">
+                {t('booking.new.personsHint', {
+                  min: room.minPersons,
+                  max: room.seats,
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-new-start">
+              {t('booking.fields.start')}
+            </label>
+            <TextInput
+              id="bk-new-start"
+              type="time"
+              value={startTime}
+              min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
+              max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
+              onChange={(e) => setStartTime(e.currentTarget.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-new-end">
+              {t('booking.fields.end')}
+            </label>
+            <TextInput
+              id="bk-new-end"
+              type="time"
+              value={endTime}
+              min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
+              max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
+              onChange={(e) => setEndTime(e.currentTarget.value)}
+            />
+          </div>
+
+          <div className="form-field full">
+            {/* `dayHours` is re-tested rather than leaning on `closedDay`: a boolean derived from a
+                nullable does not narrow it, so the compiler still needs to see the check here. */}
+            {dayHours && !dayHours.isClosed ? (
+              <div className="hint">
+                {t('booking.new.hoursHint', {
+                  day: weekdayName(bookDate),
+                  open: hhmm(dayHours.openTime),
+                  close: hhmm(dayHours.closeTime),
+                })}
+              </div>
+            ) : (
+              <div className="hint">
+                {t('booking.new.closedDay', { day: weekdayName(bookDate) })}
+              </div>
+            )}
+            {hours <= 0 && (
+              <div className="hint">{t('booking.new.endAfterStart')}</div>
+            )}
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-new-name">
+              {t('booking.fields.guest')}
+            </label>
+            <TextInput
+              id="bk-new-name"
+              value={guestName}
+              onChange={(e) => setGuestName(e.currentTarget.value)}
+              maxLength={120}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-new-phone">
+              {t('booking.fields.phone')}
+            </label>
+            <TextInput
+              id="bk-new-phone"
+              value={guestPhone}
+              onChange={(e) => setGuestPhone(e.currentTarget.value)}
+              maxLength={30}
+            />
+          </div>
+
+          <div className="form-field full">
+            <label className="form-label" htmlFor="bk-new-email">
+              {t('booking.fields.email')} {t('common.optional')}
+            </label>
+            <TextInput
+              id="bk-new-email"
+              type="email"
+              value={guestEmail}
+              onChange={(e) => setGuestEmail(e.currentTarget.value)}
+              maxLength={150}
+            />
+            <div className="hint">{t('booking.new.emailHint')}</div>
+          </div>
+
+          <div className="form-field full">
+            <label className="form-label" htmlFor="bk-new-note">
+              {t('booking.fields.note')} {t('common.optional')}
+            </label>
+            <Textarea
+              id="bk-new-note"
+              minRows={2}
+              value={note}
+              onChange={(e) => setNote(e.currentTarget.value)}
+              maxLength={500}
+            />
+          </div>
+
+          {roomAddons.length > 0 && (
+            <div className="form-field full">
+              <span className="form-label">{t('booking.fields.addons')}</span>
+              {/* Checkbox values are strings by contract; the ids are numbers everywhere else
+                  (state, preview, payload), so the conversion lives here and only here. */}
+              <Checkbox.Group
+                value={addonIds.map(String)}
+                onChange={(values) => setAddonIds(values.map(Number))}
+              >
+                {roomAddons.map((addon) => (
+                  <Checkbox
+                    key={addon.addonId}
+                    mt={6}
+                    value={String(addon.addonId)}
+                    label={
+                      addon.priceType === 'PerHour'
+                        ? t('booking.new.addonPerHour', {
+                            name: addon.name,
+                            price: money(addon.price, room?.currencyCode ?? ''),
+                          })
+                        : t('booking.new.addonFixed', {
+                            name: addon.name,
+                            price: money(addon.price, room?.currencyCode ?? ''),
+                          })
+                    }
+                  />
+                ))}
+              </Checkbox.Group>
+            </div>
+          )}
+
+          {preview && (
+            <div className="form-field full">
+              <div className="bk-money-row bk-money-row--total">
+                <span>{t('booking.fields.total')}</span>
+                <span>{money(preview.total, preview.currency)}</span>
+              </div>
+              <div className="bk-money-row">
+                <span>{t('booking.fields.deposit')}</span>
+                <span>{money(preview.deposit, preview.currency)}</span>
+              </div>
+              <div className="hint">{t('booking.new.previewHint')}</div>
+            </div>
+          )}
+        </div>
+
+        <div className="form-actions">
+          <Button variant="default" onClick={onClose} disabled={saving}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={submit} loading={saving} disabled={missing}>
+            {t('booking.new.submit')}
+          </Button>
+        </div>
+      </FormErrorBoundary>
     </Modal>
   )
 }
