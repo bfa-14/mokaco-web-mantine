@@ -5,11 +5,11 @@ import {
   Button,
   Checkbox,
   Loader,
-  Modal,
   NumberInput,
   Table,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import {
   IconCalendarCheck,

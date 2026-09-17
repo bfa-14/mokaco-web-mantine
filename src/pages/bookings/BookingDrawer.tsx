@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next'
 import {
   Badge,
   Button,
-  Drawer,
   Loader,
   NumberInput,
   Select,
   Textarea,
   TextInput,
 } from '@mantine/core'
+import { Drawer } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import {
   IconCash,
@@ -40,6 +40,8 @@ import {
   statusLabel,
 } from './bookingShared'
 import { ReceiptModal } from './ReceiptModal'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 /**
  * Everything about one booking, and everything that can be done to it — opened by clicking a block
@@ -90,7 +92,9 @@ export function BookingDrawer({
   const [cancelReason, setCancelReason] = useState('')
   const [paying, setPaying] = useState(false)
   const [methodId, setMethodId] = useState<number | null>(null)
-  const [amount, setAmount] = useState<number>(0)
+  /** As the box hands it over ("45." on the way to 45.5) — coerced below. See numeric.ts. */
+  const [amount, setAmount] = useState<NumberInputValue>(0)
+  const amountValue = parseDecimal(amount) ?? 0
   const [reference, setReference] = useState('')
 
   const [methods, setMethods] = useState<PaymentMethod[]>([])
@@ -174,14 +178,14 @@ export function BookingDrawer({
   }
 
   async function addPayment() {
-    if (!booking || methodId == null || amount <= 0) return
+    if (!booking || methodId == null || amountValue <= 0) return
 
     setBusy(true)
     setError(null)
     try {
       const added = await bookingsService.addPayment(booking.bookingId, {
         paymentMethodId: methodId,
-        amount,
+        amount: amountValue,
         reference: reference.trim() || null,
       })
       notifications.show({
@@ -457,7 +461,7 @@ export function BookingDrawer({
                     min={0}
                     decimalScale={2}
                     value={amount}
-                    onChange={(v) => setAmount(typeof v === 'number' ? v : 0)}
+                    onChange={setAmount}
                   />
                   <div className="hint">
                     {t('booking.drawer.amountHint', {
@@ -490,7 +494,7 @@ export function BookingDrawer({
                     <Button
                       onClick={addPayment}
                       loading={busy}
-                      disabled={methodId == null || amount <= 0}
+                      disabled={methodId == null || amountValue <= 0}
                     >
                       {t('common.save')}
                     </Button>

@@ -6,6 +6,8 @@ import { expensesService } from '../../services/workflowService'
 import { currenciesService } from '../../services/coreService'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 const FALLBACK_CURRENCIES = ['USD', 'LBP']
 
@@ -38,7 +40,9 @@ export function useExpenseReimbursementForm(employeeName: string | null, saving:
   const [currencies, setCurrencies] = useState<string[]>(FALLBACK_CURRENCIES)
   const [expenseDate, setExpenseDate] = useState<string | null>(null) // yyyy-MM-dd
   const [category, setCategory] = useState<string>('')
-  const [amount, setAmount] = useState<number | null>(null)
+  /** As the box hands it over ("12." on the way to 12.5) — the number is derived. See numeric.ts. */
+  const [amountRaw, setAmountRaw] = useState<NumberInputValue>('')
+  const amount = parseDecimal(amountRaw)
   const [currencyCode, setCurrencyCode] = useState<string>('USD')
   const [description, setDescription] = useState('')
 
@@ -112,12 +116,12 @@ export function useExpenseReimbursementForm(employeeName: string | null, saving:
         <div className="form-field">
           <NumberInput
             label={t('common.amount')}
-            value={amount ?? ''}
+            value={amountRaw}
             min={0}
             decimalScale={2}
             placeholder="0.00"
             disabled={saving}
-            onChange={(v) => setAmount(typeof v === 'number' ? v : null)}
+            onChange={setAmountRaw}
           />
         </div>
         <div className="form-field">

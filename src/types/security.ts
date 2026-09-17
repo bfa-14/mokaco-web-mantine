@@ -1,9 +1,56 @@
-/** Row in the users grid — GET /api/users (mirrors backend UserListItem). */
+/** One role held by a user, as the users list may carry it. */
+export interface UserRoleRef {
+  roleId: number
+  name: string
+}
+
+/**
+ * Row in the users grid — GET /api/users (mirrors backend UserListItem).
+ *
+ * The employee and role fields are OPTIONAL because the API is gaining them in a separate change
+ * (Username + Roles per user on GET /api/users). Until it lands the list carries only the four
+ * original columns, and the grid must read as "unknown" for the rest rather than crash — so every
+ * reader goes through {@link roleNamesOf} / {@link roleIdsOf}, which accept any of the shapes the
+ * endpoint might reasonably return (names, ids, or {roleId, name} pairs) and an absent field.
+ */
 export interface UserListItem {
   userId: number
   username: string
   isActive: boolean
   lastLoginAt: string | null
+  /** The linked employee, when the list carries it. */
+  employeeId?: number | null
+  employeeName?: string | null
+  /** The user's roles, as names or as {roleId, name} pairs. */
+  roles?: Array<string | UserRoleRef> | null
+  /** The user's role ids, when the list carries them separately from the names. */
+  roleIds?: number[] | null
+}
+
+/** The role names a list row carries, in list order — empty when the list carries none. */
+export function roleNamesOf(user: UserListItem): string[] {
+  if (Array.isArray(user.roles)) {
+    return user.roles.map((r) => (typeof r === 'string' ? r : r.name)).filter(Boolean)
+  }
+  return []
+}
+
+/**
+ * The role ids a list row stands for, resolved against the roles dictionary when the list carries
+ * only names. Prefills the roles editor; a name the dictionary does not know is dropped.
+ */
+export function roleIdsOf(user: UserListItem, roles: Role[]): number[] {
+  if (Array.isArray(user.roleIds)) return user.roleIds
+  if (Array.isArray(user.roles)) {
+    return user.roles
+      .map((r) =>
+        typeof r === 'string'
+          ? (roles.find((x) => x.name.toLowerCase() === r.toLowerCase())?.roleId ?? null)
+          : r.roleId,
+      )
+      .filter((id): id is number => id != null)
+  }
+  return []
 }
 
 /**

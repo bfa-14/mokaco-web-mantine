@@ -9,6 +9,8 @@ import type { Branch, EmployeeListItem } from '../../types/hr'
 import type { Currency } from '../../types/core'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 const FALLBACK_CURRENCIES = ['USD', 'LBP']
 const NO_EMPLOYEES: EmployeeListItem[] = []
@@ -17,7 +19,8 @@ const NO_EMPLOYEES: EmployeeListItem[] = []
 interface AmountRow {
   key: number
   currencyCode: string
-  amount: number | null
+  /** As the box hands it over ("12." on the way to 12.5) — parsed where it is read. See numeric.ts. */
+  amount: NumberInputValue
 }
 
 /** The split in integer cents — the procedure's own arithmetic; last person absorbs the remainder. */
@@ -50,7 +53,7 @@ export function useTipDistributionForm(
   const defaulted = useRef(false)
   const [shiftDate, setShiftDate] = useState<string | null>(null) // yyyy-MM-dd
   const nextKey = useRef(2)
-  const [amounts, setAmounts] = useState<AmountRow[]>([{ key: 1, currencyCode: 'USD', amount: null }])
+  const [amounts, setAmounts] = useState<AmountRow[]>([{ key: 1, currencyCode: 'USD', amount: '' }])
   const [participantIds, setParticipantIds] = useState<number[]>([])
 
   useEffect(() => {
@@ -101,9 +104,13 @@ export function useTipDistributionForm(
     return kept.length === participantIds.length ? participantIds : kept
   }, [participantIds, branchEmployees])
 
-  /** Rows that are actually fillable: a currency and a positive amount. */
+  /** Rows that are actually fillable: a currency and a positive amount — with the figure parsed. */
   const filled = useMemo(
-    () => amounts.filter((a) => a.currencyCode && a.amount != null && a.amount > 0),
+    () =>
+      amounts.flatMap((a) => {
+        const value = parseDecimal(a.amount)
+        return a.currencyCode && value != null && value > 0 ? [{ ...a, value }] : []
+      }),
     [amounts],
   )
 
@@ -122,7 +129,7 @@ export function useTipDistributionForm(
   const splits = useMemo(
     () =>
       chosen.length > 0
-        ? filled.map((a) => ({ ...a, split: splitTips(a.amount as number, chosen.length) }))
+        ? filled.map((a) => ({ ...a, split: splitTips(a.value, chosen.length) }))
         : [],
     [filled, chosen],
   )
@@ -135,7 +142,7 @@ export function useTipDistributionForm(
     )
   }, [])
 
-  const setRowAmount = useCallback((key: number, value: number | null) => {
+  const setRowAmount = useCallback((key: number, value: NumberInputValue) => {
     setAmounts((prev) =>
       prev.some((r) => r.key === key && r.amount !== value)
         ? prev.map((r) => (r.key === key ? { ...r, amount: value } : r))
@@ -147,7 +154,7 @@ export function useTipDistributionForm(
     setAmounts((prev) => {
       const used = new Set(prev.map((r) => r.currencyCode))
       const free = currencies.find((c) => !used.has(c)) ?? ''
-      return [...prev, { key: nextKey.current++, currencyCode: free, amount: null }]
+      return [...prev, { key: nextKey.current++, currencyCode: free, amount: '' }]
     })
   }, [currencies])
 
@@ -161,7 +168,7 @@ export function useTipDistributionForm(
 
   // Mirrors the procedure: "Tips 2026-08-02 - 20.00 USD + 300000.00 LBP / 8 people".
   const amountsText =
-    filled.length > 0 ? filled.map((a) => `${money(a.amount as number)} ${a.currencyCode}`).join(' + ') : null
+    filled.length > 0 ? filled.map((a) => `${money(a.value)} ${a.currencyCode}`).join(' + ') : null
   const autoTitle =
     dateYMD && amountsText && chosen.length > 0
       ? `Tips ${dateYMD} - ${amountsText} / ${chosen.length} people`
@@ -219,12 +226,12 @@ export function useTipDistributionForm(
               onChange={(v) => setRowCurrency(row.key, v ?? '')}
             />
             <NumberInput
-              value={row.amount ?? ''}
+              value={row.amount}
               min={0}
               decimalScale={2}
               placeholder="0.00"
               disabled={saving}
-              onChange={(v) => setRowAmount(row.key, typeof v === 'number' ? v : null)}
+              onChange={(v) => setRowAmount(row.key, v)}
             />
             {amounts.length > 1 && (
               <ActionIcon
@@ -314,7 +321,7 @@ export function useTipDistributionForm(
       const created = await tipDistributionsService.create({
         branchId,
         shiftDate: dateYMD,
-        amounts: filled.map((a) => ({ currencyCode: a.currencyCode, amount: a.amount as number })),
+        amounts: filled.map((a) => ({ currencyCode: a.currencyCode, amount: a.value })),
         participantIds: chosen,
         title: title ?? undefined,
       })

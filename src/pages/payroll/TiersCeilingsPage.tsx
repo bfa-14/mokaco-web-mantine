@@ -6,9 +6,18 @@ import {
 } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import {
-  ActionIcon, Button, Group, Loader, Modal, NumberInput, Pagination, Select, Switch, Table,
+  ActionIcon,
+  Button,
+  Group,
+  Loader,
+  NumberInput,
+  Pagination,
+  Select,
+  Switch,
+  Table,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconCopyPlus, IconPencil, IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
@@ -32,6 +41,8 @@ import type {
 import type { ApprovalTier } from '../../types/hr'
 import type { Currency } from '../../types/core'
 import type { Setting } from '../../types/settings'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 /**
  * TIERS & CEILINGS — the rate tables payroll computes from, in one place.
@@ -613,11 +624,17 @@ function ConfigGrid({
 
 /* ──────────────────────────────────── the page ──────────────────────────────────── */
 
-/** The tax-tier dialog's fields, as the form holds them (percent, and strings from date inputs). */
+/**
+ * The tax-tier dialog's fields, as the form holds them (percent, and strings from date inputs).
+ *
+ * The figures are `string | number` — whatever the NumberInput last handed over, "8." included —
+ * and are coerced once, in submitBracket. Writing a number back while the user is mid-decimal is
+ * what turned "8.2" into 0 on the Exchange-rates page. An empty ceiling ('') means "and above".
+ */
 interface BracketForm {
-  minAnnual: number
-  maxAnnual: number | null
-  ratePercent: number
+  minAnnual: NumberInputValue
+  maxAnnual: NumberInputValue
+  ratePercent: NumberInputValue
   currencyCode: string
   effectiveFrom: string
   effectiveTo: string
@@ -627,23 +644,24 @@ interface BracketForm {
 /** The NSSF dialog's fields. `nssfRateId` null means create — a brand-new scheme OR a new version. */
 interface NssfForm {
   scheme: string
-  employeePercent: number
-  employerPercent: number
+  employeePercent: NumberInputValue
+  employerPercent: NumberInputValue
   isCeilinged: boolean
-  ceilingAmount: number | null
+  /** '' means "use the fallback" — distinct from 0, which the procedure refuses. */
+  ceilingAmount: NumberInputValue
   effectiveFrom: string
   effectiveTo: string
   note: string
 }
 
 const EMPTY_BRACKET: BracketForm = {
-  minAnnual: 0, maxAnnual: null, ratePercent: 0, currencyCode: 'USD',
+  minAnnual: 0, maxAnnual: '', ratePercent: 0, currencyCode: 'USD',
   effectiveFrom: '', effectiveTo: '', note: '',
 }
 
 const EMPTY_NSSF: NssfForm = {
   scheme: '', employeePercent: 0, employerPercent: 0, isCeilinged: false,
-  ceilingAmount: null, effectiveFrom: '', effectiveTo: '', note: '',
+  ceilingAmount: '', effectiveFrom: '', effectiveTo: '', note: '',
 }
 
 export default function TiersCeilingsPage() {
@@ -728,8 +746,8 @@ export default function TiersCeilingsPage() {
   /** The tier whose band is being edited, or null when the dialog is closed. */
   const [bandTier, setBandTier] = useState<ApprovalTier | null>(null)
   /** '' is the blank box, which MEANS "no bound" — distinct from 0, which is a real floor. */
-  const [bandMin, setBandMin] = useState<number | ''>('')
-  const [bandMax, setBandMax] = useState<number | ''>('')
+  const [bandMin, setBandMin] = useState<NumberInputValue>('')
+  const [bandMax, setBandMax] = useState<NumberInputValue>('')
   const [bandCurrency, setBandCurrency] = useState<string>('')
   const [bandSaving, setBandSaving] = useState(false)
   const [bandError, setBandError] = useState<string | null>(null)
@@ -750,8 +768,8 @@ export default function TiersCeilingsPage() {
     try {
       await approvalTiersService.setSalaryRange(bandTier.tierNo, {
         // Blank → null → "no bound". Sent explicitly so clearing a side actually clears it.
-        minBasicSalary: bandMin === '' ? null : bandMin,
-        maxBasicSalary: bandMax === '' ? null : bandMax,
+        minBasicSalary: parseDecimal(bandMin),
+        maxBasicSalary: parseDecimal(bandMax),
         salaryCurrency: bandCurrency,
       })
       notify(t('payroll.tiers.bandSaved'), 'success', 2200)
@@ -786,7 +804,7 @@ export default function TiersCeilingsPage() {
     setBracketId(row.taxBracketId)
     setBracketForm({
       minAnnual: row.minAnnual,
-      maxAnnual: row.maxAnnual,
+      maxAnnual: row.maxAnnual ?? '',
       ratePercent: toPercent(row.rate),
       currencyCode: row.currencyCode,
       effectiveFrom: dateOnly(row.effectiveFrom),
@@ -799,12 +817,20 @@ export default function TiersCeilingsPage() {
 
   async function submitBracket() {
     const f = bracketForm
+    // Coerced HERE, once. The boxes hold raw text until now so a decimal can actually be typed.
+    const minAnnual = parseDecimal(f.minAnnual)
+    const maxAnnual = parseDecimal(f.maxAnnual)
+    const ratePercent = parseDecimal(f.ratePercent)
+    if (minAnnual == null || ratePercent == null) {
+      setBracketError(t('payroll.tiers.errNumber'))
+      return
+    }
     // The procedure's own rules, checked here so the refusal arrives before the round trip.
-    if (f.ratePercent < 0 || f.ratePercent > 100) {
+    if (ratePercent < 0 || ratePercent > 100) {
       setBracketError(t('payroll.tiers.errRate'))
       return
     }
-    if (f.maxAnnual != null && f.maxAnnual <= f.minAnnual) {
+    if (maxAnnual != null && maxAnnual <= minAnnual) {
       setBracketError(t('payroll.tiers.errCeiling'))
       return
     }
@@ -815,9 +841,9 @@ export default function TiersCeilingsPage() {
     setBracketError(null)
 
     const body: TaxBracketUpsertRequest = {
-      minAnnual: f.minAnnual,
-      maxAnnual: f.maxAnnual,
-      rate: fromPercent(f.ratePercent),
+      minAnnual,
+      maxAnnual,
+      rate: fromPercent(ratePercent),
       currencyCode: f.currencyCode,
       effectiveFrom: f.effectiveFrom,
       effectiveTo: f.effectiveTo || null,
@@ -871,7 +897,7 @@ export default function TiersCeilingsPage() {
       employeePercent: toPercent(row.employeeRate),
       employerPercent: toPercent(row.employerRate),
       isCeilinged: row.isCeilinged,
-      ceilingAmount: row.ceilingAmount,
+      ceilingAmount: row.ceilingAmount ?? '',
       effectiveFrom: dateOnly(row.effectiveFrom),
       effectiveTo: dateOnly(row.effectiveTo),
       note: row.note ?? '',
@@ -913,16 +939,24 @@ export default function TiersCeilingsPage() {
       setNssfError(t('payroll.tiers.errRequired'))
       return
     }
+    // Coerced HERE, once — see BracketForm.
+    const employeePercent = parseDecimal(f.employeePercent)
+    const employerPercent = parseDecimal(f.employerPercent)
+    const ceilingAmount = parseDecimal(f.ceilingAmount)
+    if (employeePercent == null || employerPercent == null) {
+      setNssfError(t('payroll.tiers.errNumber'))
+      return
+    }
     if (
-      f.employeePercent < 0 || f.employeePercent > 100 ||
-      f.employerPercent < 0 || f.employerPercent > 100
+      employeePercent < 0 || employeePercent > 100 ||
+      employerPercent < 0 || employerPercent > 100
     ) {
       setNssfError(t('payroll.tiers.errRate'))
       return
     }
     // Mirrors the procedure: a ceiling of zero is not "no ceiling", it is a scheme that contributes
     // nothing. Empty is how you say "use the fallback".
-    if (f.isCeilinged && f.ceilingAmount != null && f.ceilingAmount <= 0) {
+    if (f.isCeilinged && ceilingAmount != null && ceilingAmount <= 0) {
       setNssfError(t('payroll.tiers.errCeilingAmount'))
       return
     }
@@ -930,11 +964,11 @@ export default function TiersCeilingsPage() {
 
     const body: NssfRateUpsertRequest = {
       scheme: f.scheme.trim(),
-      employeeRate: fromPercent(f.employeePercent),
-      employerRate: fromPercent(f.employerPercent),
+      employeeRate: fromPercent(employeePercent),
+      employerRate: fromPercent(employerPercent),
       isCeilinged: f.isCeilinged,
       // A ceiling on a scheme that has none would be a number nothing reads.
-      ceilingAmount: f.isCeilinged ? f.ceilingAmount : null,
+      ceilingAmount: f.isCeilinged ? ceilingAmount : null,
       effectiveFrom: f.effectiveFrom,
       effectiveTo: f.effectiveTo || null,
       note: f.note.trim() || null,
@@ -1090,8 +1124,8 @@ export default function TiersCeilingsPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <NumberInput
                     id="nssf-fallback"
-                    value={fallbackValue === '' ? '' : Number(fallbackValue)}
-                    onChange={(v) => setFallbackDraft(v === '' || v == null ? '' : String(v))}
+                    value={fallbackValue}
+                    onChange={(v) => setFallbackDraft(v == null ? '' : String(v))}
                     min={0}
                     decimalScale={2}
                     w={200}
@@ -1132,9 +1166,7 @@ export default function TiersCeilingsPage() {
             <NumberInput
               id="tb-min"
               value={bracketForm.minAnnual}
-              onChange={(v) =>
-                setBracketForm((f) => ({ ...f, minAnnual: typeof v === 'number' ? v : 0 }))
-              }
+              onChange={(v) => setBracketForm((f) => ({ ...f, minAnnual: v }))}
               min={0}
               decimalScale={2}
               disabled={savingBracket}
@@ -1147,13 +1179,8 @@ export default function TiersCeilingsPage() {
                 means "and above", not "unfilled". */}
             <NumberInput
               id="tb-max"
-              value={bracketForm.maxAnnual ?? ''}
-              onChange={(v) =>
-                setBracketForm((f) => ({
-                  ...f,
-                  maxAnnual: v === '' || v == null ? null : Number(v),
-                }))
-              }
+              value={bracketForm.maxAnnual}
+              onChange={(v) => setBracketForm((f) => ({ ...f, maxAnnual: v }))}
               min={0}
               decimalScale={2}
               placeholder={t('payroll.tiers.andAbove')}
@@ -1167,9 +1194,7 @@ export default function TiersCeilingsPage() {
             <NumberInput
               id="tb-rate"
               value={bracketForm.ratePercent}
-              onChange={(v) =>
-                setBracketForm((f) => ({ ...f, ratePercent: typeof v === 'number' ? v : 0 }))
-              }
+              onChange={(v) => setBracketForm((f) => ({ ...f, ratePercent: v }))}
               min={0}
               max={100}
               decimalScale={4}
@@ -1197,9 +1222,10 @@ export default function TiersCeilingsPage() {
               id="tb-from"
               type="date"
               value={bracketForm.effectiveFrom}
-              onChange={(e) =>
-                setBracketForm((f) => ({ ...f, effectiveFrom: e.currentTarget.value }))
-              }
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setBracketForm((f) => ({ ...f, effectiveFrom: value }))
+              }}
               disabled={savingBracket}
             />
           </div>
@@ -1210,7 +1236,10 @@ export default function TiersCeilingsPage() {
               id="tb-to"
               type="date"
               value={bracketForm.effectiveTo}
-              onChange={(e) => setBracketForm((f) => ({ ...f, effectiveTo: e.currentTarget.value }))}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setBracketForm((f) => ({ ...f, effectiveTo: value }))
+              }}
               disabled={savingBracket}
             />
             <p className="hint" style={{ marginTop: 6 }}>{t('payroll.tiers.effectiveToHint')}</p>
@@ -1222,7 +1251,10 @@ export default function TiersCeilingsPage() {
           <TextInput
             id="tb-note"
             value={bracketForm.note}
-            onChange={(e) => setBracketForm((f) => ({ ...f, note: e.currentTarget.value }))}
+            onChange={(e) => {
+              const value = e.currentTarget.value
+              setBracketForm((f) => ({ ...f, note: value }))
+            }}
             disabled={savingBracket}
           />
         </div>
@@ -1266,7 +1298,10 @@ export default function TiersCeilingsPage() {
           <TextInput
             id="ns-scheme"
             value={nssfForm.scheme}
-            onChange={(e) => setNssfForm((f) => ({ ...f, scheme: e.currentTarget.value }))}
+            onChange={(e) => {
+              const value = e.currentTarget.value
+              setNssfForm((f) => ({ ...f, scheme: value }))
+            }}
             disabled={savingNssf}
           />
         </div>
@@ -1277,9 +1312,7 @@ export default function TiersCeilingsPage() {
             <NumberInput
               id="ns-emp"
               value={nssfForm.employeePercent}
-              onChange={(v) =>
-                setNssfForm((f) => ({ ...f, employeePercent: typeof v === 'number' ? v : 0 }))
-              }
+              onChange={(v) => setNssfForm((f) => ({ ...f, employeePercent: v }))}
               min={0}
               max={100}
               decimalScale={4}
@@ -1293,9 +1326,7 @@ export default function TiersCeilingsPage() {
             <NumberInput
               id="ns-empr"
               value={nssfForm.employerPercent}
-              onChange={(v) =>
-                setNssfForm((f) => ({ ...f, employerPercent: typeof v === 'number' ? v : 0 }))
-              }
+              onChange={(v) => setNssfForm((f) => ({ ...f, employerPercent: v }))}
               min={0}
               max={100}
               decimalScale={4}
@@ -1308,9 +1339,10 @@ export default function TiersCeilingsPage() {
         <div className="form-field">
           <Switch
             checked={nssfForm.isCeilinged}
-            onChange={(e) =>
-              setNssfForm((f) => ({ ...f, isCeilinged: e.currentTarget.checked }))
-            }
+            onChange={(e) => {
+              const checked = e.currentTarget.checked
+              setNssfForm((f) => ({ ...f, isCeilinged: checked }))
+            }}
             label={t('payroll.tiers.hasCeiling')}
             disabled={savingNssf}
           />
@@ -1324,13 +1356,8 @@ export default function TiersCeilingsPage() {
               will actually apply rather than nothing at all. */}
           <NumberInput
             id="ns-ceiling"
-            value={nssfForm.ceilingAmount ?? ''}
-            onChange={(v) =>
-              setNssfForm((f) => ({
-                ...f,
-                ceilingAmount: v === '' || v == null ? null : Number(v),
-              }))
-            }
+            value={nssfForm.ceilingAmount}
+            onChange={(v) => setNssfForm((f) => ({ ...f, ceilingAmount: v }))}
             min={0}
             decimalScale={2}
             placeholder={
@@ -1350,7 +1377,10 @@ export default function TiersCeilingsPage() {
               id="ns-from"
               type="date"
               value={nssfForm.effectiveFrom}
-              onChange={(e) => setNssfForm((f) => ({ ...f, effectiveFrom: e.currentTarget.value }))}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setNssfForm((f) => ({ ...f, effectiveFrom: value }))
+              }}
               disabled={savingNssf}
             />
           </div>
@@ -1361,7 +1391,10 @@ export default function TiersCeilingsPage() {
               id="ns-to"
               type="date"
               value={nssfForm.effectiveTo}
-              onChange={(e) => setNssfForm((f) => ({ ...f, effectiveTo: e.currentTarget.value }))}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setNssfForm((f) => ({ ...f, effectiveTo: value }))
+              }}
               disabled={savingNssf}
             />
           </div>
@@ -1372,7 +1405,10 @@ export default function TiersCeilingsPage() {
           <TextInput
             id="ns-note"
             value={nssfForm.note}
-            onChange={(e) => setNssfForm((f) => ({ ...f, note: e.currentTarget.value }))}
+            onChange={(e) => {
+              const value = e.currentTarget.value
+              setNssfForm((f) => ({ ...f, note: value }))
+            }}
             disabled={savingNssf}
           />
         </div>
@@ -1450,7 +1486,7 @@ export default function TiersCeilingsPage() {
                 decimalScale={2}
                 placeholder={t('payroll.tiers.noBound')}
                 disabled={bandSaving}
-                onChange={(v) => setBandMin(v === '' || v == null ? '' : Number(v))}
+                onChange={setBandMin}
               />
             </div>
 
@@ -1465,7 +1501,7 @@ export default function TiersCeilingsPage() {
                 decimalScale={2}
                 placeholder={t('payroll.tiers.noBound')}
                 disabled={bandSaving}
-                onChange={(v) => setBandMax(v === '' || v == null ? '' : Number(v))}
+                onChange={setBandMax}
               />
             </div>
           </div>

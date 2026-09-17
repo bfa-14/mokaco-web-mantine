@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next'
 import {
   Button,
   Checkbox,
-  Modal,
   NumberInput,
   Select,
   Textarea,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'

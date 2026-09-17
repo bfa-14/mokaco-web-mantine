@@ -8,6 +8,8 @@ import { salaryAdvancesService } from '../../services/workflowService'
 import { currenciesService } from '../../services/coreService'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 const nextMonth = () => {
   const d = new Date()
@@ -26,9 +28,13 @@ const fmt = (v: number) => v.toFixed(2)
 export function useSalaryAdvanceForm(employeeName: string | null, saving: boolean): RequestFormBody {
   const [currencies, setCurrencies] = useState<string[]>(['USD', 'LBP'])
 
-  const [amount, setAmount] = useState<number | null>(null)
+  /* Both figures are held AS THE BOX HANDS THEM OVER ("12." on the way to 12.5) and the numbers
+     are derived; writing a number back mid-decimal is what made "8.2" collapse to 0 elsewhere. */
+  const [amountRaw, setAmountRaw] = useState<NumberInputValue>('')
+  const amount = parseDecimal(amountRaw)
   const [currencyCode, setCurrencyCode] = useState('USD')
-  const [monthlyDeduction, setMonthlyDeduction] = useState<number | null>(null)
+  const [monthlyDeductionRaw, setMonthlyDeductionRaw] = useState<NumberInputValue>('')
+  const monthlyDeduction = parseDecimal(monthlyDeductionRaw)
   const [firstDeductionPeriod, setFirstDeductionPeriod] = useState(nextMonth())
   const [reason, setReason] = useState('')
 
@@ -75,11 +81,11 @@ export function useSalaryAdvanceForm(employeeName: string | null, saving: boolea
         <div className="form-field">
           <NumberInput
             label={t('common.amount')}
-            value={amount ?? ''}
+            value={amountRaw}
             min={0}
             decimalScale={2}
             disabled={saving}
-            onChange={(v) => setAmount(typeof v === 'number' ? v : null)}
+            onChange={setAmountRaw}
           />
         </div>
         <div className="form-field">
@@ -95,11 +101,11 @@ export function useSalaryAdvanceForm(employeeName: string | null, saving: boolea
         <div className="form-field">
           <NumberInput
             label={t('body.salaryAdvance.monthlyDeduction')}
-            value={monthlyDeduction ?? ''}
+            value={monthlyDeductionRaw}
             min={0}
             decimalScale={2}
             disabled={saving}
-            onChange={(v) => setMonthlyDeduction(typeof v === 'number' ? v : null)}
+            onChange={setMonthlyDeductionRaw}
           />
           <div className="hint">{t('body.salaryAdvance.monthlyHint')}</div>
         </div>

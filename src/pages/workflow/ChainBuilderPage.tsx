@@ -6,11 +6,11 @@ import {
   Button,
   Checkbox,
   Loader,
-  Modal,
   NumberInput,
   Select,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconCheck, IconPlus } from '@tabler/icons-react'
 import { DirectionalIcon } from '../../components/dxIcons'

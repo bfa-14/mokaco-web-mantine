@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Modal, Select, Textarea, TextInput } from '@mantine/core'
+import { Button, Select, Textarea, TextInput } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'

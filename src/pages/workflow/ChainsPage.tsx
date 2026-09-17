@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ActionIcon, Button, Loader, Modal } from '@mantine/core'
+import { ActionIcon, Button, Loader } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconPlus, IconRefresh } from '@tabler/icons-react'
 import { DirectionalIcon } from '../../components/dxIcons'

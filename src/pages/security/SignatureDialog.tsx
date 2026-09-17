@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Modal } from '@mantine/core'
+import { Button } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconTrash, IconUpload } from '@tabler/icons-react'
 import { signaturesService } from '../../services/securityService'

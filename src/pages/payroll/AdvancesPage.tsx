@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { ActionIcon, Button, Checkbox, Group, Modal, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
+import { ActionIcon, Button, Checkbox, Group, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
@@ -14,6 +15,8 @@ import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { advancesService } from '../../services/payrollService'
 import type { SalaryAdvance } from '../../types/payroll'
 import './payroll.css'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 const EMPTY: SalaryAdvance[] = []
 const fmt = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -44,7 +47,9 @@ export default function AdvancesPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [editRow, setEditRow] = useState<SalaryAdvance | null>(null)
-  const [editMonthly, setEditMonthly] = useState<number | null>(null)
+  /** As the box hands it over ("150." on the way to 150.5) — coerced below. See numeric.ts. */
+  const [editMonthly, setEditMonthly] = useState<NumberInputValue>('')
+  const editMonthlyValue = parseDecimal(editMonthly)
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -57,14 +62,14 @@ export default function AdvancesPage() {
   useEffect(refresh, [refresh])
 
   const saveMonthly = useCallback(async () => {
-    if (!editRow || editMonthly == null || editMonthly <= 0) return
+    if (!editRow || editMonthlyValue == null || editMonthlyValue <= 0) return
     setBusy(true); setError(null)
     try {
-      await advancesService.updateMonthly(editRow.salaryAdvanceId, editMonthly)
+      await advancesService.updateMonthly(editRow.salaryAdvanceId, editMonthlyValue)
       setEditRow(null)
       refresh()
     } catch (e) { setError(getErrorMessage(e)) } finally { setBusy(false) }
-  }, [editRow, editMonthly, refresh])
+  }, [editRow, editMonthlyValue, refresh])
 
   const grid = useMemo(() => rows, [rows])
 
@@ -278,15 +283,15 @@ export default function AdvancesPage() {
           <>
             <p>{editRow.employeeName} — {fmt(editRow.remainingAmount)} {editRow.currencyCode} remaining.</p>
             <NumberInput
-              value={editMonthly ?? ''}
+              value={editMonthly}
               min={0}
               decimalScale={2}
               disabled={busy}
-              onChange={(v) => setEditMonthly(typeof v === 'number' ? v : null)}
+              onChange={setEditMonthly}
             />
             {error && <div className="wf-balance-warn">{error}</div>}
             <div className="pr-actions">
-              <Button disabled={busy || editMonthly == null || editMonthly <= 0}
+              <Button disabled={busy || editMonthlyValue == null || editMonthlyValue <= 0}
                 onClick={() => void saveMonthly()}>
                 {busy ? 'Saving…' : 'Save'}
               </Button>

@@ -36,6 +36,20 @@ export const usersService = {
       { method: 'POST' },
     )
   },
+
+  /**
+   * Replaces a user's role set. Creating a user already takes `roleIds` (POST /api/users); this is
+   * the per-user counterpart for an existing account, `PUT /api/users/{id}/roles` with the full
+   * list — the same contract as the per-role permissions endpoint. The API side of it ships with
+   * the change that adds Username + Roles to GET /api/users; until then the server's refusal is
+   * shown verbatim in the dialog.
+   */
+  setRoles(userId: number, roleIds: number[]): Promise<void> {
+    return apiRequest<void>(`/api/users/${userId}/roles`, {
+      method: 'PUT',
+      body: JSON.stringify({ roleIds }),
+    })
+  },
 }
 
 /** Roles & permissions — all endpoints require the ROLE_MANAGE permission. */

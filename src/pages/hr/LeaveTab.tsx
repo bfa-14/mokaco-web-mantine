@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState, Table as TableInstance } from '@tanstack/react-table'
-import { ActionIcon, Button, Loader, Modal, NumberInput, Select, Table, Textarea } from '@mantine/core'
+import { ActionIcon, Button, Loader, NumberInput, Select, Table, Textarea } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconAdjustments, IconCalendar, IconPlus, IconPrinter, IconTrash } from '@tabler/icons-react'
@@ -15,6 +16,8 @@ import { fmtDate, fmtNumber, fmtSigned } from './hrFormat'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import type { LeaveBalance, LeaveLedgerEntry, LeaveType } from '../../types/hr'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 /** The movement an out-of-band balance correction is filed as — see AdjustBalanceModal. */
 const ADJUSTMENT = 'Adjustment'
@@ -31,7 +34,8 @@ function todayYMD(): string {
 interface FormState {
   leaveTypeId: number | null
   movementType: string
-  days: number
+  /** As the box hands it over ("0." on the way to 0.5) — coerced in submit. See numeric.ts. */
+  days: NumberInputValue
   effectiveDate: string
   note: string
 }
@@ -328,6 +332,7 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
   const [fieldErrors, setFieldErrors] = useState<{
     leaveTypeId?: string
     effectiveDate?: string
+    days?: string
   }>({})
 
   const [balanceSorting, setBalanceSorting] = useState<SortingState>([])
@@ -407,18 +412,21 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
   async function submit() {
     /* The DX "Days is required" rule is not reproduced: the state coerces an empty box to 0, so
        that rule could never fire in the original either. */
-    const errors: { leaveTypeId?: string; effectiveDate?: string } = {}
+    const errors: { leaveTypeId?: string; effectiveDate?: string; days?: string } = {}
+    // Coerced HERE, once — the box holds raw text until now so a half day can actually be typed.
+    const days = parseDecimal(form.days)
     if (form.leaveTypeId == null) errors.leaveTypeId = 'Leave type is required'
+    if (days == null) errors.days = 'Days must be a number'
     if (!form.effectiveDate) errors.effectiveDate = 'Date is required'
     setFieldErrors(errors)
-    if (errors.leaveTypeId || errors.effectiveDate) return
+    if (errors.leaveTypeId || errors.effectiveDate || days == null) return
     setSaving(true)
     try {
       await leaveLedgerService.post({
         employeeId,
         leaveTypeId: form.leaveTypeId!,
         movementType: form.movementType,
-        days: form.days,
+        days,
         effectiveDate: form.effectiveDate,
         leaveRequestId: null,
         note: form.note.trim() || null,
@@ -665,10 +673,12 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
             <label className="form-label">Days (− for usage)</label>
             <NumberInput
               value={form.days}
+              step={0.5}
+              decimalScale={2}
+              allowNegative
               disabled={saving}
-              onChange={(v) =>
-                setForm((f) => ({ ...f, days: typeof v === 'number' ? v : 0 }))
-              }
+              error={fieldErrors.days}
+              onChange={(v) => setForm((f) => ({ ...f, days: v }))}
             />
           </div>
 

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { ActionIcon, Autocomplete, Button, Group, Loader, Modal, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
+import { ActionIcon, Autocomplete, Button, Group, Loader, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconPencil, IconPlus, IconRefresh, IconSearch, IconTrash } from '@tabler/icons-react'
@@ -13,6 +14,8 @@ import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import { t } from '../../i18n/t'
 import type { Currency, ExchangeRate } from '../../types/core'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 /**
  * The stored rate-type CODES. The label is resolved at render, so the list follows the language —
@@ -34,7 +37,8 @@ interface FormState {
   toCurrency: string
   rateType: string
   effectiveDate: string
-  rate: number
+  /** AS THE BOX HOLDS IT — "8." while typing is a string; coerced only on submit. See numeric.ts. */
+  rate: NumberInputValue
 }
 
 const EMPTY: FormState = {
@@ -42,7 +46,7 @@ const EMPTY: FormState = {
   toCurrency: '',
   rateType: 'Official',
   effectiveDate: '',
-  rate: 0,
+  rate: '',
 }
 
 /**
@@ -379,11 +383,16 @@ export default function ExchangeRatesPage() {
       setFormError('Effective date is required')
       return
     }
+    const rate = parseDecimal(form.rate)
+    if (rate == null || rate <= 0) {
+      setFormError('Rate must be a number above zero')
+      return
+    }
     setFormError(null)
     setSaving(true)
     try {
       await exchangeRatesService.update(editing.exchangeRateId, {
-        rate: form.rate,
+        rate,
         // Sent only when it actually moved — null is the endpoint's "leave the date as it is",
         // and re-asserting an unchanged date would put the row through the uniqueness check for
         // no reason, against itself.
@@ -439,10 +448,16 @@ export default function ExchangeRatesPage() {
       setFormError('Effective date is required')
       return
     }
+    // Coerced HERE and nowhere earlier: the box must be allowed to hold "8." on the way to 8.2.
+    const rate = parseDecimal(form.rate)
+    if (rate == null || rate <= 0) {
+      setFormError('Rate must be a number above zero')
+      return
+    }
     setFormError(null)
     setSaving(true)
     try {
-      await exchangeRatesService.create(form)
+      await exchangeRatesService.create({ ...form, rate })
       notify('Exchange rate added.', 'success', 2000)
       setPopupVisible(false)
       await reload()
@@ -588,8 +603,9 @@ export default function ExchangeRatesPage() {
           <NumberInput
             id="er-rate"
             value={form.rate}
-            onChange={(v) => setForm((f) => ({ ...f, rate: typeof v === 'number' ? v : 0 }))}
+            onChange={(v) => setForm((f) => ({ ...f, rate: v }))}
             min={0}
+            decimalScale={4}
             disabled={saving}
           />
         </div>

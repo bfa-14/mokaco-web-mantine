@@ -6,12 +6,12 @@ import {
   Button,
   Checkbox,
   Loader,
-  Modal,
   PasswordInput,
   Text,
   Textarea,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconArrowBackUp, IconBan, IconMail, IconPrinter, IconRestore } from '@tabler/icons-react'
 import { DirectionalIcon } from '../../components/dxIcons'

@@ -5,8 +5,17 @@ import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, g
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import {
-  ActionIcon, Button, Group, Modal, NumberInput, Pagination, Select, Table, Textarea, TextInput,
+  ActionIcon,
+  Button,
+  Group,
+  NumberInput,
+  Pagination,
+  Select,
+  Table,
+  Textarea,
+  TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { MonthPickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconPlus, IconRefresh, IconSearch, IconUsersGroup } from '@tabler/icons-react'
@@ -617,7 +626,10 @@ export default function AdjustmentsPage() {
           <Textarea
             id="bulk-reason"
             value={bulkForm.reason}
-            onChange={(e) => setBulkForm((f) => ({ ...f, reason: e.currentTarget.value }))}
+            onChange={(e) => {
+              const value = e.currentTarget.value
+              setBulkForm((f) => ({ ...f, reason: value }))
+            }}
             maxLength={300}
             autosize
             minRows={2}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Loader, Modal } from '@mantine/core'
+import { Button, Loader } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { IconPrinter } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'

@@ -15,13 +15,13 @@ import {
   Button,
   Group,
   Loader,
-  Modal,
   NumberInput,
   Pagination,
   Select,
   Table,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconPencil, IconPlus, IconRefresh, IconSearch, IconTrash } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'

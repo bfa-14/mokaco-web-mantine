@@ -5,13 +5,13 @@ import {
   Button,
   Checkbox,
   Loader,
-  Modal,
   NumberInput,
   Select,
   Switch,
   Textarea,
   TextInput,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { IconClock, IconPencil, IconPlus, IconSparkles } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
@@ -29,6 +29,8 @@ import type {
 import { hhmm, money, PERMISSIONS, withSeconds } from './bookingShared'
 import { t as translate } from '../../i18n/t'
 import './bookings.css'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 /**
  * The room catalogue: what each room is, when it is open, and what can be added to a booking of it.
@@ -275,8 +277,18 @@ export default function RoomsPage() {
 
 /* ── the room form ───────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * The form's copy of the payload. The two decimal fields are held AS THE BOX HANDS THEM OVER
+ * (`string | number` — "12." while typing) and coerced once in submit; writing a number back
+ * mid-decimal is what made "8.2" collapse to 0 elsewhere. See components/numeric.ts.
+ */
+type RoomForm = Omit<RoomUpsertPayload, 'pricePerHour' | 'depositPercent'> & {
+  pricePerHour: NumberInputValue
+  depositPercent: NumberInputValue
+}
+
 /** A blank room, carrying the same defaults the server would apply — see the page remark on why. */
-function blankRoom(): RoomUpsertPayload {
+function blankRoom(): RoomForm {
   return {
     code: '',
     name: '',
@@ -311,7 +323,7 @@ function RoomEditModal({
 }) {
   const { t } = useTranslation()
 
-  const [form, setForm] = useState<RoomUpsertPayload>(blankRoom())
+  const [form, setForm] = useState<RoomForm>(blankRoom())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -345,18 +357,27 @@ function RoomEditModal({
     setError(null)
   }, [opened, room])
 
-  function set<K extends keyof RoomUpsertPayload>(key: K, value: RoomUpsertPayload[K]) {
+  function set<K extends keyof RoomForm>(key: K, value: RoomForm[K]) {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
   const missing = form.code.trim() === '' || form.name.trim() === '' || form.seats < 1
 
   async function submit() {
+    // Coerced HERE and nowhere earlier — see RoomForm.
+    const pricePerHour = parseDecimal(form.pricePerHour)
+    const depositPercent = parseDecimal(form.depositPercent)
+    if (pricePerHour == null || depositPercent == null) {
+      setError(t('booking.rooms.errNumber'))
+      return
+    }
+    const payload: RoomUpsertPayload = { ...form, pricePerHour, depositPercent }
+
     setSaving(true)
     setError(null)
     try {
-      if (room) await roomsService.update(room.roomId, form)
-      else await roomsService.create(form)
+      if (room) await roomsService.update(room.roomId, payload)
+      else await roomsService.create(payload)
 
       notifications.show({ message: t('booking.rooms.saved'), color: 'green' })
       onSaved()
@@ -465,7 +486,7 @@ function RoomEditModal({
             min={0}
             decimalScale={2}
             value={form.pricePerHour}
-            onChange={(v) => set('pricePerHour', typeof v === 'number' ? v : 0)}
+            onChange={(v) => set('pricePerHour', v)}
           />
         </div>
 
@@ -491,7 +512,7 @@ function RoomEditModal({
             max={100}
             decimalScale={2}
             value={form.depositPercent}
-            onChange={(v) => set('depositPercent', typeof v === 'number' ? v : 0)}
+            onChange={(v) => set('depositPercent', v)}
           />
           <div className="hint">{t('booking.rooms.depositHint')}</div>
         </div>
@@ -759,7 +780,8 @@ function RoomAddonsModal({
   const [addons, setAddons] = useState<RoomAddon[]>([])
   const [name, setName] = useState('')
   const [priceType, setPriceType] = useState<AddonPriceType>('PerHour')
-  const [price, setPrice] = useState<number>(0)
+  /** As the box hands it over — coerced in submit. See components/numeric.ts. */
+  const [price, setPrice] = useState<NumberInputValue>(0)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [isActive, setIsActive] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -790,11 +812,16 @@ function RoomAddonsModal({
 
   async function submit() {
     if (!room || name.trim() === '') return
+    const priceValue = parseDecimal(price)
+    if (priceValue == null) {
+      setError(t('booking.rooms.addonErrPrice'))
+      return
+    }
 
     setSaving(true)
     setError(null)
     try {
-      const payload = { name: name.trim(), priceType, price, isActive }
+      const payload = { name: name.trim(), priceType, price: priceValue, isActive }
       if (editingId == null) await roomsService.createAddon(room.roomId, payload)
       else await roomsService.updateAddon(room.roomId, editingId, payload)
 
@@ -886,7 +913,7 @@ function RoomAddonsModal({
             min={0}
             decimalScale={2}
             value={price}
-            onChange={(v) => setPrice(typeof v === 'number' ? v : 0)}
+            onChange={setPrice}
           />
         </div>
 

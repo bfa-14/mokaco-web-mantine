@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Modal, Switch, TextInput } from '@mantine/core'
+import { Button, Switch, TextInput } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { settingsService, systemService } from '../../services/settingsService'

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState, Table as TableInstance } from '@tanstack/react-table'
-import { ActionIcon, Button, Loader, Modal, NumberInput, Select, Table } from '@mantine/core'
+import { ActionIcon, Button, Loader, NumberInput, Select, Table } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconPencil, IconPlus, IconTrash } from '@tabler/icons-react'
@@ -15,10 +16,13 @@ import { fmtDate, fmtNumber } from './hrFormat'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import type { ComponentType, SalaryComponent } from '../../types/hr'
 import type { Currency } from '../../types/core'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
 
 interface FormState {
   componentTypeId: number | null
-  amount: number
+  /** As the box hands it over ("12." while typing) — coerced in submit. See components/numeric.ts. */
+  amount: NumberInputValue
   currencyCode: string
   effectiveFrom: string
   effectiveTo: string
@@ -154,6 +158,7 @@ export function SalaryComponentsTab({
     componentTypeId?: string
     currencyCode?: string
     effectiveFrom?: string
+    amount?: string
   }>({})
 
   /** The API's own refusal — the tier-band trigger's sentence, chiefly. Cleared on each attempt. */
@@ -261,18 +266,26 @@ export function SalaryComponentsTab({
   async function submit() {
     /* The DX "Amount is required" rule is not reproduced: the state coerces an empty box to 0, so
        that rule could never fire in the original either (0 satisfies a RequiredRule). */
-    const errors: { componentTypeId?: string; currencyCode?: string; effectiveFrom?: string } = {}
+    const errors: {
+      componentTypeId?: string
+      currencyCode?: string
+      effectiveFrom?: string
+      amount?: string
+    } = {}
+    // Coerced HERE, once — the box holds raw text until now so a decimal can actually be typed.
+    const amount = parseDecimal(form.amount)
     if (form.componentTypeId == null) errors.componentTypeId = 'Component type is required'
+    if (amount == null) errors.amount = 'Amount must be a number'
     if (!form.currencyCode) errors.currencyCode = 'Currency is required'
     if (!form.effectiveFrom) errors.effectiveFrom = 'Start date is required'
     setFieldErrors(errors)
-    if (errors.componentTypeId || errors.currencyCode || errors.effectiveFrom) return
+    if (errors.componentTypeId || amount == null || errors.currencyCode || errors.effectiveFrom) return
     setServerError(null)
     setSaving(true)
     try {
       if (editingId != null) {
         await salaryComponentsService.update(editingId, {
-          amount: form.amount,
+          amount,
           currencyCode: form.currencyCode,
           effectiveFrom: form.effectiveFrom,
           effectiveTo: form.effectiveTo || null,
@@ -282,7 +295,7 @@ export function SalaryComponentsTab({
         await salaryComponentsService.create({
           employeeId,
           componentTypeId: form.componentTypeId!,
-          amount: form.amount,
+          amount,
           currencyCode: form.currencyCode,
           effectiveFrom: form.effectiveFrom,
           effectiveTo: form.effectiveTo || null,
@@ -451,10 +464,10 @@ export function SalaryComponentsTab({
             <NumberInput
               value={form.amount}
               min={0}
+              decimalScale={2}
               disabled={saving}
-              onChange={(v) =>
-                setForm((f) => ({ ...f, amount: typeof v === 'number' ? v : 0 }))
-              }
+              error={fieldErrors.amount}
+              onChange={(v) => setForm((f) => ({ ...f, amount: v }))}
             />
             {/* THE RULE, BEFORE IT REFUSES. A trigger enforces this band on save; saying it here
                 turns a refusal into something the user could have avoided. Advisory only — the

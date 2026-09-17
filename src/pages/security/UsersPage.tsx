@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { ActionIcon, Button, Group, Loader, Modal, MultiSelect, Pagination, PasswordInput, Select, Switch, Table, TextInput } from '@mantine/core'
+import { ActionIcon, Badge, Button, Group, Loader, MultiSelect, Pagination, PasswordInput, Select, Switch, Table, TextInput } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
-import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPencil, IconPlus, IconRefresh, IconSearch, IconShield } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { rolesService, signaturesService, usersService } from '../../services/securityService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
+import { roleIdsOf, roleNamesOf } from '../../types/security'
 import type {
   Role,
   UserListItem,
@@ -31,9 +33,34 @@ const EMPTY_FORM: CreateFormState = {
   roleIds: [],
 }
 
-/** The two words the Status cell prints — also the closed set its filter dropdown offers. */
+/** The two words the Active cell prints — also the closed set its filter dropdown offers. */
 const ACTIVE_LABELS = ['Active', 'Inactive']
 const activeText = (isActive: boolean) => (isActive ? 'Active' : 'Inactive')
+
+/** The Roles cell's text — what the filter row and the funnel match against. */
+const rolesText = (user: UserListItem) => roleNamesOf(user).join(', ')
+
+/** The employee cell's text: the linked employee's name, blank when unlinked or not yet carried. */
+const employeeText = (user: UserListItem) => user.employeeName ?? ''
+
+/**
+ * The roles as chips. Nothing at all — not "None" — when the list carries no roles field, because
+ * that is the API not saying, which is different from the user holding none.
+ */
+function RolesCell({ user }: { user: UserListItem }) {
+  const names = roleNamesOf(user)
+  if (user.roles == null) return <span className="hint" style={{ margin: 0 }}>—</span>
+  if (names.length === 0) return <span className="badge badge--muted">None</span>
+  return (
+    <Group gap={4} wrap="wrap">
+      {names.map((name) => (
+        <Badge key={name} variant="light" size="sm" radius="sm" tt="none">
+          {name}
+        </Badge>
+      ))}
+    </Group>
+  )
+}
 
 function StatusCell({ isActive }: { isActive: boolean }) {
   return (
@@ -89,6 +116,12 @@ export default function UsersPage() {
 
   /** The user whose signature dialog is open, or null. */
   const [sigTarget, setSigTarget] = useState<UserListItem | null>(null)
+
+  /** The user whose roles are being edited, or null; and the draft selection for them. */
+  const [rolesTarget, setRolesTarget] = useState<UserListItem | null>(null)
+  const [rolesDraft, setRolesDraft] = useState<number[]>([])
+  const [rolesSaving, setRolesSaving] = useState(false)
+  const [rolesError, setRolesError] = useState<string | null>(null)
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -204,12 +237,47 @@ export default function UsersPage() {
     }
   }
 
+  function openRoles(user: UserListItem) {
+    setRolesTarget(user)
+    setRolesDraft(roleIdsOf(user, roles))
+    setRolesError(null)
+  }
+
+  async function submitRoles() {
+    if (!rolesTarget) return
+    setRolesSaving(true)
+    setRolesError(null)
+    try {
+      await usersService.setRoles(rolesTarget.userId, rolesDraft)
+      notify(`Roles for "${rolesTarget.username}" saved.`, 'success', 2500)
+      setRolesTarget(null)
+      await loadUsers()
+    } catch (err) {
+      // In the dialog, verbatim: the refusal names the reason and the reader still has the picker.
+      setRolesError(getErrorMessage(err))
+    } finally {
+      setRolesSaving(false)
+    }
+  }
+
   const columns = useMemo(
     () => [
       columnHelper.accessor('userId', { header: 'ID' }),
       columnHelper.accessor('username', { header: 'Username' }),
+      // The linked employee and the roles: both read through helpers that tolerate an API that
+      // does not send them yet (see UserListItem), so the grid degrades to blank cells, not a crash.
+      columnHelper.accessor((u) => employeeText(u), {
+        id: 'employee',
+        header: 'Employee',
+        cell: (info) => info.getValue() || <span className="hint" style={{ margin: 0 }}>—</span>,
+      }),
+      columnHelper.accessor((u) => rolesText(u), {
+        id: 'roles',
+        header: 'Roles',
+        cell: (info) => <RolesCell user={info.row.original} />,
+      }),
       columnHelper.accessor('isActive', {
-        header: 'Status',
+        header: 'Active',
         cell: (info) => <StatusCell isActive={info.row.original.isActive} />,
         meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
       }),
@@ -249,6 +317,15 @@ export default function UsersPage() {
               >
                 {user.isActive ? 'Deactivate' : 'Activate'}
               </Button>
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                leftSection={<IconShield size={14} />}
+                title="Change which roles this user holds."
+                onClick={() => openRoles(user)}
+              >
+                Roles
+              </Button>
               {/* SIGNATURE_MANAGE only — hidden, never disabled. */}
               {canManageSignatures && (
                 <Button
@@ -266,7 +343,8 @@ export default function UsersPage() {
         },
       }),
     ],
-    [signatures, canManageSignatures, toggleActive],
+    // `roles` prefills the roles editor from a row's names.
+    [signatures, canManageSignatures, toggleActive, roles],
   )
 
   /** The pixel widths the original grid pinned; unlisted columns auto-size, as columnAutoWidth did. */
@@ -275,7 +353,7 @@ export default function UsersPage() {
     isActive: 130,
     lastLoginAt: 180,
     signature: 190,
-    actions: canManageSignatures ? 250 : 140,
+    actions: canManageSignatures ? 330 : 220,
   }
 
   const table = useReactTable({
@@ -502,6 +580,52 @@ export default function UsersPage() {
           </Button>
           <Button onClick={() => void submitCreate()} disabled={saving}>
             {saving ? 'Saving…' : 'Create User'}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* THE ROLES EDITOR. The same MultiSelect the create form uses, prefilled with what the row
+          carries and saved as the FULL set — the endpoint replaces, so an unticked role is removed. */}
+      <Modal
+        opened={rolesTarget !== null}
+        onClose={() => setRolesTarget(null)}
+        title={rolesTarget ? `Roles — ${rolesTarget.username}` : 'Roles'}
+        size={440}
+        centered
+      >
+        <div className="form-field">
+          <label className="form-label" htmlFor="edit-user-roles">
+            Roles
+          </label>
+          <MultiSelect
+            id="edit-user-roles"
+            data={roles.map((r) => ({ value: String(r.roleId), label: r.name }))}
+            value={rolesDraft.map(String)}
+            onChange={(values) => setRolesDraft(values.map(Number))}
+            placeholder="Select roles…"
+            searchable
+            disabled={rolesSaving}
+          />
+          {rolesTarget && rolesTarget.roles == null && (
+            <p className="hint" style={{ marginTop: 6 }}>
+              The list did not carry this user's current roles, so the picker starts empty; what
+              you save here becomes the full set.
+            </p>
+          )}
+        </div>
+
+        {rolesError && (
+          <div className="alert alert--error" role="alert">
+            {rolesError}
+          </div>
+        )}
+
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setRolesTarget(null)} disabled={rolesSaving}>
+            Cancel
+          </Button>
+          <Button onClick={() => void submitRoles()} disabled={rolesSaving}>
+            {rolesSaving ? 'Saving…' : 'Save roles'}
           </Button>
         </div>
       </Modal>

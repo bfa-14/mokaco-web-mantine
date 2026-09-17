@@ -4,10 +4,10 @@ import {
   Button,
   Checkbox,
   Loader,
-  Modal,
   MultiSelect,
   Select,
 } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { DateRangeField } from '../../components/DateRangeField'
 import { t } from '../../i18n/t'

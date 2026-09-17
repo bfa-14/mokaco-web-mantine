@@ -23,6 +23,14 @@ export class FormErrorBoundary extends Component<
      */
     resetKey: string | null
     children: ReactNode
+    /** The panel's heading. Defaults to the form wording; a dialog names itself instead. */
+    title?: string
+    /** What the reader can still do — defaults to the request-picker advice. */
+    hint?: string
+    /** Buttons under the detail — a dialog puts its Close here so the reader is never stuck. */
+    actions?: ReactNode
+    /** The console log prefix, so a dialog crash is filed under its own name. */
+    tag?: string
   },
   { error: Error | null; stack: string | null; shownFor: string | null }
 > {
@@ -56,22 +64,23 @@ export class FormErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Still logged: the console remains the fullest record, and this panel is a summary of it.
-    console.error('[NewRequestShell] a form body crashed', error, info)
+    console.error(`[${this.props.tag ?? 'NewRequestShell'}] a form body crashed`, error, info)
     this.setState({ stack: info.componentStack ?? null })
   }
 
   render() {
     const { error, stack } = this.state
     if (!error) return this.props.children
+    const { title, hint, actions } = this.props
 
     return (
       <div className="card" role="alert">
         <div className="card-title" style={{ color: '#b91c1c' }}>
-          This form could not be displayed
+          {title ?? 'This form could not be displayed'}
         </div>
         <p className="hint" style={{ marginTop: 0 }}>
-          The rest of the page still works — pick another request type on the left, or send this to
-          whoever is fixing it.
+          {hint ??
+            'The rest of the page still works — pick another request type on the left, or send this to whoever is fixing it.'}
         </p>
         {/* The message VERBATIM. Never a friendly paraphrase: the exact text is the whole value. */}
         <pre className="wf-crash-detail">{error.message}</pre>
@@ -83,6 +92,7 @@ export class FormErrorBoundary extends Component<
             <pre className="wf-crash-detail">{stack.trim()}</pre>
           </details>
         )}
+        {actions && <div className="form-actions">{actions}</div>}
       </div>
     )
   }

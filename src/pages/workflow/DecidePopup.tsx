@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Checkbox, Loader, Modal, NumberInput, PasswordInput, Select, Textarea } from '@mantine/core'
+import { Button, Checkbox, Loader, NumberInput, PasswordInput, Select, Textarea } from '@mantine/core'
+import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { ApiError } from '../../api/client'
@@ -37,6 +38,14 @@ import type {
 } from '../../types/workflow'
 import { balanceDaysText } from './newRequestShared'
 import { shortDate } from './workflowFormat'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
+
+/** One editable tip share: the payload's line with the amount as the NumberInput holds it. */
+type DraftLine = Omit<TipDistributionLine, 'amount'> & { amount: NumberInputValue }
+
+/** A share's figure; a blank or unparseable box counts as 0, which zeroShare then refuses. */
+const lineAmount = (line: DraftLine): number => parseDecimal(line.amount) ?? 0
 
 /**
  * THE decision dialog. One component, used from the Requests hub cards AND from the current step in
@@ -129,8 +138,13 @@ export function DecidePopup({
   /** The API's refusal, shown verbatim INSIDE the dialog. */
   const [error, setError] = useState<string | null>(null)
 
-  /** THE TYPED FIGURE for leave; null means "as requested" (the procedure's own default). */
-  const [grantValue, setGrantValue] = useState<number | null>(null)
+  /* EVERY DECIMAL FIGURE BELOW IS HELD AS THE BOX HANDS IT OVER ("2." on the way to 2.5) and the
+     number is DERIVED from it; writing a number back mid-decimal is what made "8.2" collapse to 0
+     on the Exchange-rates page. The minutes boxes stay numeric — they take no decimals. */
+
+  /** THE TYPED FIGURE for leave; blank means "as requested" (the procedure's own default). */
+  const [grantValueRaw, setGrantValueRaw] = useState<NumberInputValue>('')
+  const grantValue = parseDecimal(grantValueRaw)
   const [leave, setLeave] = useState<LeaveRequestPayload | null>(null)
 
   /**
@@ -207,8 +221,12 @@ export function DecidePopup({
   /** OFF BY DEFAULT — approving the calculated split stays one click. */
   const [redistribute, setRedistribute] = useState(false)
 
-  /** The editable split. A LOCAL COPY seeded from the payload, never the payload itself. */
-  const [draftLines, setDraftLines] = useState<TipDistributionLine[]>([])
+  /**
+   * The editable split. A LOCAL COPY seeded from the payload, never the payload itself. Each
+   * share is held as the box hands it over (see the remark on the decimal figures above) and read
+   * through {@link lineAmount}.
+   */
+  const [draftLines, setDraftLines] = useState<DraftLine[]>([])
 
   /** Add-a-person picker, cleared after each add. */
   const [addEmployeeId, setAddEmployeeId] = useState<number | null>(null)
@@ -220,7 +238,7 @@ export function DecidePopup({
     return tip.amounts.map((pool) => {
       const assigned = draftLines
         .filter((l) => l.currencyCode === pool.currencyCode)
-        .reduce((sum, l) => sum + cents(l.amount || 0), 0)
+        .reduce((sum, l) => sum + cents(lineAmount(l)), 0)
       const pooled = cents(pool.amount)
       return {
         currencyCode: pool.currencyCode,
@@ -236,7 +254,7 @@ export function DecidePopup({
   const splitBalances = currencyTotals.length > 0 && currencyTotals.every((c) => c.exact)
 
   /** A share of nothing — the procedure refuses it; caught while the row is on screen. */
-  const zeroShare = draftLines.some((l) => !l.amount || l.amount <= 0)
+  const zeroShare = draftLines.some((l) => lineAmount(l) <= 0)
 
   /** Whoever is not yet in the split — the only people "Add participant" may offer. */
   const addableStaff = useMemo(
@@ -265,10 +283,12 @@ export function DecidePopup({
   const [advance, setAdvance] = useState<SalaryAdvancePayload | null>(null)
 
   /** The amount to approve, for whichever of the two money types this is. Required. */
-  const [grantSigned, setGrantSigned] = useState<number | null>(null)
+  const [grantSignedRaw, setGrantSignedRaw] = useState<NumberInputValue>('')
+  const grantSigned = parseDecimal(grantSignedRaw)
 
   /** The monthly deduction to approve, advance only. Sent explicitly. */
-  const [grantMonthly, setGrantMonthly] = useState<number | null>(null)
+  const [grantMonthlyRaw, setGrantMonthlyRaw] = useState<NumberInputValue>('')
+  const grantMonthly = parseDecimal(grantMonthlyRaw)
 
   /** The standing figure — the ceiling, NOT the requested figure once a chain is underway. */
   const standingAmount = isPayrollAdjustment
@@ -303,7 +323,8 @@ export function DecidePopup({
   }, [isSalaryAdvance, grantSigned, grantMonthly])
 
   /** An expense's granted figure — REQUIRED, prefilled with what was requested. */
-  const [grantAmount, setGrantAmount] = useState<number | null>(null)
+  const [grantAmountRaw, setGrantAmountRaw] = useState<NumberInputValue>('')
+  const grantAmount = parseDecimal(grantAmountRaw)
 
   /** THE FROZEN CONVERSION — the rate STORED ON THE EXPENSE, not today's. */
   const grantUsd = useMemo(() => {
@@ -409,19 +430,19 @@ export function DecidePopup({
         // Prefilled with THE STANDING FIGURE, not the requested one.
         if (otPayload) setGrantMinutes(otPayload.approvedMinutes ?? otPayload.requestedMinutes)
         // Prefilled with what was REQUESTED — the common decision is "yes, all of it".
-        if (expensePayload) setGrantAmount(expensePayload.amount)
+        if (expensePayload) setGrantAmountRaw(expensePayload.amount)
 
         // THE STANDING FIGURE, not the original claim.
         setAdjustment(adjPayload)
-        if (adjPayload) setGrantSigned(adjPayload.approvedAmount ?? adjPayload.amount)
+        if (adjPayload) setGrantSignedRaw(adjPayload.approvedAmount ?? adjPayload.amount)
 
         setAdvance(advPayload)
         if (advPayload) {
           const amount = advPayload.approvedAmount ?? advPayload.amount
           const monthly = advPayload.approvedMonthlyDeduction ?? advPayload.monthlyDeduction
-          setGrantSigned(amount)
+          setGrantSignedRaw(amount)
           // Clamped on open, not only while typing.
-          setGrantMonthly(Math.min(monthly, amount))
+          setGrantMonthlyRaw(Math.min(monthly, amount))
         }
 
         setExitPermission(epPayload)
@@ -512,7 +533,7 @@ export function DecidePopup({
               ? draftLines.map((l) => ({
                   employeeId: l.employeeId,
                   currencyCode: l.currencyCode,
-                  amount: l.amount,
+                  amount: lineAmount(l),
                 }))
               : null,
             comment: text || null,
@@ -868,13 +889,13 @@ export function DecidePopup({
               <div className="wf-amount-row">
                 <NumberInput
                   id="wf-grant-amount"
-                  value={grantAmount ?? ''}
+                  value={grantAmountRaw}
                   min={0}
                   max={expense.amount}
                   step={1}
                   decimalScale={2}
                   disabled={submitting}
-                  onChange={(v) => setGrantAmount(num(v))}
+                  onChange={setGrantAmountRaw}
                 />
                 <span className="wf-amount-ccy">{expense.currencyCode}</span>
               </div>
@@ -990,18 +1011,18 @@ export function DecidePopup({
                 <div className="wf-amount-row">
                   <NumberInput
                     id="wf-grant-signed"
-                    value={grantSigned ?? ''}
+                    value={grantSignedRaw}
                     min={0}
                     max={standingAmount}
                     step={1}
                     decimalScale={2}
                     disabled={submitting}
                     onChange={(v) => {
-                      const next = num(v)
-                      setGrantSigned(next)
+                      setGrantSignedRaw(v)
+                      const next = parseDecimal(v)
                       // THE SCHEDULE FOLLOWS THE LOAN DOWN — clamped, not cleared.
                       if (isSalaryAdvance && next != null && grantMonthly != null && grantMonthly > next) {
-                        setGrantMonthly(next)
+                        setGrantMonthlyRaw(next)
                       }
                     }}
                   />
@@ -1030,14 +1051,14 @@ export function DecidePopup({
               <div className="wf-amount-row">
                 <NumberInput
                   id="wf-grant-monthly"
-                  value={grantMonthly ?? ''}
+                  value={grantMonthlyRaw}
                   min={0}
                   // Bounded by the FIELD, not the payload.
                   max={grantSigned ?? standingAmount}
                   step={1}
                   decimalScale={2}
                   disabled={submitting}
-                  onChange={(v) => setGrantMonthly(num(v))}
+                  onChange={setGrantMonthlyRaw}
                 />
                 <span className="wf-amount-ccy">{signedCurrency}</span>
               </div>
@@ -1108,9 +1129,8 @@ export function DecidePopup({
                           disabled={submitting}
                           aria-label={`${line.fullName} — ${line.currencyCode}`}
                           onChange={(v) => {
-                            const next = num(v) ?? 0
                             setDraftLines((prev) =>
-                              prev.map((l, i) => (i === index ? { ...l, amount: next } : l)),
+                              prev.map((l, i) => (i === index ? { ...l, amount: v } : l)),
                             )
                           }}
                         />
@@ -1205,13 +1225,13 @@ export function DecidePopup({
               </label>
               <NumberInput
                 id="wf-grant-days"
-                value={grantValue ?? ''}
+                value={grantValueRaw}
                 min={0.1}
                 max={leave.daysRequested}
                 step={0.5}
                 placeholder={`${leave.daysRequested} (as requested)`}
                 disabled={submitting}
-                onChange={(v) => setGrantValue(num(v))}
+                onChange={setGrantValueRaw}
               />
               <div className="hint">
                 {leave.employeeName} asked for {balanceDaysText(leave.daysRequested)}. Leave this
