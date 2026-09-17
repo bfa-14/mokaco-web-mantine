@@ -200,13 +200,13 @@ export const ROUTE_ACCESS: RouteRule[] = [
   { path: '/security/role-permissions', anyOf: [PERMISSION.ROLE_MANAGE] },
 
   /* ── Settings ─────────────────────────────────────────────────────────────────────────────────
-     GATED ON SETTING_MANAGE, WHICH ALSO HIDES THE PERSONAL PREFERENCES INSIDE IT.
-     The page holds two unrelated things: the system settings (SETTING_MANAGE, and the reason for
-     this entry) and each person's own Language and Live-updates choices, which need no permission
-     and used to reach everybody. Gating the route takes the second away with the first — see the
-     note in SettingsPage. The language switch is the one that matters: it is the only route to
-     reading this application in Arabic. */
-  { path: '/settings', anyOf: [PERMISSION.SETTING_MANAGE] },
+     DELIBERATELY ABSENT, so the route stays open to every signed-in user.
+     The page holds two unrelated things: the system settings, which need SETTING_MANAGE, and each
+     person's own Language and Live-updates choices, which need no permission at all. Gating the
+     route would take the second away with the first, and the language switch is the only route to
+     reading this application in Arabic. So the page gates ITSELF — SettingsPage hides the
+     SETTING_MANAGE tabs and never fetches the list without the code — and neither App.tsx nor the
+     side nav consults this table for it. An entry here was a lie both readers had to ignore. */
 ]
 
 /** Indexed once at module load — the nav asks this for every leaf on every render. */

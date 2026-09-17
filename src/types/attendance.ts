@@ -12,9 +12,9 @@
 export const PERMISSIONS = {
   /** Read attendance, rosters, devices and summaries. */
   view: 'ATTENDANCE_VIEW',
-  /** Run the processor, enter attendance manually, edit rosters and shifts. */
+  /** Run the processor, mark absentees, edit rosters and shifts. Never a pay-bearing edit. */
   manage: 'ATTENDANCE_MANAGE',
-  /** HR ONLY: corrections, exit approvals and dispositions, day adjustments. Changes pay. */
+  /** HR ONLY: manual entry, corrections, exit approvals and dispositions, day adjustments. Changes pay. */
   correct: 'ATTENDANCE_CORRECT',
   /** Upload device spreadsheets and map unresolved PINs. */
   import: 'ATTENDANCE_IMPORT',
