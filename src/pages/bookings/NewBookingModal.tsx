@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { emailError } from '../../components/contact'
 import {
   Button,
   Checkbox,
@@ -163,6 +164,11 @@ export function NewBookingModal({
 
   async function submit() {
     if (!room || missing) return
+    // The optional address, when given, must be one — same rule as the employee form (contact.ts).
+    if (emailError(guestEmail, false)) {
+      setError(t('booking.new.emailInvalid'))
+      return
+    }
 
     setSaving(true)
     setError(null)

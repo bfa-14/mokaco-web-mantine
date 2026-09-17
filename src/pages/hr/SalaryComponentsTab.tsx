@@ -14,6 +14,7 @@ import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { fmtDate, fmtNumber } from './hrFormat'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
+import { isActiveRow } from '../../types/hr'
 import type { ComponentType, SalaryComponent } from '../../types/hr'
 import type { Currency } from '../../types/core'
 import { parseDecimal } from '../../components/numeric'
@@ -443,10 +444,14 @@ export function SalaryComponentsTab({
         <div className="form-field">
           <label className="form-label">Component type</label>
           <Select
-            data={componentTypes.map((t) => ({
-              value: String(t.componentTypeId),
-              label: t.name,
-            }))}
+            data={componentTypes
+              // A deactivated type is off the menu for NEW components; the one an existing row
+              // already carries stays, so editing it does not blank the box.
+              .filter((t) => isActiveRow(t) || t.componentTypeId === form.componentTypeId)
+              .map((t) => ({
+                value: String(t.componentTypeId),
+                label: t.name,
+              }))}
             value={form.componentTypeId != null ? String(form.componentTypeId) : null}
             placeholder="Select type…"
             allowDeselect={false}

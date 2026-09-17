@@ -4,13 +4,16 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, Select, Table, TextInput } from '@mantine/core'
 import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
-import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPencil, IconPlus, IconRefresh, IconRotateClockwise, IconSearch, IconTrash } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
+import { useReferenceDelete } from '../../components/ReferenceDelete'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import { componentTypesService } from '../../services/hrService'
+import { isActiveRow } from '../../types/hr'
 import type { ComponentType } from '../../types/hr'
 
 const CATEGORIES = ['Earning', 'Deduction']
@@ -41,8 +44,13 @@ const WIDTHS: Record<string, number | undefined> = {
   componentTypeId: 80,
   category: 150,
   sign: 100,
-  actions: 110,
+  isActive: 110,
+  actions: 260,
 }
+
+/** The two words the Status cell can show — the closed set the filter dropdown offers. */
+const ACTIVE_LABELS = ['Active', 'Inactive']
+const activeText = (isActive: boolean) => (isActive ? 'Active' : 'Inactive')
 
 /** The page sizes the original pager offered. */
 const PAGE_SIZES = ['10', '25', '50']
@@ -51,12 +59,20 @@ function ComponentTypesGrid({
   rows,
   canManage,
   onEdit,
+  onDelete,
+  onReactivate,
+  busy,
 }: {
   rows: ComponentType[]
   /** False for a COMPONENT_MANAGE-less reader: the grid still reads, the Actions column goes. */
   canManage: boolean
   onEdit: (row: ComponentType) => void
+  onDelete: (row: ComponentType) => void
+  onReactivate: (row: ComponentType) => void
+  /** A delete / (re)activate is in flight — the row buttons wait for it. */
+  busy: boolean
 }) {
+  const { t } = useTranslation()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -76,6 +92,18 @@ function ComponentTypesGrid({
         cell: (info) => (info.row.original.sign < 0 ? '−1' : '+1'),
         meta: { filterText: (v) => (v < 0 ? '−1' : '+1'), filterOptions: ['+1', '−1'] },
       }),
+      // Inactive = deactivated after a refused delete. Still listed here (this is the admin page),
+      // hidden from the salary-component form's pick-list.
+      columnHelper.accessor((row) => isActiveRow(row), {
+        id: 'isActive',
+        header: 'Status',
+        cell: (info) => (
+          <span className={info.getValue() ? 'badge badge--on' : 'badge badge--off'}>
+            {info.getValue() ? t('hr.reference.active') : t('hr.reference.inactive')}
+          </span>
+        ),
+        meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
+      }),
       // The column, not just the button — an "Actions" header over empty cells reads as broken.
       ...(canManage
         ? [
@@ -90,7 +118,28 @@ function ComponentTypesGrid({
                     leftSection={<IconPencil size={14} />}
                     onClick={() => onEdit(info.row.original)}
                   >
-                    Edit
+                    {t('common.edit')}
+                  </Button>
+                  {!isActiveRow(info.row.original) && (
+                    <Button
+                      variant="subtle"
+                      size="compact-sm"
+                      leftSection={<IconRotateClockwise size={14} />}
+                      disabled={busy}
+                      onClick={() => onReactivate(info.row.original)}
+                    >
+                      {t('hr.reference.reactivate')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    color="red"
+                    leftSection={<IconTrash size={14} />}
+                    disabled={busy}
+                    onClick={() => onDelete(info.row.original)}
+                  >
+                    {t('common.delete')}
                   </Button>
                 </div>
               ),
@@ -99,7 +148,7 @@ function ComponentTypesGrid({
         : []),
     ],
     // `rows` only feeds the Category dropdown's option list.
-    [onEdit, rows, canManage],
+    [onEdit, onDelete, onReactivate, busy, rows, canManage, t],
   )
 
   const table = useReactTable({
@@ -262,6 +311,10 @@ export default function ComponentTypesPage() {
     void reload()
   }
 
+  /* Delete, and "Deactivate instead" when the API refuses (a type on payslip lines or salary
+     components). The refusal dialog shows the server's sentence verbatim — see ReferenceDelete. */
+  const ending = useReferenceDelete(componentTypesService, reload)
+
   function openCreate() {
     setEditingId(null)
     setName('')
@@ -343,7 +396,14 @@ export default function ComponentTypesPage() {
           <Loader size={40} />
         </div>
       ) : (
-        <ComponentTypesGrid rows={rows} canManage={canManage} onEdit={openEdit} />
+        <ComponentTypesGrid
+          rows={rows}
+          canManage={canManage}
+          onEdit={openEdit}
+          onDelete={(row) => ending.requestDelete(row.componentTypeId, row.name)}
+          onReactivate={(row) => void ending.setActive(row.componentTypeId, row.name, true)}
+          busy={ending.busy}
+        />
       )}
 
       <Modal
@@ -401,6 +461,8 @@ export default function ComponentTypesPage() {
           </Button>
         </div>
       </Modal>
+
+      {ending.dialog}
     </div>
   )
 }

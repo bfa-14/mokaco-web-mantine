@@ -30,6 +30,7 @@ import { employeeLabel } from '../../types/hr'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import { branchOptions, departmentOptions, positionOptions } from '../../hr/assignableOptions'
 import { useTranslation } from 'react-i18next'
+import { CONTACT_REQUIRED_MESSAGE, emailError, phoneError } from '../../components/contact'
 import type { UnlinkedUser } from '../../types/security'
 
 /**
@@ -99,20 +100,15 @@ const EMPTY: FormState = {
 
 /* PORT NOTE: DevExtreme ValidationGroup/RequiredRule → the same five required checks, message for
    message, run in submit() and shown as field-level errors. */
-/**
- * DELIBERATELY LOOSE: one @, a dot after it, no spaces.
- *
- * The strict RFC grammar is famously enormous, and every compact approximation of it rejects
- * addresses that genuinely deliver. What this is actually for is catching the typo — the missing
- * @, the trailing comma from a pasted list — and the real verification is the mail either arriving
- * or bouncing into EMAIL_OUTBOX.Error, which is a better test than any regex.
- */
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/* THE CONTACT RULES live in src/components/contact.ts, mirrored from the API's ContactRules: a
+   Lebanese phone and a bare e-mail address, both REQUIRED on create and never blocking on edit. */
 
 interface FieldErrors {
   fullName?: string
-  /** Only ever set for a MALFORMED address — an empty box is a valid answer, not an error. */
+  /** On create: blank or malformed. On edit: only a CHANGED, malformed address. */
   email?: string
+  /** Same contract as email. */
+  phoneNumber?: string
   branchId?: string
   departmentId?: string
   positionId?: string
@@ -423,11 +419,26 @@ export function EmployeeFormPopup({
     if (form.departmentId == null) errors.departmentId = 'Department is required'
     if (form.positionId == null) errors.positionId = 'Position is required'
     if (!form.hireDate) errors.hireDate = 'Hire date is required'
-    // OPTIONAL, SO ONLY A FILLED BOX IS JUDGED. The check is deliberately loose — one @, a dot
-    // after it, no spaces — because the strict grammar rejects addresses that genuinely deliver,
-    // and the cost of a typo here is a mail nobody receives, not a corrupted record.
-    if (form.email.trim() && !EMAIL_PATTERN.test(form.email.trim()))
-      errors.email = t('hr.employee.emailInvalid')
+    /* CONTACT. On CREATE both are required and must parse — the API refuses otherwise, with these
+       same sentences. On EDIT nothing blocks on a missing address (the hint under the fields says
+       what it costs), and a stored value is judged only if it was CHANGED: a legacy number that
+       predates the rule must not stop an unrelated correction from saving. */
+    const contactRequired = !isEdit
+    const emailChanged = !isEdit || form.email.trim() !== (employee?.email ?? '').trim()
+    const phoneChanged =
+      !isEdit || form.phoneNumber.trim() !== (employee?.phoneNumber ?? '').trim()
+    const emailProblem = emailError(form.email, contactRequired)
+    if (emailProblem && emailChanged)
+      errors.email =
+        emailProblem === CONTACT_REQUIRED_MESSAGE
+          ? t('hr.employee.contactRequired')
+          : t('hr.employee.emailInvalid')
+    const phoneProblem = phoneError(form.phoneNumber, contactRequired)
+    if (phoneProblem && phoneChanged)
+      errors.phoneNumber =
+        phoneProblem === CONTACT_REQUIRED_MESSAGE
+          ? t('hr.employee.contactRequired')
+          : t('hr.employee.phoneInvalid')
     setFieldErrors(errors)
     if (Object.keys(errors).length > 0) return
 
@@ -741,13 +752,22 @@ export function EmployeeFormPopup({
             />
           </div>
 
-          {/* CONTACT. Optional, both of them — plenty of staff have neither on file, and refusing
-              to save an employee record over a missing phone number would be absurd. The email is
-              the one the SYSTEM uses: request-closed notifications go to it, and somebody without
-              one simply gets none. */}
+          {/* CONTACT. REQUIRED ON CREATE — a new employee the system cannot write to is a person
+              whose approvals go nowhere — and the API refuses the create without both. On EDIT
+              nothing blocks: plenty of older records have neither on file, and refusing an
+              unrelated correction over that would be absurd; the amber hint says what it costs. */}
+          {isEdit && !form.email.trim() && !form.phoneNumber.trim() && (
+            <div
+              className="card"
+              role="status"
+              style={{ marginBottom: 12, borderInlineStart: '4px solid #c9922b', padding: '8px 12px' }}
+            >
+              {t('hr.employee.noContactHint')}
+            </div>
+          )}
           <div className="form-field">
             <label className="form-label" htmlFor="emp-email">
-              {t('hr.employee.email')}
+              {t('hr.employee.email')} {!isEdit && t('common.required')}
             </label>
             <TextInput
               id="emp-email"
@@ -768,7 +788,7 @@ export function EmployeeFormPopup({
 
           <div className="form-field">
             <label className="form-label" htmlFor="emp-phone">
-              {t('hr.employee.phoneNumber')}
+              {t('hr.employee.phoneNumber')} {!isEdit && t('common.required')}
             </label>
             <TextInput
               id="emp-phone"
@@ -777,8 +797,13 @@ export function EmployeeFormPopup({
                 const value = e.currentTarget.value
                 setForm((f) => ({ ...f, phoneNumber: value }))
               }}
+              placeholder="03 123 456"
+              error={fieldErrors.phoneNumber}
               disabled={saving}
             />
+            <p className="hint" style={{ marginTop: 6 }}>
+              {t('hr.employee.phoneHint')}
+            </p>
           </div>
 
           {/* BESIDE THE TWO ADDRESSES, because it is a fact about them: it decides which language the

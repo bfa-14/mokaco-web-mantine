@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Button, Select } from '@mantine/core'
-import { IconSend } from '@tabler/icons-react'
+import { Button, Select, Tooltip } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
+import { IconSend, IconTrash } from '@tabler/icons-react'
+import { Modal } from '../../components/dialogs'
 import { rosterService } from '../../services/attendanceService'
 import { rosterApprovalsService, meService } from '../../services/workflowService'
 import { branchesService } from '../../services/hrService'
@@ -49,11 +51,14 @@ const ACCENT: Record<MonthState, string> = {
 export function RosterApprovalBanner({
   period,
   canManage,
+  onCleared,
 }: {
   /** 'yyyy-MM' — the month the grid is showing. */
   period: string
   /** ATTENDANCE_MANAGE. A viewer sees the state and gets no button. */
   canManage: boolean
+  /** Called after "Clear roster" succeeded — the grid behind has to refetch its month. */
+  onCleared?: () => void
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -66,6 +71,10 @@ export function RosterApprovalBanner({
   const [submitting, setSubmitting] = useState(false)
   /** The server's refusal — "already approved", "already pending" — shown verbatim, on the banner. */
   const [error, setError] = useState<string | null>(null)
+
+  /** "Clear roster": null (closed) → 'confirm' → in flight → a refusal's sentence, or closed. */
+  const [clearState, setClearState] = useState<null | { refused: string | null }>(null)
+  const [clearing, setClearing] = useState(false)
 
   /** The month as the endpoint and the request both spell it: its first day. */
   const monthDate = `${period}-01`
@@ -97,7 +106,9 @@ export function RosterApprovalBanner({
       .monthStatus(branchId, monthDate)
       .then((result) => {
         if (cancelled) return
-        setStatus(result)
+        // 204 — no header row yet (a fresh month, or one just cleared). That IS a draft: nothing
+        // has been asked, so the month shows as such with Submit live, rather than no banner at all.
+        setStatus(result ?? { branchId, monthDate, status: 'Draft', requestInstanceId: null })
         setUnreadable(false)
       })
       .catch(() => {
@@ -131,11 +142,51 @@ export function RosterApprovalBanner({
     }
   }
 
+  async function clearRoster() {
+    if (branchId == null) return
+    const [year, month] = period.split('-').map(Number)
+    setClearing(true)
+    try {
+      const result = await rosterService.clearMonth(branchId, year, month)
+      notifications.show({
+        message: t('attendance.rosterApproval.cleared', { count: result.rowsDeleted }),
+        color: 'green',
+        autoClose: 3000,
+      })
+      setClearState(null)
+      setError(null)
+      load()
+      onCleared?.()
+    } catch (err) {
+      // The reason — waiting for approval, approved, attendance already recorded — stays in the
+      // dialog the person is looking at, verbatim, rather than fading as a toast.
+      setClearState({ refused: getErrorMessage(err) })
+    } finally {
+      setClearing(false)
+    }
+  }
+
   if (branchId == null || unreadable || status == null) return null
 
   const state = stateOf(status.status)
   const monthName = periodLabel(period)
   const requestId = status.requestInstanceId
+
+  /* WHY "SUBMIT" IS OFF, when it is. Read off the status the guard endpoint now carries:
+     a request still open on the month (Pending / OnHold), or an approval nothing has moved since.
+     After a rejection, or once anything changed since the approval, there is something new to
+     sign for and the button is live. A missing field (older API build) reads as "not blocked" for
+     the open-request case and falls back to the month's own state for the approved one — the
+     server's 409 is the rule either way; this only says the reason before the click. */
+  const openRequestId =
+    status.openRequestId ?? (state === 'pending' ? status.requestInstanceId : null)
+  const blockedReason =
+    openRequestId != null
+      ? t('attendance.rosterApproval.blocked.pending', { id: openRequestId })
+      : state === 'approved' && status.changedSinceApproval !== true
+        ? t('attendance.rosterApproval.blocked.approvedUnchanged')
+        : null
+  const branchName = branches.find((b) => b.branchId === branchId)?.name ?? ''
 
   return (
     <div
@@ -173,28 +224,100 @@ export function RosterApprovalBanner({
             />
           )}
 
-          {state === 'draft' && canManage && (
+          {canManage && (
+            <Tooltip label={blockedReason} disabled={blockedReason == null} withArrow>
+              {/* A span so the tooltip still fires over a disabled button. */}
+              <span>
+                <Button
+                  leftSection={<IconSend size={16} />}
+                  loading={submitting}
+                  disabled={blockedReason != null || clearing}
+                  onClick={() => void submit()}
+                >
+                  {t('attendance.rosterApproval.submit')}
+                </Button>
+              </span>
+            </Tooltip>
+          )}
+
+          {canManage && (
             <Button
-              leftSection={<IconSend size={16} />}
-              loading={submitting}
-              onClick={() => void submit()}
+              variant="default"
+              color="red"
+              leftSection={<IconTrash size={16} />}
+              disabled={submitting}
+              onClick={() => setClearState({ refused: null })}
             >
-              {t('attendance.rosterApproval.submit')}
+              {t('attendance.rosterApproval.clear')}
             </Button>
           )}
 
-          {state !== 'draft' && requestId != null && (
-            <Button variant="default" onClick={() => navigate(`/requests/${requestId}`)}>
+          {(openRequestId ?? (state !== 'draft' ? requestId : null)) != null && (
+            <Button
+              variant="default"
+              onClick={() => navigate(`/requests/${openRequestId ?? requestId}`)}
+            >
               {t('attendance.rosterApproval.viewRequest')}
             </Button>
           )}
         </div>
       </div>
 
+      {canManage && blockedReason && (
+        <div className="hint" style={{ marginTop: 8, marginBottom: 0 }}>
+          {blockedReason}
+        </div>
+      )}
+
       {error && (
         <div className="alert alert--error" role="alert" style={{ marginTop: 12 }}>
           {error}
         </div>
+      )}
+
+      {/* "Clear roster" — the question, then (if the server says no) its reason, in place. */}
+      {clearState && (
+        <Modal
+          opened
+          onClose={() => !clearing && setClearState(null)}
+          title={
+            clearState.refused
+              ? t('attendance.rosterApproval.clearRefusedTitle')
+              : t('attendance.rosterApproval.clearTitle', { month: monthName })
+          }
+          size={480}
+          centered
+        >
+          {clearState.refused ? (
+            <>
+              <div className="alert alert--error" role="alert">
+                {clearState.refused}
+              </div>
+              <div className="form-actions">
+                <Button variant="default" onClick={() => setClearState(null)}>
+                  {t('common.close')}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ marginTop: 0 }}>
+                {t('attendance.rosterApproval.clearConfirm', {
+                  month: monthName,
+                  branch: branchName,
+                })}
+              </p>
+              <div className="form-actions">
+                <Button variant="default" onClick={() => setClearState(null)} disabled={clearing}>
+                  {t('common.cancel')}
+                </Button>
+                <Button color="red" loading={clearing} onClick={() => void clearRoster()}>
+                  {t('attendance.rosterApproval.clear')}
+                </Button>
+              </div>
+            </>
+          )}
+        </Modal>
       )}
     </div>
   )

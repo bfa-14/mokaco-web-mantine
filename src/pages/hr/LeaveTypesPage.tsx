@@ -4,13 +4,16 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, Select, Switch, Table, TextInput } from '@mantine/core'
 import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
-import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPencil, IconPlus, IconRefresh, IconRotateClockwise, IconSearch, IconTrash } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
+import { useReferenceDelete } from '../../components/ReferenceDelete'
 import { leaveTypesService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
+import { isActiveRow } from '../../types/hr'
 import type { LeaveType } from '../../types/hr'
 
 interface FormState {
@@ -56,8 +59,13 @@ const WIDTHS: Record<string, number | undefined> = {
   leaveTypeId: 80,
   isPaid: 100,
   carryOver: 120,
-  actions: 110,
+  isActive: 110,
+  actions: 260,
 }
+
+/** The two words the Status cell can show — the closed set the filter dropdown offers. */
+const ACTIVE_LABELS = ['Active', 'Inactive']
+const activeText = (isActive: boolean) => (isActive ? 'Active' : 'Inactive')
 
 /** The page sizes the original pager offered. */
 const PAGE_SIZES = ['10', '25', '50']
@@ -66,12 +74,20 @@ function LeaveTypesGrid({
   rows,
   canManage,
   onEdit,
+  onDelete,
+  onReactivate,
+  busy,
 }: {
   rows: LeaveType[]
   /** False for a LEAVE_POLICY_MANAGE-less reader: the grid still reads, the Actions column goes. */
   canManage: boolean
   onEdit: (row: LeaveType) => void
+  onDelete: (row: LeaveType) => void
+  onReactivate: (row: LeaveType) => void
+  /** A delete / (re)activate is in flight — the row buttons wait for it. */
+  busy: boolean
 }) {
+  const { t } = useTranslation()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -92,6 +108,18 @@ function LeaveTypesGrid({
         cell: (info) => <YesNo value={info.row.original.carryOver} />,
         meta: { filterText: yesNoText, filterOptions: YES_NO },
       }),
+      // Inactive = deactivated after a refused delete. Still listed here (this is the admin page),
+      // hidden from every pick-list elsewhere.
+      columnHelper.accessor((row) => isActiveRow(row), {
+        id: 'isActive',
+        header: 'Status',
+        cell: (info) => (
+          <span className={info.getValue() ? 'badge badge--on' : 'badge badge--off'}>
+            {info.getValue() ? t('hr.reference.active') : t('hr.reference.inactive')}
+          </span>
+        ),
+        meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
+      }),
       // The column, not just the button — an "Actions" header over empty cells reads as broken.
       ...(canManage
         ? [
@@ -106,7 +134,28 @@ function LeaveTypesGrid({
                     leftSection={<IconPencil size={14} />}
                     onClick={() => onEdit(info.row.original)}
                   >
-                    Edit
+                    {t('common.edit')}
+                  </Button>
+                  {!isActiveRow(info.row.original) && (
+                    <Button
+                      variant="subtle"
+                      size="compact-sm"
+                      leftSection={<IconRotateClockwise size={14} />}
+                      disabled={busy}
+                      onClick={() => onReactivate(info.row.original)}
+                    >
+                      {t('hr.reference.reactivate')}
+                    </Button>
+                  )}
+                  <Button
+                    variant="subtle"
+                    size="compact-sm"
+                    color="red"
+                    leftSection={<IconTrash size={14} />}
+                    disabled={busy}
+                    onClick={() => onDelete(info.row.original)}
+                  >
+                    {t('common.delete')}
                   </Button>
                 </div>
               ),
@@ -114,7 +163,7 @@ function LeaveTypesGrid({
           ]
         : []),
     ],
-    [onEdit, canManage],
+    [onEdit, onDelete, onReactivate, busy, canManage, t],
   )
 
   const table = useReactTable({
@@ -276,6 +325,10 @@ export default function LeaveTypesPage() {
     void reload()
   }
 
+  /* Delete, and "Deactivate instead" when the API refuses (a type with ledger entries or requests
+     behind it). The refusal dialog shows the server's sentence verbatim — see ReferenceDelete. */
+  const ending = useReferenceDelete(leaveTypesService, reload)
+
   function openCreate() {
     setEditingId(null)
     setForm(EMPTY)
@@ -358,7 +411,14 @@ export default function LeaveTypesPage() {
           <Loader size={40} />
         </div>
       ) : (
-        <LeaveTypesGrid rows={rows} canManage={canManage} onEdit={openEdit} />
+        <LeaveTypesGrid
+          rows={rows}
+          canManage={canManage}
+          onEdit={openEdit}
+          onDelete={(row) => ending.requestDelete(row.leaveTypeId, row.name)}
+          onReactivate={(row) => void ending.setActive(row.leaveTypeId, row.name, true)}
+          busy={ending.busy}
+        />
       )}
 
       <Modal
@@ -426,6 +486,8 @@ export default function LeaveTypesPage() {
           </Button>
         </div>
       </Modal>
+
+      {ending.dialog}
     </div>
   )
 }

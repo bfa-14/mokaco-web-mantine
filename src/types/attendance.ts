@@ -337,6 +337,28 @@ export interface RosterMonthStatus {
   requestInstanceId: number | null
   /** When it was signed off. Null unless Approved. */
   approvedAt?: string | null
+  /** The open request's own state, when the month carries one. */
+  requestStatus?: string | null
+
+  /* ── WHAT "SUBMIT FOR APPROVAL" NEEDS. Absent from an older build, so every reader treats a
+     missing field as "nothing known" and the button stays enabled — the server's 409 is the rule
+     either way; these only let the page say the reason BEFORE the click. ── */
+
+  /** The ROSTER_APPROVAL request still waiting on this month, if any. */
+  openRequestId?: number | null
+  /** 'Pending' | 'OnHold' while openRequestId is set. */
+  openRequestStatus?: string | null
+  /** When the last approval was signed. Null when never approved. */
+  lastApprovedAt?: string | null
+  /** True once anything on the roster moved after lastApprovedAt — the only reason to resubmit. */
+  changedSinceApproval?: boolean
+  lastChangedUtc?: string | null
+}
+
+/** DELETE /api/attendance/rosters — what clearing one branch-month removed. */
+export interface RosterClearResult {
+  rowsDeleted: number
+  headerDeleted: boolean
 }
 
 /** attendance.EMPLOYEE_SHIFT_PATTERN — an employee's default week (a template, no dates). */

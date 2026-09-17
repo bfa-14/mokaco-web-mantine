@@ -14,6 +14,7 @@ export default function PositionsPage() {
       load={positionsService.getAll}
       create={positionsService.create}
       update={positionsService.update}
+      endings={positionsService}
     />
   )
 }

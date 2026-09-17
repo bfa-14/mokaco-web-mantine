@@ -1859,7 +1859,9 @@ export default function DailyAttendancePage() {
           </label>
           <Select
             id="filter-branch"
-            data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
+            data={branches
+              .filter((b) => b.isActive)
+              .map((b) => ({ value: String(b.branchId), label: b.name }))}
             value={branchId != null ? String(branchId) : null}
             placeholder="All branches"
             w={200}

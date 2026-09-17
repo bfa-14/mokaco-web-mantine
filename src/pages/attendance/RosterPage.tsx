@@ -889,7 +889,7 @@ export default function RosterPage() {
 
       {/* Whether this month has been SIGNED FOR, and the one button that asks for it. Above the
           gaps banner deliberately: the gaps are what stop the month being worth approving. */}
-      <RosterApprovalBanner period={period} canManage={canManage} />
+      <RosterApprovalBanner period={period} canManage={canManage} onCleared={refresh} />
 
       {!loading && gaps.length > 0 && (
         // Amber, not red: a gap is not a failure, it is a decision nobody has made yet.

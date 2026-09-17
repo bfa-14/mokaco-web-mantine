@@ -31,6 +31,20 @@ export interface ComponentType {
   nameAr?: string | null
   category: string // Earning / Deduction
   sign: number // +1 / -1
+  /**
+   * False once somebody has deactivated it (the "deactivate instead" path of a refused delete).
+   * OPTIONAL because an older API build omits it; read through {@link isActiveRow}, which treats
+   * an absent flag as active.
+   */
+  isActive?: boolean
+}
+
+/**
+ * Is this reference row still offered in pick-lists? Absent means active — the flag arrived with
+ * the delete/deactivate change, and a list from an older build must not go blank.
+ */
+export function isActiveRow(row: { isActive?: boolean | null }): boolean {
+  return row.isActive !== false
 }
 
 /** hr.LEAVE_TYPE — GET /api/leave-types. */
@@ -45,6 +59,8 @@ export interface LeaveType {
   nameAr?: string | null
   isPaid: boolean
   carryOver: boolean
+  /** False once deactivated. Optional for the same reason as on ComponentType — see isActiveRow. */
+  isActive?: boolean
 
   /* ── policy. Every one of these is ENFORCED in the leave-request procedures; they are read here
      only so the form can say what a type needs BEFORE someone submits and is refused. Nothing in
@@ -150,6 +166,8 @@ export interface LeaveTypeUpsertRequest {
   /** Clears fixedEntitlementDays back to null — which omitting the field alone cannot express. */
   clearFixedEntitlement?: boolean
   isDiscretionary?: boolean | null
+  /** Omitted keeps the stored value; the "Reactivate" / "Deactivate" actions use the PATCH instead. */
+  isActive?: boolean
 }
 
 /** Grid row from GET /api/employees (resolved lookup names). */
@@ -542,6 +560,37 @@ export interface LeaveLedgerEntry {
  * the profile's balance grid, because a remaining figure nobody can reconstruct is one nobody can
  * check — and the adjustments are exactly the movements somebody may later have to explain.
  */
+/**
+ * One leave type's balance for ONE LEAVE YEAR — a row of GET /api/employees/{id}/leave-balance
+ * (no leaveTypeId). Remaining = entitlement + carriedOver − used + adjusted.
+ */
+export interface LeaveTypeYearBalance {
+  leaveTypeId: number
+  leaveType: string
+  isPaid: boolean
+  /** What opening the year granted (plus any later accrual). */
+  entitlement: number
+  carriedOver: number
+  used: number
+  adjusted: number
+  remaining: number
+  year: number
+}
+
+/**
+ * GET /api/employees/{id}/leave-balance WITHOUT a leaveTypeId: every type for one leave year.
+ *
+ * `yearOpened` false — and `balances` EMPTY — means hr.usp_LeaveYear_Open has not been run for
+ * this employee and year: there is no entitlement to measure against yet, which is not a balance
+ * of zero. The tab says so and links to the Leave policy page, where the year is opened.
+ */
+export interface LeaveYearBalance {
+  employeeId: number
+  year: number
+  yearOpened: boolean
+  balances: LeaveTypeYearBalance[]
+}
+
 export interface LeaveBalance {
   employeeId: number
   leaveTypeId: number

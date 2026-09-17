@@ -28,6 +28,7 @@ import type {
   LeaveRelationEntitlement,
   LeaveType,
   LeaveTypeUpsertRequest,
+  LeaveYearBalance,
   OrgTreeNode,
   Position,
   ReportingLineEntry,
@@ -39,6 +40,27 @@ import type {
 } from '../types/hr'
 
 /** All HR endpoints: read requires EMP_VIEW, write requires EMP_EDIT. */
+
+/**
+ * THE TWO ENDINGS A REFERENCE ROW CAN HAVE, shared by the five setup tables.
+ *
+ * DELETE removes an UNUSED row (204). One that anything still references — employees, payslip
+ * lines, ledger entries, requests — is refused with a 409 whose body is the procedure's own
+ * sentence: "Cannot delete 'X': it is used by 7 employees and 340 payslip lines. Deactivate it
+ * instead." That sentence is the whole point; callers show it verbatim and offer the second
+ * ending, PATCH …/{id}/active { isActive: false }, which keeps the history and takes the row out
+ * of every pick-list. The same PATCH with true is "Reactivate".
+ */
+function referenceEndings(base: string) {
+  return {
+    remove: (id: number) => apiRequest<void>(`${base}/${id}`, { method: 'DELETE' }),
+    setActive: (id: number, isActive: boolean) =>
+      apiRequest<void>(`${base}/${id}/active`, {
+        method: 'PATCH',
+        body: JSON.stringify({ isActive }),
+      }),
+  }
+}
 
 export const branchesService = {
   getAll: () => apiRequest<Branch[]>('/api/branches'),
@@ -52,6 +74,7 @@ export const branchesService = {
       method: 'PUT',
       body: JSON.stringify({ name, isActive }),
     }),
+  ...referenceEndings('/api/branches'),
 }
 
 export const departmentsService = {
@@ -66,6 +89,7 @@ export const departmentsService = {
       method: 'PUT',
       body: JSON.stringify({ name, isActive }),
     }),
+  ...referenceEndings('/api/departments'),
 }
 
 export const positionsService = {
@@ -80,6 +104,7 @@ export const positionsService = {
       method: 'PUT',
       body: JSON.stringify({ title, isActive }),
     }),
+  ...referenceEndings('/api/positions'),
 }
 
 export const componentTypesService = {
@@ -89,16 +114,21 @@ export const componentTypesService = {
       method: 'POST',
       body: JSON.stringify({ name, category, sign }),
     }),
+  /** `isActive` omitted keeps the stored value — the grid's own actions use setActive instead. */
   update: (
     componentTypeId: number,
     name: string,
     category: string,
     sign: number,
+    isActive?: boolean,
   ) =>
     apiRequest<void>(`/api/component-types/${componentTypeId}`, {
       method: 'PUT',
-      body: JSON.stringify({ name, category, sign }),
+      body: JSON.stringify(
+        isActive == null ? { name, category, sign } : { name, category, sign, isActive },
+      ),
     }),
+  ...referenceEndings('/api/component-types'),
 }
 
 export const leaveTypesService = {
@@ -127,6 +157,7 @@ export const leaveTypesService = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  ...referenceEndings('/api/leave-types'),
 }
 
 /**
@@ -208,6 +239,18 @@ export const employeesService = {
     }),
   remove: (id: number) =>
     apiRequest<void>(`/api/employees/${id}`, { method: 'DELETE' }),
+
+  /**
+   * EVERY LEAVE TYPE'S BALANCE FOR ONE LEAVE YEAR (EMP_VIEW). Defaults to the current year.
+   *
+   * `yearOpened: false` with no balances is a real answer — the year has not been opened for this
+   * employee — and is rendered as such, not as a row of zeros. The single-type shape of the same
+   * endpoint (with ?leaveTypeId=) is leaveRequestsService.balance in workflowService; unchanged.
+   */
+  getLeaveYearBalance: (id: number, year?: number) =>
+    apiRequest<LeaveYearBalance>(
+      `/api/employees/${id}/leave-balance` + (year != null ? `?year=${year}` : ''),
+    ),
 
   /**
    * Employee↔login state for the accounts screen. onlyMissing=true returns just the employees who

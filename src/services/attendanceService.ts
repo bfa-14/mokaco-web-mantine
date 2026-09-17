@@ -40,6 +40,7 @@ import type {
   RosterGenerateRequest,
   RosterGenerateResult,
   RosterMonthStatus,
+  RosterClearResult,
   Setting,
   SettingUpsertRequest,
   Shift,
@@ -215,6 +216,18 @@ export const rosterService = {
   monthStatus: (branchId: number, month: string) =>
     apiRequest<RosterMonthStatus>(
       `/api/attendance/roster-month?branchId=${branchId}&month=${encodeURIComponent(month)}`,
+    ),
+
+  /**
+   * CLEARS ONE BRANCH-MONTH OF ROSTER — every assignment of the branch's employees in the month,
+   * and the month's header (ATTENDANCE_MANAGE). A month that is waiting for approval, approved, or
+   * already has attendance recorded on it is refused with a 409 carrying the procedure's reason;
+   * callers show that sentence verbatim.
+   */
+  clearMonth: (branchId: number, year: number, month: number) =>
+    apiRequest<RosterClearResult>(
+      `/api/attendance/rosters?branchId=${branchId}&year=${year}&month=${month}`,
+      { method: 'DELETE' },
     ),
 
   /** Employee-days with NO roster row. These block payroll. */

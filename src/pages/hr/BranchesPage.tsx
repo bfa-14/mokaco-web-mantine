@@ -14,6 +14,7 @@ export default function BranchesPage() {
       load={branchesService.getAll}
       create={branchesService.create}
       update={branchesService.update}
+      endings={branchesService}
     />
   )
 }

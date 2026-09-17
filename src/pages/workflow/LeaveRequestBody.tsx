@@ -3,6 +3,7 @@ import { Select, Textarea } from '@mantine/core'
 import { DateRangeField } from '../../components/DateRangeField'
 import { leaveRequestsService } from '../../services/workflowService'
 import { leaveTypesService } from '../../services/hrService'
+import { isActiveRow } from '../../types/hr'
 import type { LeaveRelationEntitlement, LeaveType } from '../../types/hr'
 import type { LeaveBalanceSummary } from '../../types/workflow'
 import { balanceDaysText, dayCountText, inclusiveDays } from './newRequestShared'
@@ -36,8 +37,10 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
       leaveTypesService.getAll(),
       leaveTypesService.getRelationEntitlements().catch(() => [] as LeaveRelationEntitlement[]),
     ])
-      .then(([list, rels]) => {
+      .then(([all, rels]) => {
         if (cancelled) return
+        // A deactivated type is history, not a choice — it stays on old requests, off new ones.
+        const list = all.filter(isActiveRow)
         setLeaveTypes(list)
         setEntitlements(rels)
         // Pre-select when there is only one — the same rule the type cards follow.

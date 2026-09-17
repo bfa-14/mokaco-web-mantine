@@ -14,6 +14,7 @@ export default function DepartmentsPage() {
       load={departmentsService.getAll}
       create={departmentsService.create}
       update={departmentsService.update}
+      endings={departmentsService}
     />
   )
 }

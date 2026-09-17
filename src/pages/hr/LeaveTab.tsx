@@ -9,13 +9,14 @@ import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconAdjustments, IconCalendar, IconPlus, IconPrinter, IconTrash } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
-import { leaveLedgerService, leaveTypesService } from '../../services/hrService'
+import { employeesService, leaveLedgerService, leaveTypesService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
 import { fmtDate, fmtNumber, fmtSigned } from './hrFormat'
 import { useAuth } from '../../auth/useAuth'
-import { PERMISSION } from '../../auth/routeAccess'
-import type { LeaveBalance, LeaveLedgerEntry, LeaveType } from '../../types/hr'
+import { canOpen, PERMISSION } from '../../auth/routeAccess'
+import { isActiveRow } from '../../types/hr'
+import type { LeaveBalance, LeaveLedgerEntry, LeaveType, LeaveYearBalance } from '../../types/hr'
 import { parseDecimal } from '../../components/numeric'
 import type { NumberInputValue } from '../../components/numeric'
 
@@ -131,6 +132,113 @@ function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText
 
 const balanceHelper = createColumnHelper<LeaveBalance>()
 const ledgerHelper = createColumnHelper<LeaveLedgerEntry>()
+
+/**
+ * THE YEAR'S BALANCE, ONE CARD PER LEAVE TYPE — GET /api/employees/{id}/leave-balance.
+ *
+ * Five figures that add up: Remaining = Entitlement + Carried over − Used + Adjusted. All five are
+ * shown because a Remaining that cannot be reconstructed is one nobody can check.
+ *
+ * `yearOpened` false is its own state, not an empty list: the year has not been opened for this
+ * employee, so there is no entitlement to measure against. The card says so and points at the
+ * Leave policy page, where the year is opened — as a link only for somebody who may open that
+ * page, so the sentence never leads to a door that is locked.
+ */
+function YearBalanceCards({
+  data,
+  error,
+}: {
+  data: LeaveYearBalance | null
+  /** The endpoint could not be read (an older API build, a network failure). */
+  error: string | null
+}) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+
+  if (error) {
+    return (
+      <div className="hint" style={{ marginBottom: 12 }}>
+        {t('hr.leaveBalance.unavailable')} {error}
+      </div>
+    )
+  }
+  if (!data) return null
+
+  if (!data.yearOpened) {
+    const mayOpen = canOpen('/hr/leave-policy', hasPermission)
+    return (
+      <div
+        className="card"
+        role="status"
+        style={{
+          marginBottom: 12,
+          borderInlineStart: '4px solid #c9922b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+        }}
+      >
+        <strong>{t('hr.leaveBalance.yearNotOpened', { year: data.year })}</strong>
+        {mayOpen && (
+          <Button variant="default" onClick={() => navigate('/hr/leave-policy')}>
+            {t('hr.leaveBalance.openFromPolicy')}
+          </Button>
+        )}
+      </div>
+    )
+  }
+
+  if (data.balances.length === 0) {
+    return (
+      <div className="hint" style={{ marginBottom: 12 }}>
+        {t('hr.leaveBalance.noneForYear', { year: data.year })}
+      </div>
+    )
+  }
+
+  const figures = (b: LeaveYearBalance['balances'][number]) => [
+    { label: t('hr.leaveBalance.entitlement'), value: fmtNumber(b.entitlement) },
+    { label: t('hr.leaveBalance.carriedOver'), value: fmtNumber(b.carriedOver) },
+    { label: t('hr.leaveBalance.used'), value: fmtNumber(b.used) },
+    { label: t('hr.leaveBalance.adjusted'), value: fmtSigned(b.adjusted) },
+    { label: t('hr.leaveBalance.remaining'), value: fmtNumber(b.remaining), strong: true },
+  ]
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+        gap: 12,
+        marginBottom: 16,
+      }}
+    >
+      {data.balances.map((b) => (
+        <div key={b.leaveTypeId} className="card" style={{ margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <strong style={{ flex: 1 }}>{b.leaveType}</strong>
+            {!b.isPaid && <span className="badge badge--muted">{t('hr.leaveBalance.unpaid')}</span>}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
+            {figures(b).map((f) => (
+              <div key={f.label}>
+                <div className="hint" style={{ margin: 0, fontSize: 11 }}>
+                  {f.label}
+                </div>
+                <div style={{ fontWeight: f.strong ? 700 : 500, fontVariantNumeric: 'tabular-nums' }}>
+                  {f.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 /**
  * ADJUST BALANCE — a correction to what the ledger says this person is owed.
@@ -318,7 +426,12 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
   const { hasPermission } = useAuth()
   const canEdit = hasPermission(PERMISSION.EMP_EDIT)
   const [balances, setBalances] = useState<LeaveBalance[]>([])
+  /** This leave year, per type — the cards. Null until read; see yearBalanceError for a failure. */
+  const [yearBalance, setYearBalance] = useState<LeaveYearBalance | null>(null)
+  const [yearBalanceError, setYearBalanceError] = useState<string | null>(null)
   const [ledger, setLedger] = useState<LeaveLedgerEntry[]>([])
+  /** EVERY type, inactive included — the ledger must still name a type that was retired. The
+      pick-lists below use `assignableTypes`, which drops the inactive ones. */
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -357,10 +470,25 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
     return (id: number) => map.get(id) ?? `#${id}`
   }, [leaveTypes])
 
+  /** The types a NEW movement may be filed under — a deactivated type is history, not a choice. */
+  const assignableTypes = useMemo(() => leaveTypes.filter(isActiveRow), [leaveTypes])
+
+  /** The year cards' own read. Its failure is shown in place, never allowed to take the tab down. */
+  async function loadYearBalance() {
+    try {
+      setYearBalance(await employeesService.getLeaveYearBalance(employeeId))
+      setYearBalanceError(null)
+    } catch (err) {
+      setYearBalance(null)
+      setYearBalanceError(getErrorMessage(err))
+    }
+  }
+
   async function reload() {
     const [bal, led] = await Promise.all([
       leaveLedgerService.getBalance(employeeId),
       leaveLedgerService.getByEmployee(employeeId),
+      loadYearBalance(),
     ])
     setBalances(bal)
     setLedger(led)
@@ -380,15 +508,21 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
     let cancelled = false
     async function load() {
       try {
-        const [bal, led, types] = await Promise.all([
+        const [bal, led, types, year] = await Promise.all([
           leaveLedgerService.getBalance(employeeId),
           leaveLedgerService.getByEmployee(employeeId),
           leaveTypesService.getAll().catch(() => [] as LeaveType[]),
+          employeesService
+            .getLeaveYearBalance(employeeId)
+            .then((d) => ({ data: d, error: null as string | null }))
+            .catch((err: unknown) => ({ data: null, error: getErrorMessage(err) })),
         ])
         if (!cancelled) {
           setBalances(bal)
           setLedger(led)
           setLeaveTypes(types)
+          setYearBalance(year.data)
+          setYearBalanceError(year.error)
           setError(null)
         }
       } catch (err) {
@@ -405,7 +539,7 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
 
   function openPost() {
     setFieldErrors({})
-    setForm({ ...EMPTY, leaveTypeId: leaveTypes[0]?.leaveTypeId ?? null })
+    setForm({ ...EMPTY, leaveTypeId: assignableTypes[0]?.leaveTypeId ?? null })
     setPopupVisible(true)
   }
 
@@ -597,7 +731,7 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
 
       <div className="tab-toolbar">
         <h3 className="tab-section-title" style={{ margin: 0, flex: 1 }}>
-          Balance
+          {yearBalance ? t('hr.leaveBalance.yearTitle', { year: yearBalance.year }) : 'Balance'}
         </h3>
         {/* Deep-link to the printable Leave Balance REPORT, pre-filled with THIS employee. It only
             navigates — the report page reads employeeId from the URL and runs itself, so the
@@ -622,6 +756,11 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
           </Button>
         )}
       </div>
+      <YearBalanceCards data={yearBalance} error={yearBalanceError} />
+
+      <h4 className="tab-section-title" style={{ margin: '0 0 8px' }}>
+        {t('hr.leaveBalance.byMonth')}
+      </h4>
       <GridTable table={balanceTable} emptyText="No leave balance yet." />
 
       <div className="tab-toolbar" style={{ marginTop: 20 }}>
@@ -646,7 +785,7 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
           <div className="form-field">
             <label className="form-label">Leave type</label>
             <Select
-              data={leaveTypes.map((t) => ({ value: String(t.leaveTypeId), label: t.name }))}
+              data={assignableTypes.map((t) => ({ value: String(t.leaveTypeId), label: t.name }))}
               value={form.leaveTypeId != null ? String(form.leaveTypeId) : null}
               placeholder="Select…"
               allowDeselect={false}
@@ -722,7 +861,7 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
       {adjustVisible && (
         <AdjustBalanceModal
           employeeId={employeeId}
-          leaveTypes={leaveTypes}
+          leaveTypes={assignableTypes}
           onClose={() => setAdjustVisible(false)}
           onPosted={refresh}
         />

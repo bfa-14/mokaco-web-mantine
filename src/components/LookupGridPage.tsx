@@ -4,12 +4,15 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, Select, Switch, Table, TextInput } from '@mantine/core'
 import { Modal } from './dialogs'
 import { notifications } from '@mantine/notifications'
-import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPencil, IconPlus, IconRefresh, IconRotateClockwise, IconSearch, IconTrash } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
 import { getErrorMessage } from '../api/errorMessage'
 import { useAuth } from '../auth/useAuth'
 import { alignStart } from '../i18n/physical'
 import { gridFilterFn, GridFilterRow } from './grid/GridFilterRow'
 import { GridHeaderContent } from './grid/GridHeaderFilter'
+import { useReferenceDelete } from './ReferenceDelete'
+import type { ReferenceEndings } from './ReferenceDelete'
 
 type LookupRow = Record<string, unknown>
 
@@ -56,6 +59,17 @@ interface LookupGridPageProps {
   load: () => Promise<unknown[]>
   create: (text: string) => Promise<unknown>
   update: (id: number, text: string, isActive: boolean) => Promise<unknown>
+  /**
+   * DELETE and PATCH …/active for this table — see useReferenceDelete. Omitted, the grid offers
+   * no Delete and no Reactivate; every setup table passes its service, which carries both.
+   */
+  endings?: ReferenceEndings
+}
+
+/** What a grid without `endings` hands the hook — never called, since the buttons are not drawn. */
+const NO_ENDINGS: ReferenceEndings = {
+  remove: () => Promise.reject(new Error('Not available')),
+  setActive: () => Promise.reject(new Error('Not available')),
 }
 
 export function LookupGridPage({
@@ -68,7 +82,9 @@ export function LookupGridPage({
   load,
   create,
   update,
+  endings,
 }: LookupGridPageProps) {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = managePermission == null || hasPermission(managePermission)
   const [rows, setRows] = useState<LookupRow[]>([])
@@ -126,6 +142,10 @@ export function LookupGridPage({
     void reload()
   }
 
+  /* The delete-or-deactivate flow, shared with the leave-type and component-type pages. A refused
+     delete (409) shows the API's sentence and offers "Deactivate instead"; see ReferenceDelete. */
+  const ending = useReferenceDelete(endings ?? NO_ENDINGS, reload)
+
   function openCreate() {
     setEditingId(null)
     setText('')
@@ -168,8 +188,8 @@ export function LookupGridPage({
 
   /** The pixel widths the original grid pinned; unlisted columns auto-size, as columnAutoWidth did. */
   const widths: Record<string, number | undefined> = useMemo(
-    () => ({ [keyField]: 80, isActive: 130, actions: 110 }),
-    [keyField],
+    () => ({ [keyField]: 80, isActive: 130, actions: endings ? 260 : 110 }),
+    [keyField, endings],
   )
 
   const columns = useMemo(
@@ -201,22 +221,54 @@ export function LookupGridPage({
             columnHelper.display({
               id: 'actions',
               header: 'Actions',
-              cell: (info) => (
-                <Button
-                  variant="subtle"
-                  size="compact-sm"
-                  leftSection={<IconPencil size={14} />}
-                  onClick={() => openEdit(info.row.original)}
-                >
-                  Edit
-                </Button>
-              ),
+              cell: (info) => {
+                const row = info.row.original
+                const id = row[keyField] as number
+                const name = (row[textField] as string) ?? String(id)
+                return (
+                  <div className="grid-actions">
+                    <Button
+                      variant="subtle"
+                      size="compact-sm"
+                      leftSection={<IconPencil size={14} />}
+                      onClick={() => openEdit(row)}
+                    >
+                      {t('common.edit')}
+                    </Button>
+                    {/* An inactive row's one way back; an active row's way out. Delete is offered
+                        on either — the server decides whether anything still depends on it. */}
+                    {endings && !row.isActive && (
+                      <Button
+                        variant="subtle"
+                        size="compact-sm"
+                        leftSection={<IconRotateClockwise size={14} />}
+                        disabled={ending.busy}
+                        onClick={() => void ending.setActive(id, name, true)}
+                      >
+                        {t('hr.reference.reactivate')}
+                      </Button>
+                    )}
+                    {endings && (
+                      <Button
+                        variant="subtle"
+                        size="compact-sm"
+                        color="red"
+                        leftSection={<IconTrash size={14} />}
+                        disabled={ending.busy}
+                        onClick={() => ending.requestDelete(id, name)}
+                      >
+                        {t('common.delete')}
+                      </Button>
+                    )}
+                  </div>
+                )
+              },
             }),
           ]
         : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [keyField, textField, textLabel, canManage],
+    [keyField, textField, textLabel, canManage, endings, ending.busy],
   )
 
   const table = useReactTable({
@@ -412,6 +464,8 @@ export function LookupGridPage({
           </Button>
         </div>
       </Modal>
+
+      {ending.dialog}
     </div>
   )
 }

@@ -713,7 +713,17 @@
         "approved": "Signed off. Anything changed after this differs from what was approved."
       },
       "submit": "Submit month for approval",
-      "viewRequest": "View request"
+      "viewRequest": "View request",
+      "blocked": {
+        "pending": "Waiting for approval — request #{{id}}",
+        "approvedUnchanged": "Approved and unchanged since — nothing new to submit"
+      },
+      "clear": "Clear roster",
+      "clearTitle": "Clear the roster for {{month}}?",
+      "clearConfirm": "Every shift assignment for {{branch}} in {{month}} is removed, and the month starts again as an empty draft. A month that is waiting for approval, approved, or already has attendance recorded on it is refused by the server.",
+      "cleared_one": "Roster cleared — {{count}} assignment removed.",
+      "cleared_other": "Roster cleared — {{count}} assignments removed.",
+      "clearRefusedTitle": "Roster not cleared"
     },
     "status": {
       "Present": "Present",
@@ -958,7 +968,11 @@
       "emailInvalid": "That does not look like an email address.",
       "phoneNumber": "Phone number",
       "preferredLanguage": "Preferred language",
-      "preferredLanguageHint": "The language this person is written to in. Notifications about their requests are composed in it — it does not change the language they see when they sign in."
+      "preferredLanguageHint": "The language this person is written to in. Notifications about their requests are composed in it — it does not change the language they see when they sign in.",
+      "phoneInvalid": "Enter a Lebanese phone number: 8 digits (e.g. 03 123 456) or +961 followed by the number.",
+      "contactRequired": "Phone number and e-mail are required for a new employee.",
+      "phoneHint": "8 digits (03 123 456) or +961 followed by the number. Stored as +961…",
+      "noContactHint": "No phone / e-mail — notifications cannot reach this employee."
     },
     "employeeForm": {
       "tierPlaceholder": "Select the tier…",
@@ -1014,7 +1028,18 @@
       "nameRequired": "Give the leave type a name."
     },
     "leaveBalance": {
-      "adjusted": "Adjusted"
+      "adjusted": "Adjusted",
+      "yearTitle": "Balance for {{year}}",
+      "entitlement": "Entitlement",
+      "carriedOver": "Carried over",
+      "used": "Used",
+      "remaining": "Remaining",
+      "unpaid": "Unpaid",
+      "byMonth": "By month",
+      "noneForYear": "No leave types have a balance for {{year}}.",
+      "yearNotOpened": "No leave year opened for {{year}} — open it from Leave policy.",
+      "openFromPolicy": "Leave policy",
+      "unavailable": "The yearly balance could not be read."
     },
     "leaveAdjust": {
       "action": "Adjust balance",
@@ -1038,6 +1063,19 @@
     "salaryComponents": {
       "tierBand": "Tier {{tier}}: basic salary must be between {{min}} and {{max}} {{currency}}",
       "noBound": "no bound"
+    },
+    "reference": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "deleteTitle": "Delete “{{name}}”?",
+      "deleteConfirm": "This removes it for good. If anything still uses it, the delete is refused and you can deactivate it instead.",
+      "refusedTitle": "Cannot delete",
+      "deactivateHint": "Deactivating keeps the history and takes it out of every pick-list. It can be reactivated later.",
+      "deactivateInstead": "Deactivate instead",
+      "reactivate": "Reactivate",
+      "deleted": "“{{name}}” deleted.",
+      "deactivated": "“{{name}}” deactivated — it no longer appears in pick-lists.",
+      "reactivated": "“{{name}}” reactivated."
     }
   },
   "settings": {
@@ -1188,7 +1226,8 @@
       "emailHint": "Optional — with an address, the guest is emailed their confirmation.",
       "addonPerHour": "{{name}} — {{price}} per hour",
       "addonFixed": "{{name}} — {{price}}",
-      "previewHint": "An estimate. The price that is stored is the one the server works out when the booking is taken."
+      "previewHint": "An estimate. The price that is stored is the one the server works out when the booking is taken.",
+      "emailInvalid": "Enter a valid e-mail address."
     },
     "block": {
       "title": "Block room",
