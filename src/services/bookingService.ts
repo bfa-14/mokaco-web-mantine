@@ -4,6 +4,8 @@ import type {
   BlockCreated,
   BookingCreatePayload,
   BookingCreated,
+  BookingDetail,
+  BookingRefundPayload,
   BookingPaymentPayload,
   BookingRange,
   BookingReceipt,
@@ -12,6 +14,7 @@ import type {
   BookingStatusPayload,
   PaymentAdded,
   PaymentMethod,
+  RefundRecorded,
   RoomAddonUpsertPayload,
   RoomCatalog,
   RoomHoursPayload,
@@ -52,10 +55,26 @@ export const bookingsService = {
       body: JSON.stringify(payload),
     }),
 
-  /** Confirm / Complete / Cancel / NoShow. A cancellation without a reason is refused by the server. */
+  /** One booking with its refund position and individual payment lines (refunds flagged). */
+  getOne: (bookingId: number) => apiRequest<BookingDetail>(`/api/bookings/${bookingId}`),
+
+  /**
+   * Confirm / Complete / Cancel / NoShow. A cancellation has to say WHO cancelled — that is what
+   * decides the refund — and the server refuses one without it.
+   */
   setStatus: (bookingId: number, payload: BookingStatusPayload) =>
     apiRequest<BookingStatusChanged>(`/api/bookings/${bookingId}/status`, {
       method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Money handed BACK on a cancelled booking. The server caps it at what is still due and answers
+   * with the position after it — the lines, the total owed and Due / Partial / Refunded.
+   */
+  recordRefund: (bookingId: number, payload: BookingRefundPayload) =>
+    apiRequest<RefundRecorded>(`/api/bookings/${bookingId}/refunds`, {
+      method: 'POST',
       body: JSON.stringify(payload),
     }),
 

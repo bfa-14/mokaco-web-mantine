@@ -252,6 +252,16 @@ textarea.mantine-Input-input {
   flex-wrap: wrap;
 }
 
+/* The page-head's action row is flex-shrink: 0 in index.css so the title cannot squash it on a
+   desktop. On a phone that same rule let three buttons run off the right edge, because a
+   non-shrinking item is as wide as its content whether or not that fits. Capped at the page's
+   width, it wraps its buttons instead — the wrap above only works once the row itself fits. */
+.page-head-actions,
+.filter-spacer {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* A dialog on a phone is the screen. Done in CSS rather than a Modal defaultProps wrapper so it
    reaches every modal in the app, including the ones mounted conditionally. dvh, not vh, so the
    mobile browser's collapsing address bar does not leave the actions off-screen. */

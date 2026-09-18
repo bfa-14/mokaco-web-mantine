@@ -367,6 +367,32 @@
   white-space: nowrap;
 }
 
+/* The refund position on a cancelled card. Small, its own line, and never struck through — it is
+   the one thing on a cancelled card that is still live. */
+.bk-ev-refund {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-decoration: none;
+  white-space: nowrap;
+  background: #fbe9e6;
+  color: #8a3323;
+}
+
+.bk-ev-refund--partial {
+  background: #fdf3dd;
+  color: #6b5310;
+}
+
+.bk-ev-refund--refunded {
+  background: #e3f3e6;
+  color: #1f5c30;
+}
+
 /* Amber: waiting for somebody. The one status the calendar exists to make findable. */
 .bk-ev--pending {
   background: #fdf3dd;
@@ -508,6 +534,16 @@
 .bk-money-row--due {
   color: #b4442f;
   font-weight: 600;
+}
+
+/* A refund line — money that went BACK. Red, the same red a balance wears, because until it has
+   been handed over it is a debt the house carries; and always shown with a leading minus. */
+.bk-money-row--refund {
+  color: #b4442f;
+}
+
+.bk-receipt-refund td {
+  color: #b4442f;
 }
 
 /* ── room cards ── */

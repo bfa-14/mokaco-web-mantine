@@ -206,7 +206,35 @@ export const ROUTE_ACCESS: RouteRule[] = [
      route would take the second away with the first, and the language switch is the only route to
      reading this application in Arabic. So the page gates ITSELF — SettingsPage hides the
      SETTING_MANAGE tabs and never fetches the list without the code — and neither App.tsx nor the
-     side nav consults this table for it. An entry here was a lie both readers had to ignore. */
+     side nav consults this table for it. An entry here was a lie both readers had to ignore.
+     It is listed in OPEN_ROUTES below instead, so the route-table test knows it is open by
+     decision rather than by omission — and SettingsPage renders the No access panel for a system
+     tab that somebody without the code asks for by URL. */
+]
+
+/**
+ * THE ROUTES THAT ARE OPEN ON PURPOSE — every signed-in user may reach them.
+ *
+ * App.tsx's route table is checked against this file by tests/routeTable.test.ts: every path in
+ * ROUTE_ACCESS must be wrapped in guard(), and every path App.tsx renders WITHOUT a guard must be
+ * named here. A route that is in neither list fails the test, which is the point — a new page
+ * cannot be added to the router without somebody deciding, in writing, whether it is gated.
+ *
+ * Section landings (`/hr`, `/payroll`, …) are plain <Navigate> redirects and are recognised by the
+ * test as such; they render no page and need no entry.
+ */
+export const OPEN_ROUTES: readonly string[] = [
+  // The dashboard, which is every role's landing page.
+  '/',
+  // The requests hub, raising a request and reading one's own: the workflow's operations side.
+  '/requests',
+  '/requests/new',
+  '/requests/:id',
+  // One's own profile.
+  '/profile',
+  // Settings — see the note at the end of ROUTE_ACCESS: the page gates its system tabs itself so
+  // that the Preferences tab (the language switch) reaches everybody.
+  '/settings',
 ]
 
 /** Indexed once at module load — the nav asks this for every leaf on every render. */

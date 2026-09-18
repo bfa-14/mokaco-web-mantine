@@ -1,5 +1,11 @@
 import { t } from '../../i18n/t'
-import type { BookingStatus, RoomHours } from '../../types/booking'
+import type {
+  BookingPaymentLine,
+  BookingRow,
+  BookingStatus,
+  RefundStatus,
+  RoomHours,
+} from '../../types/booking'
 
 /**
  * The handful of ideas every Bookings screen shares: the two permissions, the date and time
@@ -222,6 +228,49 @@ export function isClosed(status: BookingStatus): boolean {
 /** The translated name of a status. */
 export function statusLabel(status: BookingStatus): string {
   return t(`booking.status.${status}`)
+}
+
+/* ── refunds ─────────────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The refund position of a row, with a missing field read as "nothing owed". An older API sends no
+ * refund fields at all, and a booking that was never cancelled has none worth sending; both are
+ * 'None', and neither earns a badge.
+ */
+export function refundStatusOf(row: Pick<BookingRow, 'refundStatus'>): RefundStatus {
+  return row.refundStatus ?? 'None'
+}
+
+/** True when the booking still carries a refund somebody has to hand over or has handed over. */
+export function hasRefund(row: Pick<BookingRow, 'refundStatus'>): boolean {
+  return refundStatusOf(row) !== 'None'
+}
+
+/** Red while money is owed, green once it has gone back — the badge is a to-do until then. */
+export const REFUND_COLOR: Record<RefundStatus, string> = {
+  None: 'gray',
+  Due: 'red',
+  Partial: 'orange',
+  Refunded: 'green',
+}
+
+export function refundLabel(status: RefundStatus): string {
+  return t(`booking.refundStatus.${status}`)
+}
+
+/**
+ * What is STILL owed back: the total the server worked out, less every refund line already
+ * recorded. Never below zero — a server that capped a refund is the one that knows.
+ */
+export function refundOutstanding(
+  refundAmount: number | null | undefined,
+  lines: Pick<BookingPaymentLine, 'amount' | 'isRefund'>[],
+): number {
+  const owed = refundAmount ?? 0
+  const returned = lines
+    .filter((line) => line.isRefund === true)
+    .reduce((sum, line) => sum + Math.abs(line.amount), 0)
+  return Math.max(0, Math.round((owed - returned) * 100) / 100)
 }
 
 /* ── money ───────────────────────────────────────────────────────────────────────────────────── */

@@ -92,6 +92,14 @@ const KNOWN: Record<
     max: 1,
     step: 0.05,
   },
+  /* PAYROLL. The annual family deduction the income-tax table applies per dependant, in USD.
+     Arrives from core.SETTING (Section = Payroll, DataType = decimal) and files itself under
+     Advanced by its section; this entry only names it and stops a negative from being typed. */
+  TaxFamilyDeductionAnnualUsd: {
+    title: 'Family tax deduction (annual, USD)',
+    min: 0,
+    step: 1,
+  },
   // A per-person choice about the reader's own screen. Its PLACEMENT is core.SETTING's to state —
   // the row's Section is 'Preferences' — and this entry now only supplies the friendlier title.
   [SHOW_PAGE_HELP_KEY]: { title: 'Show page help' },

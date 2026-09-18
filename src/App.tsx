@@ -70,6 +70,11 @@ import MyProfilePage from './pages/profile/MyProfilePage'
  *
  * A path absent from the map returns the element untouched, which is how the open routes (the
  * dashboard, the requests hub, raising a request, one's own profile, settings) stay open.
+ *
+ * THAT SILENCE IS AUDITED. tests/routeTable.test.ts (`npm test`) reads this file and checks that
+ * every ROUTE_ACCESS path goes through guard() under the same string, that every guard() names a
+ * listed path, and that every unguarded route is a redirect or is named in OPEN_ROUTES — so a
+ * route cannot slip past the gate by omission.
  */
 function guard(path: string, element: ReactNode): ReactNode {
   const rule = accessFor(path)
@@ -309,6 +314,8 @@ export default function App() {
                     />
 
                     <Route path="/profile" element={<MyProfilePage />} />
+                    {/* Open on purpose (OPEN_ROUTES): the Preferences tab — the language switch —
+                        must reach everybody. The page renders No access for its system tabs. */}
                     <Route path="/settings" element={<SettingsPage />} />
                   </Route>
                 </Route>

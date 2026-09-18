@@ -23,6 +23,22 @@ function stateOf(status: string | null | undefined): MonthState {
   return 'draft'
 }
 
+/**
+ * WHAT THE GRID BEHIND THIS BANNER MAY DO, reported upward.
+ *
+ * The page owns the cells and the banner owns the month's status, so the one thing they have to
+ * agree on — whether the grid is editable right now — is handed from the banner to the page rather
+ * than read twice. `readOnly` is true exactly while a ROSTER_APPROVAL request is open on the
+ * month: the server refuses every edit with a 409 in that state, so the page stops offering them.
+ */
+export interface RosterEditState {
+  readOnly: boolean
+  /** The open request, when there is one — the number the read-only sentence quotes. */
+  openRequestId: number | null
+  /** Approved, and moved since: the reason Submit is live again. */
+  changedSinceApproval: boolean
+}
+
 /** The accent stripe: neutral while it is nobody's problem, brand while it waits, green when signed. */
 const ACCENT: Record<MonthState, string> = {
   draft: 'var(--ink-muted)',
@@ -52,6 +68,8 @@ export function RosterApprovalBanner({
   period,
   canManage,
   onCleared,
+  onEditState,
+  refreshToken = 0,
 }: {
   /** 'yyyy-MM' — the month the grid is showing. */
   period: string
@@ -59,6 +77,13 @@ export function RosterApprovalBanner({
   canManage: boolean
   /** Called after "Clear roster" succeeded — the grid behind has to refetch its month. */
   onCleared?: () => void
+  /** Told whenever the month's editability changes — see {@link RosterEditState}. */
+  onEditState?: (state: RosterEditState) => void
+  /**
+   * Bumped by the page after it changed the roster, so the banner re-reads the month: an edit on
+   * an approved month is what flips changedSinceApproval, and the banner has to say so at once.
+   */
+  refreshToken?: number
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -121,7 +146,8 @@ export function RosterApprovalBanner({
     }
   }, [branchId, monthDate])
 
-  useEffect(() => load(), [load])
+  // refreshToken is not read inside load; it is here so a bump re-runs it.
+  useEffect(() => load(), [load, refreshToken])
 
   async function submit() {
     if (branchId == null) return
@@ -166,27 +192,61 @@ export function RosterApprovalBanner({
     }
   }
 
-  if (branchId == null || unreadable || status == null) return null
-
-  const state = stateOf(status.status)
-  const monthName = periodLabel(period)
-  const requestId = status.requestInstanceId
-
   /* WHY "SUBMIT" IS OFF, when it is. Read off the status the guard endpoint now carries:
      a request still open on the month (Pending / OnHold), or an approval nothing has moved since.
      After a rejection, or once anything changed since the approval, there is something new to
      sign for and the button is live. A missing field (older API build) reads as "not blocked" for
      the open-request case and falls back to the month's own state for the approved one — the
-     server's 409 is the rule either way; this only says the reason before the click. */
+     server's 409 is the rule either way; this only says the reason before the click.
+
+     AN OPEN REQUEST IS THE PENDING STATE, whatever the month's own status says: a resubmitted
+     approved month is waiting again, and reads as such. */
   const openRequestId =
-    status.openRequestId ?? (state === 'pending' ? status.requestInstanceId : null)
+    status == null
+      ? null
+      : (status.openRequestId ??
+        (stateOf(status.status) === 'pending' ? status.requestInstanceId : null))
+  const state: MonthState =
+    status == null ? 'draft' : openRequestId != null ? 'pending' : stateOf(status.status)
+  const changedSinceApproval = state === 'approved' && status?.changedSinceApproval === true
+  const readOnly = openRequestId != null
+
+  // Reported after render, and only when it actually changed, so the page never re-renders for
+  // a banner that re-read the same answer.
+  useEffect(() => {
+    onEditState?.({ readOnly, openRequestId, changedSinceApproval })
+    // onEditState is a setState from the page — stable — and listing it would only re-fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, openRequestId, changedSinceApproval])
+
+  if (branchId == null || unreadable || status == null) return null
+
+  const monthName = periodLabel(period)
+  const requestId = status.requestInstanceId
+
   const blockedReason =
     openRequestId != null
       ? t('attendance.rosterApproval.blocked.pending', { id: openRequestId })
-      : state === 'approved' && status.changedSinceApproval !== true
+      : state === 'approved' && !changedSinceApproval
         ? t('attendance.rosterApproval.blocked.approvedUnchanged')
         : null
   const branchName = branches.find((b) => b.branchId === branchId)?.name ?? ''
+
+  /* THE HEADLINE SAYS THE ONE THING THAT MATTERS NOW. Waiting: the request number, because that is
+     what somebody withdraws or chases. Approved and moved since: that it has to go up again — and
+     Submit is live beside it. Otherwise the month's own state, as before. */
+  const headline =
+    openRequestId != null
+      ? t('attendance.rosterApproval.state.pendingRequest', { id: openRequestId })
+      : changedSinceApproval
+        ? t('attendance.rosterApproval.state.changed')
+        : t(`attendance.rosterApproval.state.${state}`, { month: monthName })
+  const hint =
+    openRequestId != null
+      ? t('attendance.rosterApproval.hint.pendingRequest', { month: monthName })
+      : changedSinceApproval
+        ? t('attendance.rosterApproval.hint.changed', { month: monthName })
+        : t(`attendance.rosterApproval.hint.${state}`)
 
   return (
     <div
@@ -203,8 +263,8 @@ export function RosterApprovalBanner({
         }}
       >
         <div>
-          <strong>{t(`attendance.rosterApproval.state.${state}`, { month: monthName })}</strong>
-          <div className="hint">{t(`attendance.rosterApproval.hint.${state}`)}</div>
+          <strong>{headline}</strong>
+          <div className="hint">{hint}</div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'end', gap: 8, flexWrap: 'wrap' }}>

@@ -200,11 +200,20 @@ export function ReceiptModal({
                     </thead>
                     <tbody>
                       {(receipt?.payments ?? []).map((payment) => (
-                        <tr key={payment.paymentId}>
+                        <tr
+                          key={payment.paymentId}
+                          className={payment.isRefund ? 'bk-receipt-refund' : undefined}
+                        >
                           <td>{stamp(payment.paidUtc)}</td>
-                          <td>{payment.methodName}</td>
+                          <td>
+                            {payment.isRefund ? `${t('booking.drawer.refundLine')} · ` : ''}
+                            {payment.methodName}
+                          </td>
                           <td>{payment.reference || t('common.dash')}</td>
-                          <td className="num">{money(payment.amount, currency)}</td>
+                          <td className="num">
+                            {payment.isRefund ? '−' : ''}
+                            {money(Math.abs(payment.amount), currency)}
+                          </td>
                         </tr>
                       ))}
                       <tr>

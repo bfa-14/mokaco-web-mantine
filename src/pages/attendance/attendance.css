@@ -780,6 +780,12 @@
   margin-inline-start: auto;
   display: flex;
   gap: 8px;
+  /* On a phone the button group is wider than the screen. It wraps its own buttons rather than
+     running off the edge — a flex item's default min-width is its content, which is what let the
+     third button clip at 390 px. Capped at the bar's width so the wrap actually happens. */
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* ── Today's punch pipeline ────────────────────────────────────────────────────────────────────

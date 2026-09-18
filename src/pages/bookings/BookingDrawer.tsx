@@ -5,14 +5,17 @@ import {
   Button,
   Loader,
   NumberInput,
+  Radio,
   Select,
+  Stack,
   Textarea,
   TextInput,
 } from '@mantine/core'
-import { Drawer } from '../../components/dialogs'
+import { Drawer, Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
 import {
   IconCash,
+  IconCashOff,
   IconCheck,
   IconPrinter,
   IconTrash,
@@ -24,17 +27,25 @@ import { useLanguage } from '../../i18n/useLanguage'
 import { bookingsService, roomsService } from '../../services/bookingService'
 import type {
   BookingBlock,
+  BookingDetail,
+  BookingPaymentLine,
   BookingReceipt,
   BookingRow,
   BookingStatus,
+  CancelledBy,
   PaymentMethod,
 } from '../../types/booking'
 import {
   dayLabel,
+  hasRefund,
   hhmm,
   hoursLabel,
   isClosed,
   money,
+  REFUND_COLOR,
+  refundLabel,
+  refundOutstanding,
+  refundStatusOf,
   stamp,
   STATUS_COLOR,
   statusLabel,
@@ -59,8 +70,15 @@ import type { NumberInputValue } from '../../components/numeric'
  *
  * EVERY ACTION IS THE SERVER'S TO REFUSE. Confirm, complete, cancel and no-show all go through one
  * procedure that owns the transitions — it will not move a booking that is already closed, and it
- * will not accept a cancellation with no reason. This component asks for the reason because the
+ * will not accept a cancellation without saying who cancelled. This component asks because the
  * refusal would otherwise be the way you found out, not because it is the authority on the rule.
+ *
+ * CANCELLING ASKS WHO, BECAUSE THAT DECIDES THE MONEY. Staff cancelling on the guest owes back
+ * everything paid; a guest who asked keeps the deposit with the house. The server works the amount
+ * out and answers with a refund position (Due / Partial / Refunded); this drawer then offers
+ * "Record refund" until the position says Refunded. The refund fields and the flagged payment
+ * lines come from GET /{id}, fetched beside the receipt and read defensively — an older build
+ * sends none of them, and the drawer must still open.
  */
 export function BookingDrawer({
   booking,
@@ -86,10 +104,22 @@ export function BookingDrawer({
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  /* The two inline forms. Both start closed: a drawer that opens with a cancellation box already
-     showing invites the one action nobody should take by accident. */
+  /** The refund position and flagged payment lines — GET /{id}, null until it arrives or on a build without it. */
+  const [detail, setDetail] = useState<BookingDetail | null>(null)
+
+  /* The payment form and the two dialogs. All start closed: a drawer that opens with a
+     cancellation box already showing invites the one action nobody should take by accident. */
   const [cancelling, setCancelling] = useState(false)
-  const [cancelReason, setCancelReason] = useState('')
+  const [cancelledBy, setCancelledBy] = useState<CancelledBy>('Staff')
+  const [cancelNote, setCancelNote] = useState('')
+  /** The dialog's own refusal ("already closed") — shown in it, so the reader is still looking at what was refused. */
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [refunding, setRefunding] = useState(false)
+  const [refundMethodId, setRefundMethodId] = useState<number | null>(null)
+  const [refundAmount, setRefundAmount] = useState<NumberInputValue>(0)
+  const refundAmountValue = parseDecimal(refundAmount) ?? 0
+  const [refundReference, setRefundReference] = useState('')
+  const [refundError, setRefundError] = useState<string | null>(null)
   const [paying, setPaying] = useState(false)
   const [methodId, setMethodId] = useState<number | null>(null)
   /** As the box hands it over ("45." on the way to 45.5) — coerced below. See numeric.ts. */
@@ -120,6 +150,7 @@ export function BookingDrawer({
   useEffect(() => {
     if (!opened || booking == null) {
       setReceipt(null)
+      setDetail(null)
       return
     }
 
@@ -139,6 +170,17 @@ export function BookingDrawer({
         if (!cancelled) setLoading(false)
       })
 
+    // The refund position, beside the receipt. Its failure is NOT the drawer's: a build without
+    // GET /{id} leaves the row's own fields to speak, and the drawer opens exactly as before.
+    bookingsService
+      .getOne(booking.bookingId)
+      .then((result) => {
+        if (!cancelled) setDetail(result)
+      })
+      .catch(() => {
+        if (!cancelled) setDetail(null)
+      })
+
     return () => {
       cancelled = true
     }
@@ -148,25 +190,30 @@ export function BookingDrawer({
      prefilled with the BALANCE, because "settle the rest" is what almost every payment is. */
   useEffect(() => {
     setCancelling(false)
-    setCancelReason('')
+    setCancelledBy('Staff')
+    setCancelNote('')
+    setCancelError(null)
+    setRefunding(false)
+    setRefundError(null)
+    setRefundReference('')
+    setRefundMethodId(null)
     setPaying(false)
     setReference('')
     setAmount(booking?.balanceDue ?? 0)
     setMethodId(null)
   }, [booking])
 
-  async function setStatus(status: BookingStatus, reason?: string) {
+  async function setStatus(status: BookingStatus) {
     if (!booking) return
 
     setBusy(true)
     setError(null)
     try {
-      await bookingsService.setStatus(booking.bookingId, { status, reason: reason ?? null })
+      await bookingsService.setStatus(booking.bookingId, { status })
       notifications.show({
         message: t('booking.drawer.statusChanged', { status: statusLabel(status) }),
-        color: status === 'Cancelled' || status === 'NoShow' ? 'orange' : 'green',
+        color: status === 'NoShow' ? 'orange' : 'green',
       })
-      setCancelling(false)
       onChanged()
       onClose()
     } catch (err) {
@@ -175,6 +222,96 @@ export function BookingDrawer({
     } finally {
       setBusy(false)
     }
+  }
+
+  /**
+   * The cancellation, with who is cancelling. The note is optional to the new contract and
+   * required by the older one, so it goes under both names — see BookingStatusPayload.reason.
+   */
+  async function cancelBooking() {
+    if (!booking) return
+
+    setBusy(true)
+    setCancelError(null)
+    try {
+      const note = cancelNote.trim() || null
+      const changed = await bookingsService.setStatus(booking.bookingId, {
+        status: 'Cancelled',
+        cancelledBy,
+        note,
+        reason: note,
+      })
+      const status = changed.refundStatus ?? 'None'
+      notifications.show({
+        message:
+          status === 'None'
+            ? t('booking.drawer.statusChanged', { status: statusLabel('Cancelled') })
+            : `${t('booking.drawer.statusChanged', { status: statusLabel('Cancelled') })} ${refundLabel(status)}` +
+              (changed.refundAmount != null
+                ? ` — ${money(changed.refundAmount, booking.currencyCode)}`
+                : ''),
+        color: 'orange',
+      })
+      setCancelling(false)
+      onChanged()
+      onClose()
+    } catch (err) {
+      setCancelError(getErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Money handed back. Stays in the drawer afterwards, refreshed: a partial refund is followed by the rest. */
+  async function recordRefund() {
+    if (!booking || refundMethodId == null || refundAmountValue <= 0) return
+
+    setBusy(true)
+    setRefundError(null)
+    try {
+      const result = await bookingsService.recordRefund(booking.bookingId, {
+        amount: refundAmountValue,
+        method: refundMethodId,
+        reference: refundReference.trim() || null,
+      })
+      notifications.show({
+        message: t('booking.drawer.refundRecorded', {
+          status: refundLabel(result.refundStatus ?? 'Partial'),
+        }),
+        color: result.refundStatus === 'Refunded' ? 'green' : 'orange',
+      })
+      setRefunding(false)
+      setRefundReference('')
+      onChanged()
+      // The position AFTER, from the server — merged over what the drawer had rather than
+      // computed from it, so nothing here ever subtracts a refund from a total.
+      setDetail((current) => ({
+        ...(current ?? booking),
+        refundAmount: result.refundAmount ?? current?.refundAmount ?? booking.refundAmount,
+        refundStatus: result.refundStatus ?? current?.refundStatus ?? booking.refundStatus,
+        refundedUtc: result.refundedUtc ?? current?.refundedUtc ?? booking.refundedUtc,
+        payments: result.payments ?? current?.payments,
+      }))
+      const [refreshedReceipt, refreshedDetail] = await Promise.all([
+        bookingsService.getReceipt(booking.bookingId),
+        bookingsService.getOne(booking.bookingId).catch(() => null),
+      ])
+      setReceipt(refreshedReceipt)
+      if (refreshedDetail) setDetail(refreshedDetail)
+    } catch (err) {
+      // "Amount exceeds the refund due — 20.00 remains." — the procedure's own sentence.
+      setRefundError(getErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Opens the refund dialog with the amount prefilled to what is still owed. */
+  function openRefund() {
+    setRefundAmount(refundDue)
+    setRefundError(null)
+    setRefundMethodId(null)
+    setRefunding(true)
   }
 
   async function addPayment() {
@@ -233,6 +370,28 @@ export function BookingDrawer({
      it when it has arrived, and from the row that opened the drawer until then. */
   const paid = header?.paidAmount ?? booking?.paidAmount ?? 0
   const balance = header?.balanceDue ?? booking?.balanceDue ?? 0
+
+  /* THE REFUND POSITION: the detail read when it arrived, else the row. Both are read through the
+     same helpers, which treat a missing field as "nothing owed". */
+  const position = detail ?? booking
+  const refundStatus = position ? refundStatusOf(position) : 'None'
+  const refundOwed = position?.refundAmount ?? null
+  /* Which lines are refunds: the detail's flag by paymentId, or the receipt's own flag where the
+     build already sends one. A line neither knows about is an ordinary payment. */
+  const refundIds = new Set(
+    (detail?.payments ?? []).filter((line) => line.isRefund === true).map((line) => line.paymentId),
+  )
+  const isRefundLine = (line: { paymentId: number; isRefund?: boolean }) =>
+    line.isRefund === true || refundIds.has(line.paymentId)
+  const lines: Pick<BookingPaymentLine, 'amount' | 'isRefund'>[] = (
+    detail?.payments ?? receipt?.payments ?? []
+  ).map((line) => ({ amount: line.amount, isRefund: isRefundLine(line) }))
+  const refundDue = refundOutstanding(refundOwed, lines)
+  const canRecordRefund =
+    canManage &&
+    booking?.status === 'Cancelled' &&
+    (refundStatus === 'Due' || refundStatus === 'Partial') &&
+    refundDue > 0
 
   return (
     <>
@@ -312,6 +471,14 @@ export function BookingDrawer({
               <Badge color="gray" variant="outline">
                 {t(`booking.source.${booking.source}`)}
               </Badge>
+              {position && hasRefund(position) && (
+                <>
+                  {' '}
+                  <Badge color={REFUND_COLOR[refundStatus]} variant="light">
+                    {refundLabel(refundStatus)}
+                  </Badge>
+                </>
+              )}
             </div>
 
             <div className="bk-detail-grid">
@@ -347,6 +514,15 @@ export function BookingDrawer({
                 <>
                   <span className="bk-detail-label">{t('booking.fields.note')}</span>
                   <span className="bk-detail-value">{booking.note}</span>
+                </>
+              )}
+
+              {position?.cancelledBy && (
+                <>
+                  <span className="bk-detail-label">{t('booking.fields.cancelledBy')}</span>
+                  <span className="bk-detail-value">
+                    {t(`booking.cancelledBy.${position.cancelledBy}`)}
+                  </span>
                 </>
               )}
 
@@ -407,6 +583,26 @@ export function BookingDrawer({
               <span>{t('booking.fields.balance')}</span>
               <span>{money(balance, booking.currencyCode)}</span>
             </div>
+            {/* What is owed BACK, on a cancelled booking. Red while any of it is outstanding —
+                it is a debt the house carries, and the badge above says how far along it is. */}
+            {position && hasRefund(position) && refundOwed != null && (
+              <div
+                className={
+                  refundDue > 0 ? 'bk-money-row bk-money-row--refund' : 'bk-money-row'
+                }
+              >
+                <span>
+                  {t('booking.fields.refund')} · {refundLabel(refundStatus)}
+                  {position.refundedUtc ? ` · ${stamp(position.refundedUtc)}` : ''}
+                </span>
+                <span>
+                  {refundDue > 0 && refundDue !== refundOwed
+                    ? `${money(refundDue, booking.currencyCode)} / `
+                    : ''}
+                  {money(refundOwed, booking.currencyCode)}
+                </span>
+              </div>
+            )}
 
             {/* ── payments ── */}
             <h3 className="card-title" style={{ marginTop: 18 }}>
@@ -417,20 +613,30 @@ export function BookingDrawer({
             ) : (receipt?.payments ?? []).length === 0 ? (
               <div className="hint">{t('booking.drawer.noPayments')}</div>
             ) : (
-              (receipt?.payments ?? []).map((payment) => (
-                <div className="bk-money-row" key={payment.paymentId}>
-                  <span>
-                    {payment.methodName}
-                    {payment.reference ? ` · ${payment.reference}` : ''}
-                    <br />
-                    <span className="bk-detail-label">
-                      {stamp(payment.paidUtc)}
-                      {payment.receivedBy ? ` · ${payment.receivedBy}` : ''}
+              (receipt?.payments ?? []).map((payment) => {
+                const refund = isRefundLine(payment)
+                return (
+                  <div
+                    className={refund ? 'bk-money-row bk-money-row--refund' : 'bk-money-row'}
+                    key={payment.paymentId}
+                  >
+                    <span>
+                      {refund ? `${t('booking.drawer.refundLine')} · ` : ''}
+                      {payment.methodName}
+                      {payment.reference ? ` · ${payment.reference}` : ''}
+                      <br />
+                      <span className="bk-detail-label">
+                        {stamp(payment.paidUtc)}
+                        {payment.receivedBy ? ` · ${payment.receivedBy}` : ''}
+                      </span>
                     </span>
-                  </span>
-                  <span>{money(payment.amount, booking.currencyCode)}</span>
-                </div>
-              ))
+                    <span>
+                      {refund ? '−' : ''}
+                      {money(Math.abs(payment.amount), booking.currencyCode)}
+                    </span>
+                  </div>
+                )
+              })
             )}
 
             {/* ── the payment form ── */}
@@ -503,40 +709,6 @@ export function BookingDrawer({
               </div>
             )}
 
-            {/* ── the cancellation form ── */}
-            {canManage && cancelling && (
-              <div className="form-field" style={{ marginTop: 12 }}>
-                <label className="form-label" htmlFor="bk-cancel-reason">
-                  {t('booking.fields.cancelReason')} {t('common.required')}
-                </label>
-                <Textarea
-                  id="bk-cancel-reason"
-                  minRows={2}
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.currentTarget.value)}
-                  maxLength={300}
-                />
-                <div className="hint">{t('booking.drawer.cancelHint')}</div>
-                <div className="form-actions">
-                  <Button
-                    variant="default"
-                    onClick={() => setCancelling(false)}
-                    disabled={busy}
-                  >
-                    {t('common.back')}
-                  </Button>
-                  <Button
-                    color="red"
-                    onClick={() => setStatus('Cancelled', cancelReason.trim())}
-                    loading={busy}
-                    disabled={cancelReason.trim() === ''}
-                  >
-                    {t('booking.drawer.confirmCancel')}
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* ── actions ──
                 A CLOSED BOOKING SHOWS NO DECISIONS AT ALL, only the receipt. The server refuses to
                 move one, so offering the buttons would be offering four ways to be told no. */}
@@ -549,7 +721,19 @@ export function BookingDrawer({
                 {t('booking.drawer.printReceipt')}
               </Button>
 
-              {canManage && !isClosed(booking.status) && !cancelling && !paying && (
+              {/* A cancelled booking that still owes money back keeps ONE action: handing it over. */}
+              {canRecordRefund && (
+                <Button
+                  color="red"
+                  variant="light"
+                  leftSection={<IconCashOff size={16} />}
+                  onClick={openRefund}
+                >
+                  {t('booking.drawer.recordRefund')}
+                </Button>
+              )}
+
+              {canManage && !isClosed(booking.status) && !paying && (
                 <>
                   <Button
                     variant="default"
@@ -595,7 +779,10 @@ export function BookingDrawer({
                     color="red"
                     variant="light"
                     leftSection={<IconX size={16} />}
-                    onClick={() => setCancelling(true)}
+                    onClick={() => {
+                      setCancelError(null)
+                      setCancelling(true)
+                    }}
                   >
                     {t('booking.drawer.cancelBooking')}
                   </Button>
@@ -619,6 +806,145 @@ export function BookingDrawer({
         opened={receiptOpen}
         onClose={() => setReceiptOpen(false)}
       />
+
+      {/* ── CANCEL: who is cancelling decides the refund, so it is asked first and by name. ── */}
+      <Modal
+        opened={cancelling && booking != null}
+        onClose={() => !busy && setCancelling(false)}
+        title={t('booking.drawer.cancelTitle', { id: booking?.bookingId ?? 0 })}
+        size={480}
+        centered
+      >
+        {cancelError && (
+          <div className="alert alert--error" role="alert">
+            {cancelError}
+          </div>
+        )}
+
+        <Radio.Group
+          label={t('booking.drawer.cancelWho')}
+          value={cancelledBy}
+          onChange={(value) => setCancelledBy(value === 'Guest' ? 'Guest' : 'Staff')}
+        >
+          <Stack gap="xs" mt="xs">
+            <Radio
+              value="Staff"
+              label={t('booking.drawer.cancelByStaff')}
+              description={t('booking.drawer.cancelByStaffHint')}
+              disabled={busy}
+            />
+            <Radio
+              value="Guest"
+              label={t('booking.drawer.cancelByGuest')}
+              description={t('booking.drawer.cancelByGuestHint')}
+              disabled={busy}
+            />
+          </Stack>
+        </Radio.Group>
+
+        <div className="form-field" style={{ marginTop: 12 }}>
+          <label className="form-label" htmlFor="bk-cancel-note">
+            {t('booking.fields.note')} {t('common.optional')}
+          </label>
+          <Textarea
+            id="bk-cancel-note"
+            minRows={2}
+            value={cancelNote}
+            onChange={(e) => setCancelNote(e.currentTarget.value)}
+            maxLength={300}
+            disabled={busy}
+          />
+          <div className="hint">{t('booking.drawer.cancelNoteHint')}</div>
+        </div>
+
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setCancelling(false)} disabled={busy}>
+            {t('booking.drawer.keepBooking')}
+          </Button>
+          <Button color="red" onClick={() => void cancelBooking()} loading={busy}>
+            {t('booking.drawer.confirmCancel')}
+          </Button>
+        </div>
+      </Modal>
+
+      {/* ── RECORD REFUND: the amount defaults to what is still owed; the server caps it. ── */}
+      <Modal
+        opened={refunding && booking != null}
+        onClose={() => !busy && setRefunding(false)}
+        title={t('booking.drawer.refundTitle', { id: booking?.bookingId ?? 0 })}
+        size={480}
+        centered
+      >
+        {refundError && (
+          <div className="alert alert--error" role="alert">
+            {refundError}
+          </div>
+        )}
+
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-refund-amount">
+              {t('booking.fields.amount')}
+            </label>
+            <NumberInput
+              id="bk-refund-amount"
+              min={0}
+              decimalScale={2}
+              value={refundAmount}
+              onChange={setRefundAmount}
+              disabled={busy}
+            />
+            <div className="hint">
+              {refundDue > 0
+                ? t('booking.drawer.refundAmountHint', {
+                    due: money(refundDue, booking?.currencyCode ?? ''),
+                  })
+                : t('booking.drawer.refundNothingDue')}
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label className="form-label" htmlFor="bk-refund-method">
+              {t('booking.fields.method')}
+            </label>
+            <Select
+              id="bk-refund-method"
+              data={methods.map((m) => ({ value: String(m.paymentMethodId), label: m.name }))}
+              value={refundMethodId == null ? null : String(refundMethodId)}
+              onChange={(v) => setRefundMethodId(v ? Number(v) : null)}
+              nothingFoundMessage={t('booking.drawer.noMethods')}
+              disabled={busy}
+            />
+          </div>
+
+          <div className="form-field full">
+            <label className="form-label" htmlFor="bk-refund-ref">
+              {t('booking.fields.reference')} {t('common.optional')}
+            </label>
+            <TextInput
+              id="bk-refund-ref"
+              value={refundReference}
+              onChange={(e) => setRefundReference(e.currentTarget.value)}
+              maxLength={80}
+              disabled={busy}
+            />
+          </div>
+        </div>
+
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setRefunding(false)} disabled={busy}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            color="red"
+            onClick={() => void recordRefund()}
+            loading={busy}
+            disabled={refundMethodId == null || refundAmountValue <= 0}
+          >
+            {t('booking.drawer.recordRefund')}
+          </Button>
+        </div>
+      </Modal>
     </>
   )
 }

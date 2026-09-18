@@ -53,6 +53,7 @@ import {
   eachDay,
   endOfMonth,
   fromMinutes,
+  hasRefund,
   hhmm,
   isStruck,
   laneLayout,
@@ -61,6 +62,8 @@ import {
   nowMinutes,
   PERMISSIONS,
   PIXELS_PER_HOUR,
+  refundLabel,
+  refundStatusOf,
   roomPalette,
   startOfMonth,
   startOfWeek,
@@ -1236,6 +1239,15 @@ export default function BookingCalendarPage() {
                             )}
                           </span>
                           <span className="bk-ev-name">{row.guestName}</span>
+                          {/* The refund position, on the card itself: Due reads red, Refunded
+                              green, so a cancelled block that still owes money is findable. */}
+                          {hasRefund(row) && (
+                            <span
+                              className={`bk-ev-refund bk-ev-refund--${refundStatusOf(row).toLowerCase()}`}
+                            >
+                              {refundLabel(refundStatusOf(row))}
+                            </span>
+                          )}
                         </button>
                       )
                     })}

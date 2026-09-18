@@ -24,6 +24,20 @@ export type BookingStatus =
 /** Website | Manual — where the booking came from. */
 export type BookingSource = 'Website' | 'Manual'
 
+/**
+ * Who cancelled a booking — and therefore what is owed back. Staff cancelling on the guest owes
+ * everything they paid; a guest who asked keeps the deposit with the house and gets the rest.
+ * The server works the amount out; this only says which rule it applied.
+ */
+export type CancelledBy = 'Staff' | 'Guest'
+
+/**
+ * Where the money owed back on a cancelled booking has got to. Absent (or 'None') on a booking
+ * that owes nothing — an older API build sends none of the refund fields at all, so every reader
+ * treats a missing value as 'None'.
+ */
+export type RefundStatus = 'None' | 'Due' | 'Partial' | 'Refunded'
+
 /** PerHour | Fixed — how an add-on prices itself. */
 export type AddonPriceType = 'PerHour' | 'Fixed'
 
@@ -117,6 +131,36 @@ export interface BookingRow {
   /** totalAmount − paidAmount, computed server-side so no two screens can disagree. */
   balanceDue: number
   decidedByUsername: string | null
+
+  /* ── CANCELLATION AND REFUND. All optional: an older API omits them, and a booking that was
+     never cancelled has nothing to say here. ── */
+  /** Set on a Cancelled booking; decides how refundAmount was worked out. */
+  cancelledBy?: CancelledBy | null
+  /** What is owed back to the guest in total (not what is still outstanding — see the payments). */
+  refundAmount?: number | null
+  refundStatus?: RefundStatus | null
+  /** When the refund was completed. Null until refundStatus is Refunded. */
+  refundedUtc?: string | null
+}
+
+/**
+ * One money line on a booking, as GET /api/bookings/{id} and POST /{id}/refunds return them.
+ * A refund is a payment line with isRefund set — the amount is positive either way and the flag
+ * says which direction the money went, so nothing here subtracts on the client.
+ */
+export interface BookingPaymentLine {
+  paymentId: number
+  amount: number
+  isRefund?: boolean
+  /** The method's name, or its id on a build that has not named it yet. */
+  method?: string | number | null
+  reference?: string | null
+  paidUtc: string
+}
+
+/** GET /api/bookings/{id} — the row plus its individual payment lines. */
+export interface BookingDetail extends BookingRow {
+  payments?: BookingPaymentLine[]
 }
 
 export interface BookingBlock {
@@ -151,6 +195,17 @@ export interface BookingCreated {
 export interface BookingStatusChanged {
   bookingId: number
   status: BookingStatus
+  cancelledBy?: CancelledBy | null
+  refundAmount?: number | null
+  refundStatus?: RefundStatus | null
+}
+
+/** POST /api/bookings/{id}/refunds — the position AFTER the refund, never to be computed here. */
+export interface RefundRecorded {
+  payments?: BookingPaymentLine[]
+  refundAmount?: number | null
+  refundStatus?: RefundStatus | null
+  refundedUtc?: string | null
 }
 
 export interface PaymentAdded {
@@ -199,6 +254,8 @@ export interface ReceiptAddon {
 export interface ReceiptPayment {
   paymentId: number
   amount: number
+  /** Money that went BACK to the guest. Absent on an older build, which never records one. */
+  isRefund?: boolean
   reference: string | null
   paidUtc: string
   methodName: string
@@ -262,8 +319,23 @@ export interface BookingCreatePayload {
 
 export interface BookingStatusPayload {
   status: BookingStatus
-  /** Required by the server when cancelling; it refuses an empty one by name. */
+  /** Cancelling only: which refund rule applies. The server refuses a cancellation without it. */
+  cancelledBy?: CancelledBy | null
+  /** Cancelling only: kept on the booking and printed on the receipt. */
+  note?: string | null
+  /**
+   * The older spelling of `note`. Still accepted by the server (reason = note), and still sent —
+   * the build this page may be talking to REQUIRES it on a cancellation and refuses an empty one
+   * by name. Sending both costs nothing and works against either.
+   */
   reason?: string | null
+}
+
+export interface BookingRefundPayload {
+  amount: number
+  /** A PaymentMethodId from GET /api/bookings/payment-methods. */
+  method: number
+  reference?: string | null
 }
 
 export interface BookingPaymentPayload {

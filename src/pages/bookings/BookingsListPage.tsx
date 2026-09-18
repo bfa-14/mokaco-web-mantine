@@ -24,10 +24,14 @@ import {
   addDays,
   BOOKING_STATUSES,
   dayLabel,
+  hasRefund,
   hhmm,
   isStruck,
   money,
   PERMISSIONS,
+  REFUND_COLOR,
+  refundLabel,
+  refundStatusOf,
   STATUS_COLOR,
   statusLabel,
   today,
@@ -177,13 +181,25 @@ export default function BookingsListPage() {
       }),
       columnHelper.accessor('status', {
         header: t('booking.fields.status'),
+        /* A cancelled booking that owes money back wears a second badge — red until the refund
+           has been handed over — so the list is where somebody finds the ones still to settle. */
         cell: (info) => (
-          <Badge color={STATUS_COLOR[info.getValue()]} variant="light">
-            {statusLabel(info.getValue())}
-          </Badge>
+          <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+            <Badge color={STATUS_COLOR[info.getValue()]} variant="light">
+              {statusLabel(info.getValue())}
+            </Badge>
+            {hasRefund(info.row.original) && (
+              <Badge color={REFUND_COLOR[refundStatusOf(info.row.original)]} variant="light">
+                {refundLabel(refundStatusOf(info.row.original))}
+              </Badge>
+            )}
+          </span>
         ),
         meta: {
-          filterText: (_v, row) => statusLabel(row.status),
+          filterText: (_v, row) =>
+            hasRefund(row)
+              ? `${statusLabel(row.status)} ${refundLabel(refundStatusOf(row))}`
+              : statusLabel(row.status),
           // Only the statuses actually present, so every option in the dropdown returns something.
           filterOptions: optionsFrom(rows, (row) => statusLabel(row.status)),
         },

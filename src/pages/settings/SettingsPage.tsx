@@ -5,6 +5,7 @@ import { ActionIcon, Loader, Tabs } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconRefresh } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
+import { AccessDenied } from '../AccessDenied'
 import { useSettings } from '../../settings/useSettings'
 import { settingsService } from '../../services/settingsService'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -324,6 +325,24 @@ export default function SettingsPage() {
   const requested = params.get('tab')
   const active = visible.find((tab) => tab.id === requested)?.id ?? visible[0].id
 
+  /**
+   * A SYSTEM TAB ASKED FOR BY SOMEBODY WHO MAY NOT SEE IT IS REFUSED, NOT REDIRECTED.
+   *
+   * The route itself stays open — it has to, for Preferences (see routeAccess.ts) — so this is
+   * where the gate that RequirePermission would have been sits: a ?tab= naming a panel this user
+   * cannot open renders the same No access panel a guarded route would, rather than quietly
+   * landing them on Preferences as if the link had never said anything else. A tab that is merely
+   * empty for a manager (no Workflow rows yet) still falls back, because that is a tab with nothing
+   * in it, not a tab they are kept out of.
+   */
+  const requestedIsSystemTab =
+    requested != null && requested !== 'preferences' && (TAB_IDS as readonly string[]).includes(requested)
+  const refusedTab =
+    requestedIsSystemTab &&
+    !visible.some((tab) => tab.id === requested) &&
+    (requested === 'danger' ? !canReset : !canManage)
+  if (refusedTab) return <AccessDenied />
+
   function selectTab(value: string | null) {
     if (!value) return
     const next = new URLSearchParams(params)
@@ -397,17 +416,15 @@ export default function SettingsPage() {
               </SettingRows>
             </SettingsCard>
 
-            {/* The one thing a user with neither system trust needs to be told, kept exactly as
-                it read before: not an error, an explanation of whose settings those are. */}
+            {/* THE SYSTEM SETTINGS ARE REFUSED IN SO MANY WORDS for a user without SETTING_MANAGE.
+                Not an error — the page opened, and their own preferences above are theirs — but
+                the same No access wording every guarded route uses, so that what this page is
+                mostly made of is visibly not theirs rather than merely absent. */}
             {!canManage && (
-              <SettingsCard title="System settings">
-                <div className="empty-hint">
-                  <div className="empty-hint-main">
-                    You do not have access to system settings.
-                  </div>
-                  These values decide what a working day is — and therefore what people are
-                  paid — so they are owner-level rather than day-to-day. Ask whoever
-                  administers the system if one of them needs to change.
+              <SettingsCard title={t('access.deniedTitle')}>
+                <div className="empty-hint" role="note">
+                  <div className="empty-hint-main">{t('access.deniedTitle')}</div>
+                  {t('settings.systemDenied')}
                 </div>
               </SettingsCard>
             )}

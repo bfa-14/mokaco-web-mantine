@@ -47,6 +47,7 @@ import {
 } from './attendanceFormat'
 import { useApprovedLeaveDays } from './useApprovedLeaveDays'
 import { RosterApprovalBanner } from './RosterApprovalBanner'
+import type { RosterEditState } from './RosterApprovalBanner'
 import { chevronBack, chevronForward } from '../../i18n/physical'
 
 /**
@@ -258,7 +259,22 @@ export default function RosterPage() {
   const draggingRef = useRef(false)
   const anchorRef = useRef<{ row: number; col: number } | null>(null)
 
+  /* WHETHER THE MONTH MAY BE EDITED, as the approval banner reports it. Read-only while a request
+     is open on the month: the server refuses every cell edit then, so the grid stops offering them
+     rather than collecting the 409 per click. Starts editable — a banner that cannot answer (no
+     branch chosen, older API) leaves the server's refusal as the rule, exactly as before. */
+  const [editState, setEditState] = useState<RosterEditState>({
+    readOnly: false,
+    openRequestId: null,
+    changedSinceApproval: false,
+  })
+  const editable = canManage && !editState.readOnly
+  /** Bumped after every roster write, so the banner re-reads the month's status. */
+  const [rosterVersion, setRosterVersion] = useState(0)
+
   const [setDayVisible, setSetDayVisible] = useState(false)
+  /** The server's refusal of a set-day, kept IN the dialog the person is looking at. */
+  const [setDayError, setSetDayError] = useState<string | null>(null)
   const [setDayForm, setSetDayForm] = useState<SetDayFormState>({
     shiftId: null,
     isRestDay: false,
@@ -364,6 +380,8 @@ export default function RosterPage() {
       setAssignments(assignmentList)
       setGaps(gapList)
       setError(null)
+      // Every reload follows a write (or a Refresh), so the banner re-reads the month with it.
+      setRosterVersion((v) => v + 1)
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -436,6 +454,7 @@ export default function RosterPage() {
     } else {
       setSetDayForm({ shiftId: null, isRestDay: false })
     }
+    setSetDayError(null)
     setSetDayVisible(true)
   }, [])
 
@@ -455,7 +474,7 @@ export default function RosterPage() {
   }, [openSetDayForSelection])
 
   function startDrag(row: number, col: number) {
-    if (!canManage) return
+    if (!editable) return
     draggingRef.current = true
     anchorRef.current = { row, col }
     applySelection(new Set([cellKey(employees[row].employeeId, days[col])]))
@@ -490,6 +509,8 @@ export default function RosterPage() {
     }
 
     setSaving(true)
+    setSetDayError(null)
+    let written = 0
     try {
       for (const key of keys) {
         const { employeeId, workDate } = parseCellKey(key)
@@ -500,6 +521,7 @@ export default function RosterPage() {
           shiftId: setDayForm.isRestDay ? null : setDayForm.shiftId,
           isRestDay: setDayForm.isRestDay,
         })
+        written++
       }
       notifications.show({
         message: `Set ${keys.length} day(s).`,
@@ -510,7 +532,18 @@ export default function RosterPage() {
       clearSelection()
       await load()
     } catch (err) {
-      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
+      /* THE SERVER'S SENTENCE, IN THE DIALOG. A locked past day ("already in an approved roster
+         and attendance was recorded — correct the attendance record instead") or an open request
+         ("Waiting for approval — request #N …") is a 409 whose whole value is its wording, so it
+         stays in front of the person with the cells still selected, rather than fading as a toast
+         over a dialog that closed. A run that got part-way says how far, because those days ARE
+         written. */
+      const message = getErrorMessage(err)
+      setSetDayError(
+        written > 0 ? `${message} (${written} of ${keys.length} day(s) were set before this.)` : message,
+      )
+      notifications.show({ message, color: 'red', autoClose: 5000 })
+      if (written > 0) await load()
     } finally {
       setSaving(false)
     }
@@ -889,7 +922,13 @@ export default function RosterPage() {
 
       {/* Whether this month has been SIGNED FOR, and the one button that asks for it. Above the
           gaps banner deliberately: the gaps are what stop the month being worth approving. */}
-      <RosterApprovalBanner period={period} canManage={canManage} onCleared={refresh} />
+      <RosterApprovalBanner
+        period={period}
+        canManage={canManage}
+        onCleared={refresh}
+        onEditState={setEditState}
+        refreshToken={rosterVersion}
+      />
 
       {!loading && gaps.length > 0 && (
         // Amber, not red: a gap is not a failure, it is a decision nobody has made yet.
@@ -1036,7 +1075,7 @@ export default function RosterPage() {
                             isWeekend(date) ? 'roster-weekend' : undefined
                           }
                         >
-                          {canManage ? (
+                          {editable ? (
                             <button
                               type="button"
                               className={cellClass}
@@ -1106,9 +1145,14 @@ export default function RosterPage() {
               />
               Nothing assigned (the system cannot judge this day)
             </span>
-            {canManage && (
+            {editable && (
               <span className="roster-legend-item">
                 Click a cell to set it. Drag across cells to set many at once.
+              </span>
+            )}
+            {canManage && editState.readOnly && editState.openRequestId != null && (
+              <span className="roster-legend-item">
+                {t('attendance.rosterApproval.readOnly', { id: editState.openRequestId })}
               </span>
             )}
           </div>
@@ -1125,6 +1169,12 @@ export default function RosterPage() {
         size={480}
         centered
       >
+        {setDayError && (
+          <div className="alert alert--error" role="alert">
+            {setDayError}
+          </div>
+        )}
+
         <div className="form-field">
           <label className="form-label" htmlFor="roster-day-shift">
             Shift

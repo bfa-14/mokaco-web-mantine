@@ -705,12 +705,16 @@
       "state": {
         "draft": "{{month}} has not been submitted for approval.",
         "pending": "{{month}} is waiting for approval.",
-        "approved": "{{month}} is approved."
+        "approved": "{{month}} is approved.",
+        "pendingRequest": "Waiting for approval — request #{{id}}",
+        "changed": "Changed after approval — submit again"
       },
       "hint": {
         "draft": "Finish the month first — a roster sent up with gaps in it is sent up twice.",
         "pending": "A request is open on it. Changes made now are changes nobody has signed for.",
-        "approved": "Signed off. Anything changed after this differs from what was approved."
+        "approved": "Signed off. Anything changed after this differs from what was approved.",
+        "pendingRequest": "{{month}} is with its approvers. The grid is read-only until they decide — withdraw the request to edit it now.",
+        "changed": "{{month}} was signed off, and the roster has moved since. What is on the grid now is not what was approved until it is submitted again."
       },
       "submit": "Submit month for approval",
       "viewRequest": "View request",
@@ -723,7 +727,8 @@
       "clearConfirm": "Every shift assignment for {{branch}} in {{month}} is removed, and the month starts again as an empty draft. A month that is waiting for approval, approved, or already has attendance recorded on it is refused by the server.",
       "cleared_one": "Roster cleared — {{count}} assignment removed.",
       "cleared_other": "Roster cleared — {{count}} assignments removed.",
-      "clearRefusedTitle": "Roster not cleared"
+      "clearRefusedTitle": "Roster not cleared",
+      "readOnly": "Read-only while request #{{id}} waits for approval."
     },
     "status": {
       "Present": "Present",
@@ -1226,7 +1231,8 @@
         "Actual": "Actual",
         "Approved": "Approved"
       }
-    }
+    },
+    "systemDenied": "You don't have permission to view or change the system settings — the values that decide what a working day is, and therefore what people are paid. Ask an administrator if one of them needs to change. Your own preferences above are still yours."
   },
   "booking": {
     "noAccess": "You do not have access to bookings.",
@@ -1267,7 +1273,10 @@
       "when": "When",
       "createdBy": "Blocked by",
       "decidedBy": "Decided by",
-      "hoursValue": "{{value}} h"
+      "hoursValue": "{{value}} h",
+      "cancelledBy": "Cancelled by",
+      "refund": "Refund",
+      "refundDue": "Refund due"
     },
     "calendar": {
       "title": "Booking calendar",
@@ -1324,7 +1333,21 @@
       "confirmCancel": "Cancel the booking",
       "cancelHint": "The guest is told why, so write something they can read.",
       "statusChanged": "Booking marked {{status}}.",
-      "closedHint": "This booking is {{status}} and can no longer be changed."
+      "closedHint": "This booking is {{status}} and can no longer be changed.",
+      "cancelTitle": "Cancel booking #{{id}}",
+      "cancelWho": "Who is cancelling?",
+      "cancelByStaff": "Staff — full refund",
+      "cancelByStaffHint": "We are cancelling on the guest. Everything they paid is due back.",
+      "cancelByGuest": "Guest asked us — refund minus deposit",
+      "cancelByGuestHint": "The guest changed their mind. The deposit is kept; anything paid above it is due back.",
+      "cancelNoteHint": "Kept on the booking and printed on the receipt, so write something the guest can read.",
+      "keepBooking": "Keep booking",
+      "recordRefund": "Record refund",
+      "refundTitle": "Record a refund — booking #{{id}}",
+      "refundAmountHint": "{{due}} still due back to the guest.",
+      "refundRecorded": "Refund recorded — {{status}}.",
+      "refundLine": "Refund",
+      "refundNothingDue": "Nothing is due back."
     },
     "new": {
       "title": "New booking",
@@ -1466,6 +1489,16 @@
       "balanceDue": "BALANCE DUE",
       "print": "Print",
       "notFound": "That booking could not be found."
+    },
+    "cancelledBy": {
+      "Staff": "Staff",
+      "Guest": "Guest"
+    },
+    "refundStatus": {
+      "None": "No refund",
+      "Due": "Refund due",
+      "Partial": "Partly refunded",
+      "Refunded": "Refunded"
     }
   }
 }
