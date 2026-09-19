@@ -1355,7 +1355,9 @@
       "workflow": "سير العمل",
       "advanced": "إعدادات متقدّمة",
       "danger": "منطقة الخطر",
-      "notifications": "الإشعارات"
+      "notifications": "الإشعارات",
+      "leave": "الإجازات",
+      "payroll": "الرواتب"
     },
     "punchDirection": {
       "title": "اتجاه البصمة",

@@ -66,6 +66,7 @@ const ACCENT: Record<MonthState, string> = {
  */
 export function RosterApprovalBanner({
   period,
+  branchId: pageBranchId = null,
   canManage,
   onCleared,
   onEditState,
@@ -73,6 +74,8 @@ export function RosterApprovalBanner({
 }: {
   /** 'yyyy-MM' — the month the grid is showing. */
   period: string
+  /** The page's branch filter. When it names a branch the banner follows it — one page, one branch in view. Null leaves the banner's own choice alone. */
+  branchId?: number | null
   /** ATTENDANCE_MANAGE. A viewer sees the state and gets no button. */
   canManage: boolean
   /** Called after "Clear roster" succeeded — the grid behind has to refetch its month. */
@@ -91,6 +94,9 @@ export function RosterApprovalBanner({
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState<number | null>(null)
   const [status, setStatus] = useState<RosterMonthStatus | null>(null)
+  useEffect(() => {
+    if (pageBranchId != null) setBranchId(pageBranchId)
+  }, [pageBranchId])
   /** The status could not be read — see the note above about hiding rather than shouting. */
   const [unreadable, setUnreadable] = useState(false)
   const [submitting, setSubmitting] = useState(false)

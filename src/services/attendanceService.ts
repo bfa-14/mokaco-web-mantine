@@ -153,10 +153,12 @@ export const shiftsService = {
 
 /** The roster. Read: ATTENDANCE_VIEW. Write: ATTENDANCE_MANAGE. */
 export const rosterService = {
-  get: (from: string, to: string, employeeId?: number) =>
+  /** `branchId` = ONE branch's roster, by the branch each employee belonged to ON the work date (D7) — not today's. */
+  get: (from: string, to: string, employeeId?: number, branchId?: number) =>
     apiRequest<ShiftAssignment[]>(
       `/api/roster?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
-        (employeeId ? `&employeeId=${employeeId}` : ''),
+        (employeeId ? `&employeeId=${employeeId}` : '') +
+        (branchId ? `&branchId=${branchId}` : ''),
     ),
 
   /**

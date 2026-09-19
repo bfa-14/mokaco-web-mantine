@@ -40,6 +40,8 @@ export const PERMISSION = {
   ATTENDANCE_IMPORT: 'ATTENDANCE_IMPORT',
   DEVICE_MANAGE: 'DEVICE_MANAGE',
   EMP_VIEW: 'EMP_VIEW',
+  /** BUG-04: without it, the employee, attendance and roster lists are scoped BY THE SERVER to the caller's own rows and the branches they manage. Not a route gate — nothing here depends on it. */
+  EMP_VIEW_ALL: 'EMP_VIEW_ALL',
   EMP_EDIT: 'EMP_EDIT',
   /* THE CONFIGURATION TRUSTS, split out of EMP_EDIT.
      Editing an employee and rewriting the branch list were the same permission until now, which

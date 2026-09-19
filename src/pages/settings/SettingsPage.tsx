@@ -36,6 +36,8 @@ const SETTING_MANAGE = 'SETTING_MANAGE'
 const TAB_IDS = [
   'preferences',
   'attendance',
+  'leave',
+  'payroll',
   'workflow',
   'notifications',
   'advanced',
@@ -230,7 +232,7 @@ export default function SettingsPage() {
    * order, so nothing is sorted again here and the two cannot disagree.
    *
    * MOST TABS HAVE ONE BAND, because a tab is a section. Advanced is the exception by design: it
-   * holds its own section plus every section nobody has mapped — Payroll today — each under its own
+   * holds its own section plus every section nobody has mapped — Booking today — each under its own
    * name rather than in one undifferentiated list.
    */
   const bandsOf = (tab: TabId): { bands: [string, Setting[]][]; loose: Setting[] } => {
@@ -255,6 +257,8 @@ export default function SettingsPage() {
   const advancedSettings = byTab.get('advanced') ?? []
   const advancedBands = bandsOf('advanced')
   const workflowBands = bandsOf('workflow')
+  const leaveBands = bandsOf('leave')
+  const payrollBands = bandsOf('payroll')
   const notificationBands = bandsOf('notifications')
 
   /** One system setting as a row — the wiring is identical for every tab it appears on. */
@@ -301,6 +305,12 @@ export default function SettingsPage() {
   const visible: { id: TabId; label: string; danger?: boolean }[] = [
     { id: 'preferences', label: t('settings.tabs.preferences') },
     ...(canManage ? [{ id: 'attendance' as TabId, label: t('settings.tabs.attendance') }] : []),
+    ...(canManage && leaveBands.bands.length + leaveBands.loose.length > 0
+      ? [{ id: 'leave' as TabId, label: t('settings.tabs.leave') }]
+      : []),
+    ...(canManage && payrollBands.bands.length + payrollBands.loose.length > 0
+      ? [{ id: 'payroll' as TabId, label: t('settings.tabs.payroll') }]
+      : []),
     // A TAB PER SECTION, and only when that section actually has rows: an empty tab behind a label
     // somebody clicked reads as a page that failed to load.
     ...(canManage && workflowBands.bands.length + workflowBands.loose.length > 0
@@ -470,6 +480,38 @@ export default function SettingsPage() {
             </div>
           </Tabs.Panel>
         )}
+
+        {/* ── LEAVE and PAYROLL — promoted from cards under Advanced to tabs of their own ──────
+            Fed by Section = 'Leave' / 'Payroll', exactly like Workflow below: nothing is listed by
+            name, and each tab exists only while its section has rows. One card per tab, untitled
+            by the section (the tab already says it) unless the rows carry no section at all. */}
+        {canManage &&
+          ([
+            ['leave', leaveBands],
+            ['payroll', payrollBands],
+          ] as const).map(([id, tabBands]) => (
+            <Tabs.Panel key={id} value={id} className="set-panel">
+              <div className="set-stack">
+                {errorBanner}
+                {loading ? (
+                  spinner
+                ) : (
+                  <>
+                    {tabBands.bands.map(([section, rows]) => (
+                      <SettingsCard key={section} title={section}>
+                        <SettingRows>{rows.map(renderSetting)}</SettingRows>
+                      </SettingsCard>
+                    ))}
+                    {tabBands.loose.length > 0 && (
+                      <SettingsCard title={t(`settings.tabs.${id}`)}>
+                        <SettingRows>{tabBands.loose.map(renderSetting)}</SettingRows>
+                      </SettingsCard>
+                    )}
+                  </>
+                )}
+              </div>
+            </Tabs.Panel>
+          ))}
 
         {/* ── WORKFLOW — how requests behave ──────────────────────────────────────────────────
             Its own tab now, fed by Section = 'Workflow'. Nothing is listed here by name: the rows

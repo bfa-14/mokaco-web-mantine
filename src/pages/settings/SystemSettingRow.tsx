@@ -17,6 +17,8 @@ import { SHOW_PAGE_HELP_KEY, type Setting } from '../../types/settings'
 export type SettingTab =
   | 'preferences'
   | 'attendance'
+  | 'leave'
+  | 'payroll'
   | 'workflow'
   | 'notifications'
   | 'advanced'
@@ -39,6 +41,10 @@ export type SettingTab =
 const SECTION_TABS: Record<string, SettingTab> = {
   preferences: 'preferences',
   attendance: 'attendance',
+  // Tabs of their own since QA2: what a leave costs and what payroll pays are not "rarely touched", and four plus
+  // seven rows under Advanced were being looked for under Attendance.
+  leave: 'leave',
+  payroll: 'payroll',
   workflow: 'workflow',
   notifications: 'notifications',
   advanced: 'advanced',
@@ -100,8 +106,8 @@ const KNOWN: Record<
     min: 0,
     step: 1,
   },
-  /* QA2 (scripts 82–86). The rows come from core.SETTING — Section 'Leave' and 'Payroll', each its own card under
-     Advanced — with their descriptions; these entries only give the titles a person would say and keep a typo from
+  /* QA2 (scripts 82–86). The rows come from core.SETTING — Section 'Leave' and 'Payroll', each its own tab —
+     with their descriptions; these entries only give the titles a person would say and keep a typo from
      paying a holiday at 20x or carrying over minus three days. */
   HolidayWorkRate: { title: 'Holiday work rate (× the day rate)', min: 1, max: 5, step: 0.25 },
   LeavePayoutOnTermination: { title: 'Pay the leave balance on termination' },

@@ -24,7 +24,7 @@ import {
   IconSettings,
 } from '@tabler/icons-react'
 import { rosterService, shiftsService } from '../../services/attendanceService'
-import { employeesService } from '../../services/hrService'
+import { branchesService, employeesService } from '../../services/hrService'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
 import { PageHelp } from '../../components/PageHelp'
@@ -35,7 +35,7 @@ import type {
   ShiftAssignment,
   ShiftPatternUpsertRequest,
 } from '../../types/attendance'
-import type { EmployeeListItem, LeaveDay } from '../../types/hr'
+import type { Branch, EmployeeListItem, LeaveDay } from '../../types/hr'
 import {
   currentPeriod,
   daysInPeriod,
@@ -243,7 +243,7 @@ function OverwriteField({
 }
 
 export default function RosterPage() {
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
   // Rostering is an ATTENDANCE_MANAGE job. A viewer sees the month but no way to change it.
   const canManage = hasPermission(PERMISSIONS.manage)
 
@@ -254,11 +254,57 @@ export default function RosterPage() {
     const asked = searchParams.get('period')
     return asked && /^\d{4}-(0[1-9]|1[0-2])$/.test(asked) ? asked : currentPeriod()
   })
-  const [employees, setEmployees] = useState<EmployeeListItem[]>([])
+  /* THE BRANCH FILTER. "All branches" by default. One branch = the roster rows of the people who belonged to it ON
+     each work date (the API decides that, from the branch history), so a transferred employee's earlier days stay with
+     the branch they were in. Remembered per user, in this browser: a branch manager opens the page on their branch. */
+  const branchKey = `mokaco.roster.branch.${user?.username ?? ''}`
+  const [branchFilter, setBranchFilter] = useState<number | null>(() => {
+    try {
+      return Number(localStorage.getItem(branchKey)) || null
+    } catch {
+      return null
+    }
+  })
+  const [branches, setBranches] = useState<Branch[]>([])
+  useEffect(() => {
+    // Without EMP_VIEW the list is refused: no filter is offered, and the page works as before.
+    branchesService
+      .getAll()
+      .then(setBranches)
+      .catch(() => setBranches([]))
+  }, [])
+  function chooseBranch(next: number | null) {
+    try {
+      if (next == null) localStorage.removeItem(branchKey)
+      else localStorage.setItem(branchKey, String(next))
+    } catch {
+      /* private window: the filter still works, it is just not remembered */
+    }
+    setLoading(true)
+    clearSelection()
+    setBranchFilter(next)
+  }
+
+  const [allEmployees, setEmployees] = useState<EmployeeListItem[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([])
-  const [gaps, setGaps] = useState<RosterGap[]>([])
+  const [allGaps, setGaps] = useState<RosterGap[]>([])
   const [loading, setLoading] = useState(true)
+
+  /* WHO IS ON THE GRID under a branch filter: the people in that branch today, plus anybody with a roster row the API
+     attributed to it this month (someone transferred out since still shows on the days that were this branch's).
+     Everything below — the grid, the gaps banner, the pickers in the dialogs — reads these filtered lists. */
+  const employees = useMemo(() => {
+    if (branchFilter == null) return allEmployees
+    const branchName = branches.find((b) => b.branchId === branchFilter)?.name
+    const rostered = new Set(assignments.map((a) => a.employeeId))
+    return allEmployees.filter((e) => e.branch === branchName || rostered.has(e.employeeId))
+  }, [allEmployees, assignments, branches, branchFilter])
+  const gaps = useMemo(() => {
+    if (branchFilter == null) return allGaps
+    const visible = new Set(employees.map((e) => e.employeeId))
+    return allGaps.filter((g) => visible.has(g.employeeId))
+  }, [allGaps, employees, branchFilter])
   const [error, setError] = useState<string | null>(null)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -379,7 +425,7 @@ export default function RosterPage() {
         await Promise.all([
           employeesService.getAll(),
           shiftsService.getAll(),
-          rosterService.get(from, to),
+          rosterService.get(from, to, undefined, branchFilter ?? undefined),
           rosterService.getGaps(from, to),
         ])
       setEmployees(employeeList)
@@ -394,7 +440,7 @@ export default function RosterPage() {
     } finally {
       setLoading(false)
     }
-  }, [period])
+  }, [period, branchFilter])
 
   useEffect(() => {
     let cancelled = false
@@ -405,7 +451,7 @@ export default function RosterPage() {
           await Promise.all([
             employeesService.getAll(),
             shiftsService.getAll(),
-            rosterService.get(from, to),
+            rosterService.get(from, to, undefined, branchFilter ?? undefined),
             rosterService.getGaps(from, to),
           ])
         if (!cancelled) {
@@ -425,7 +471,7 @@ export default function RosterPage() {
     return () => {
       cancelled = true
     }
-  }, [period])
+  }, [period, branchFilter])
 
   function refresh() {
     setLoading(true)
@@ -879,6 +925,25 @@ export default function RosterPage() {
           <ForwardChevron />
         </ActionIcon>
 
+        {branches.length > 1 && (
+          <div className="filter-field">
+            <span className="filter-field-label">Branch</span>
+            <Select
+              aria-label="Branch filter"
+              w={200}
+              data={[
+                { value: 'all', label: 'All branches' },
+                ...branches
+                  .filter((b) => b.isActive || b.branchId === branchFilter)
+                  .map((b) => ({ value: String(b.branchId), label: b.name })),
+              ]}
+              value={branchFilter != null ? String(branchFilter) : 'all'}
+              allowDeselect={false}
+              onChange={(v) => chooseBranch(v == null || v === 'all' ? null : Number(v))}
+            />
+          </div>
+        )}
+
         {canManage && (
           <div className="filter-spacer">
             {/* PRIMARY. A weekly pattern is the stable, recurring truth — "Rami works Mon–Fri
@@ -931,6 +996,7 @@ export default function RosterPage() {
           gaps banner deliberately: the gaps are what stop the month being worth approving. */}
       <RosterApprovalBanner
         period={period}
+        branchId={branchFilter}
         canManage={canManage}
         onCleared={refresh}
         onEditState={setEditState}

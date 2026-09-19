@@ -1271,7 +1271,9 @@
       "workflow": "Workflow",
       "advanced": "Advanced",
       "danger": "Danger zone",
-      "notifications": "Notifications"
+      "notifications": "Notifications",
+      "leave": "Leave",
+      "payroll": "Payroll"
     },
     "punchDirection": {
       "title": "Punch direction",
