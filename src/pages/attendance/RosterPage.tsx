@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   ActionIcon,
   Button,
@@ -246,7 +247,13 @@ export default function RosterPage() {
   // Rostering is an ATTENDANCE_MANAGE job. A viewer sees the month but no way to change it.
   const canManage = hasPermission(PERMISSIONS.manage)
 
-  const [period, setPeriod] = useState(currentPeriod())
+  /* ?period=yyyy-MM opens the page ON that month — the "Worked without roster" list links here for the month the
+     unrostered day is in. Read once: after that the picker owns the month. */
+  const [searchParams] = useSearchParams()
+  const [period, setPeriod] = useState(() => {
+    const asked = searchParams.get('period')
+    return asked && /^\d{4}-(0[1-9]|1[0-2])$/.test(asked) ? asked : currentPeriod()
+  })
   const [employees, setEmployees] = useState<EmployeeListItem[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([])

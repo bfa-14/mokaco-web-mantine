@@ -9,6 +9,7 @@ import { EmployeeFormPopup } from './EmployeeFormPopup'
 import { SalaryComponentsTab } from './SalaryComponentsTab'
 import { LeaveTab } from './LeaveTab'
 import { DocumentsTab } from './DocumentsTab'
+import { BranchHistoryTab } from './BranchHistoryTab'
 import type { EmployeeProfile } from '../../types/hr'
 import { chevronBack } from '../../i18n/physical'
 
@@ -43,6 +44,8 @@ export default function EmployeeProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editVisible, setEditVisible] = useState(false)
+  /** Bumped on every save: an edit may have been a transfer, and the history tab must not show the list from before it. */
+  const [savedCount, setSavedCount] = useState(0)
 
   async function reload() {
     setProfile(await employeesService.getProfile(employeeId))
@@ -141,6 +144,7 @@ export default function EmployeeProfilePage() {
           <Tabs.Tab value="salary">Salary Components</Tabs.Tab>
           <Tabs.Tab value="leave">Leave</Tabs.Tab>
           <Tabs.Tab value="documents">Documents</Tabs.Tab>
+          <Tabs.Tab value="branches">{t('hr.branchHistory.tab')}</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="overview">
@@ -190,13 +194,24 @@ export default function EmployeeProfilePage() {
             <DocumentsTab employeeId={employeeId} />
           </div>
         </Tabs.Panel>
+
+        <Tabs.Panel value="branches">
+          <div style={{ marginTop: 16 }}>
+            {/* Cancelling a planned transfer changes nothing in the header today, but the profile is re-read so the
+                two can never disagree. */}
+            <BranchHistoryTab employeeId={employeeId} reloadKey={savedCount} onChanged={() => void reload()} />
+          </div>
+        </Tabs.Panel>
       </Tabs>
 
       <EmployeeFormPopup
         visible={editVisible}
         employee={profile}
         onClose={() => setEditVisible(false)}
-        onSaved={() => void reload()}
+        onSaved={() => {
+          setSavedCount((n) => n + 1)
+          void reload()
+        }}
       />
     </div>
   )

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { ActionIcon, Button, Group, Loader, Pagination, Select, Table, Textarea, TextInput } from '@mantine/core'
+import { ActionIcon, Button, Group, Loader, Pagination, SegmentedControl, Select, Table, Textarea, TextInput } from '@mantine/core'
 import { DateTimePicker, MonthPickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconCheck, IconClockEdit, IconMinus, IconRefresh, IconSearch } from '@tabler/icons-react'
@@ -29,11 +29,16 @@ import {
   type AttendanceAnomaly,
 } from '../../types/attendance'
 import type { Branch } from '../../types/hr'
+import { DeviceQuarantineList, WorkedWithoutRosterList } from './AnomalyExtraLists'
 import { currentPeriod, formatDate, formatMinutes, formatTime, periodLabel, periodRange } from './attendanceFormat'
 
 /* ── words ── */
 
-const TYPES: AnomalyType[] = ['LateArrival', 'EarlyDeparture', 'MissingPunch']
+const TYPES: AnomalyType[] = ['LateArrival', 'EarlyDeparture', 'MissingPunch', 'HalfDayAbsence']
+
+/** The three worklists of this page. The two beside the anomalies are not rulings — they are days and punches the
+    system could not place: a day worked that the roster does not know, a punch from a PIN that belongs to nobody. */
+type PageView = 'anomalies' | 'unrostered' | 'devices'
 const DECISIONS: AnomalyDecision[] = ['Excused', 'Deducted', 'Corrected']
 
 /** The type as the words on screen. Unknown codes render as themselves rather than as a missing key. */
@@ -69,7 +74,13 @@ function correctedSide(row: AttendanceAnomaly): 'in' | 'out' {
 
 function TypeBadge({ type }: { type: AnomalyType }) {
   const tone =
-    type === 'LateArrival' ? 'badge--late' : type === 'EarlyDeparture' ? 'badge--early' : 'badge--missing'
+    type === 'LateArrival'
+      ? 'badge--late'
+      : type === 'EarlyDeparture'
+        ? 'badge--early'
+        : type === 'HalfDayAbsence'
+          ? 'badge--halfday'
+          : 'badge--missing'
   return <span className={`badge ${tone}`}>{typeText(type)}</span>
 }
 
@@ -402,6 +413,10 @@ export default function AnomaliesPage() {
   const typeFilter = parseTypeFilter(searchParams.get('type'))
   const decisionFilter = parseDecisionFilter(searchParams.get('decision'))
   const branchId = Number(searchParams.get('branchId')) || null
+  const viewParam = searchParams.get('view')
+  const view: PageView = viewParam === 'unrostered' || viewParam === 'devices' ? viewParam : 'anomalies'
+  /** Bumped by the refresh button and after a PIN is mapped — the two side lists re-read on it. */
+  const [extraReload, setExtraReload] = useState(0)
 
   function setParams(next: Record<string, string | null>) {
     setSearchParams(
@@ -473,6 +488,7 @@ export default function AnomaliesPage() {
   }, [])
 
   function refresh() {
+    setExtraReload((n) => n + 1)
     setLoading(true)
     void load()
   }
@@ -667,7 +683,7 @@ export default function AnomaliesPage() {
           {/* The month-end ruling, one click for the lot. Disabled — with the reason on hover —
               when nothing on screen is undecided, rather than hidden: an HR user who cannot find
               the button assumes it does not exist. */}
-          {canCorrect && (
+          {canCorrect && view === 'anomalies' && (
             <>
               <Button
                 variant="default"
@@ -702,14 +718,30 @@ export default function AnomaliesPage() {
         </div>
       </div>
 
-      <PageHelp>{t('attendance.anomalies.help')}</PageHelp>
+      <SegmentedControl
+        mb="md"
+        value={view}
+        onChange={(v) => setParams({ view: v === 'anomalies' ? null : v })}
+        data={[
+          { value: 'anomalies', label: t('attendance.anomalies.views.anomalies') },
+          { value: 'unrostered', label: t('attendance.anomalies.views.unrostered') },
+          { value: 'devices', label: t('attendance.anomalies.views.devices') },
+        ]}
+      />
 
-      <p className="hint">
-        <Trans i18nKey="attendance.anomalies.blockNote" components={{ strong: <strong /> }} />
-      </p>
+      {view === 'anomalies' ? (
+        <>
+          <PageHelp>{t('attendance.anomalies.help')}</PageHelp>
+          <p className="hint">
+            <Trans i18nKey="attendance.anomalies.blockNote" components={{ strong: <strong /> }} />
+          </p>
+        </>
+      ) : (
+        <PageHelp>{t(view === 'unrostered' ? 'attendance.unrostered.help' : 'attendance.quarantine.help')}</PageHelp>
+      )}
 
       <div className="filter-bar">
-        <div className="filter-field">
+        <div className="filter-field" style={view === 'devices' ? { display: 'none' } : undefined}>
           <span className="filter-field-label">{t('attendance.anomalies.filters.month')}</span>
           {/* Not clearable: the endpoint takes a range, and the bulk ruling is a month's. */}
           <MonthPickerInput
@@ -724,7 +756,7 @@ export default function AnomaliesPage() {
             }}
           />
         </div>
-        <div className="filter-field">
+        <div className="filter-field" style={view !== 'anomalies' ? { display: 'none' } : undefined}>
           <span className="filter-field-label">{t('attendance.anomalies.filters.type')}</span>
           <Select
             data={[
@@ -736,7 +768,7 @@ export default function AnomaliesPage() {
             onChange={(v) => setParams({ type: v === 'all' ? null : v })}
           />
         </div>
-        <div className="filter-field">
+        <div className="filter-field" style={view !== 'anomalies' ? { display: 'none' } : undefined}>
           <span className="filter-field-label">{t('attendance.anomalies.filters.decision')}</span>
           <Select
             data={[
@@ -765,13 +797,18 @@ export default function AnomaliesPage() {
         </div>
       </div>
 
-      {error && (
+      {view === 'anomalies' && error && (
         <div className="alert alert--error" role="alert">
           {error}
         </div>
       )}
 
-      {loading ? (
+      {view === 'unrostered' ? (
+        <WorkedWithoutRosterList from={from} to={to} branchId={branchId} reloadKey={extraReload} />
+      ) : view === 'devices' ? (
+        /* A mapped PIN replays its punches, which can raise or clear anomalies — the first view is re-read too. */
+        <DeviceQuarantineList branchId={branchId} reloadKey={extraReload} onMapped={() => void load()} />
+      ) : loading ? (
         <div className="page-loading">
           <Loader size={40} />
         </div>

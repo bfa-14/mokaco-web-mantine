@@ -170,6 +170,9 @@ export const ROUTE_ACCESS: RouteRule[] = [
      payroll keeps working, while these two ADMIN pages follow CORE_MANAGE. */
   { path: '/core/currencies', anyOf: [PERMISSION.CORE_MANAGE] },
   { path: '/core/exchange-rates', anyOf: [PERMISSION.CORE_MANAGE] },
+  // Holidays are WRITTEN with CORE_MANAGE; the page is the place they are managed, so it takes the same right.
+  // (Reading them is open to everybody through the API: the leave form and the roster use it.)
+  { path: '/core/holidays', anyOf: [PERMISSION.CORE_MANAGE] },
 
   /* ── Reports ───────────────────────────────────────────────────────────────────────────────────
      REPORT_VIEW, not ATTENDANCE_VIEW. ReportsController's endpoints have moved off the attendance

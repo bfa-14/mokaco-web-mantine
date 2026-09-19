@@ -26,6 +26,7 @@ import LeavePolicyPage from './pages/hr/LeavePolicyPage'
 import TiersPage from './pages/hr/TiersPage'
 import CurrenciesPage from './pages/core/CurrenciesPage'
 import ExchangeRatesPage from './pages/core/ExchangeRatesPage'
+import HolidaysPage from './pages/core/HolidaysPage'
 import AttendanceHomePage from './pages/attendance/AttendanceHomePage'
 import DailyAttendancePage from './pages/attendance/DailyAttendancePage'
 import RosterPage from './pages/attendance/RosterPage'
@@ -172,6 +173,10 @@ export default function App() {
                     <Route
                       path="/core/exchange-rates"
                       element={guard('/core/exchange-rates', <ExchangeRatesPage />)}
+                    />
+                    <Route
+                      path="/core/holidays"
+                      element={guard('/core/holidays', <HolidaysPage />)}
                     />
 
                     <Route

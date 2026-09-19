@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Select, Textarea } from '@mantine/core'
+import { SegmentedControl, Select, Textarea } from '@mantine/core'
 import { DateRangeField } from '../../components/DateRangeField'
 import { leaveRequestsService } from '../../services/workflowService'
 import { leaveTypesService } from '../../services/hrService'
 import { isActiveRow } from '../../types/hr'
 import type { LeaveRelationEntitlement, LeaveType } from '../../types/hr'
-import type { LeaveBalanceSummary } from '../../types/workflow'
+import type { LeaveBalanceSummary, LeaveWorkingDays } from '../../types/workflow'
 import { balanceDaysText, dayCountText, inclusiveDays } from './newRequestShared'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
@@ -30,6 +30,10 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
   const [reason, setReason] = useState('')
   /** The balance, TAGGED with the person-and-type it was read for — see the original's rationale. */
   const [fetched, setFetched] = useState<{ key: string; data: LeaveBalanceSummary } | null>(null)
+  /** D3: 'AM' | 'PM' for a one-day request; null = whole days. Only meaningful while from and to are the same day. */
+  const [halfDay, setHalfDay] = useState<'AM' | 'PM' | null>(null)
+  /** D2: what the range will COST, from the API — keyed so an answer for an older range is never shown. */
+  const [cost, setCost] = useState<{ key: string; data: LeaveWorkingDays } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -78,7 +82,32 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
 
   const fromYMD = fromDate ? fromDate.slice(0, 10) : null
   const toYMD = toDate ? toDate.slice(0, 10) : null
-  const days = fromYMD && toYMD ? inclusiveDays(fromYMD, toYMD) : null
+  const calendarDays = fromYMD && toYMD ? inclusiveDays(fromYMD, toYMD) : null
+  const oneDay = fromYMD != null && fromYMD === toYMD
+  const effectiveHalf = oneDay ? halfDay : null
+
+  /* WHAT THE LEAVE COSTS IS THE SERVER'S ANSWER, NOT ARITHMETIC DONE HERE. It depends on this employee's roster (their
+     rest days cost nothing) and on the public holidays of their branch — neither is on this screen. The same procedure
+     that will store the figure is asked for it. Until it answers, or if it cannot, the calendar count stands in, as
+     before; the procedure still has the last word when the request is raised. */
+  const costKey = employeeId != null && fromYMD && toYMD ? `${employeeId}:${leaveTypeId ?? ''}:${fromYMD}:${toYMD}:${effectiveHalf ?? ''}` : null
+  useEffect(() => {
+    if (costKey == null || employeeId == null || !fromYMD || !toYMD) return
+    let cancelled = false
+    leaveRequestsService
+      .workingDays(employeeId, leaveTypeId, fromYMD, toYMD, effectiveHalf)
+      .then((data) => {
+        if (!cancelled) setCost({ key: costKey, data })
+      })
+      .catch(() => {
+        /* the calendar count stays on screen */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [costKey, employeeId, leaveTypeId, fromYMD, toYMD, effectiveHalf])
+  const preview = cost && cost.key === costKey ? cost.data : null
+  const days = preview ? preview.workingDays : effectiveHalf ? 0.5 : calendarDays
   const leaveType = leaveTypes.find((lt) => lt.leaveTypeId === leaveTypeId) ?? null
   const leaveTypeName = leaveType?.name ?? null
 
@@ -88,9 +117,13 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
   const relationCap = relations.find((r) => r.relation === relation)?.days ?? null
 
   // Composed to match usp_LeaveRequest_Create's format EXACTLY — any drift here would be a lie.
+  /* The same wording the procedure composes (SQL 84): working days, or the half day. Only offered once the server's
+     count is in; without it the title is left to the procedure rather than guessed with calendar days. */
   const autoTitle =
-    leaveTypeName && fromYMD && toYMD && days != null
-      ? `${leaveTypeName} leave ${fromYMD} to ${toYMD} (${days} days)`
+    leaveTypeName && fromYMD && toYMD && preview
+      ? effectiveHalf
+        ? `${leaveTypeName} leave ${fromYMD} (half day, ${effectiveHalf})`
+        : `${leaveTypeName} leave ${fromYMD} to ${toYMD} (${preview.workingDays} ${preview.countsCalendarDays ? 'days' : preview.workingDays === 1 ? 'working day' : 'working days'})`
       : null
 
   /*
@@ -102,9 +135,11 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
     ? t('body.leave.missingType')
     : needsRelation && !relation
       ? t('body.leave.missingRelation')
-      : days == null
+      : calendarDays == null
         ? t('body.leave.missingPeriod')
-        : null
+        : preview && preview.workingDays <= 0
+          ? t('body.leave.noWorkingDay')
+          : null
 
   /** More days asked for than are left. Amber, and only amber: the approver decides. */
   const overBalance = balance != null && days != null && days > balance.currentBalance
@@ -199,10 +234,37 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
         />
       </div>
 
-      {/* The day count, live — inclusive calendar days, same arithmetic as the procedure. */}
+      {/* HALF A DAY — only a one-day request can be one (the procedure refuses it otherwise), so the choice only exists then. */}
+      {oneDay && (
+        <div className="form-field">
+          <SegmentedControl
+            fullWidth
+            disabled={saving}
+            value={halfDay ?? 'FULL'}
+            onChange={(v) => setHalfDay(v === 'AM' || v === 'PM' ? v : null)}
+            data={[
+              { value: 'FULL', label: t('body.leave.wholeDay') },
+              { value: 'AM', label: t('body.leave.halfAm') },
+              { value: 'PM', label: t('body.leave.halfPm') },
+            ]}
+          />
+          {effectiveHalf && <div className="hint">{t('body.leave.halfHint')}</div>}
+        </div>
+      )}
+
+      {/* The cost, live — the server's count of WORKING days (rest days and public holidays cost nothing). */}
       {days != null && (
         <p className="hint">
-          <strong>{dayCountText(days)}</strong> {t('body.leave.countedInclusively')}
+          <strong>
+            {preview && !preview.countsCalendarDays
+              ? t('body.leave.workingDays', { count: days, value: balanceDaysText(days) })
+              : dayCountText(days)}
+          </strong>{' '}
+          {preview
+            ? preview.countsCalendarDays
+              ? t('body.leave.countedInclusively')
+              : t('body.leave.costNothing', { calendar: preview.calendarDays, rest: preview.restDays, holidays: preview.holidays })
+            : t('body.leave.countedInclusively')}
           {relationCap != null &&
             t('body.leave.relationAllows', {
               relation: relation,
@@ -264,6 +326,7 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
         title: title ?? undefined,
         // Only for a relation-capped type; the procedure ignores it on every other.
         relationToEmployee: needsRelation ? relation : null,
+        halfDay: effectiveHalf,
       })
 
       return {

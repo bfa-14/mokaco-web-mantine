@@ -54,6 +54,10 @@ import type {
   ShiftPattern,
   ShiftPatternUpsertRequest,
   ShiftUpdateRequest,
+  QuarantinedDeviceUser,
+  QuarantineMapRequest,
+  QuarantineMapResult,
+  WorkedWithoutRoster,
 } from '../types/attendance'
 
 /** Policy values that decide what a working day IS. All endpoints require SETTING_MANAGE. */
@@ -269,6 +273,21 @@ export const attendanceService = {
    * One row PER ANOMALY (a day can carry several). ATTENDANCE_CORRECT, not VIEW: the list exists
    * to be decided from. `onlyUndecided` is the worklist; the full list shows who ruled what.
    */
+  /** Rule 12: days someone punched while the APPROVED roster month has no row for them. Nothing is paid or deducted for these. */
+  getWorkedWithoutRoster: (from: string, to: string, branchId?: number | null) =>
+    apiRequest<WorkedWithoutRoster[]>(
+      `/api/attendance/worked-without-roster?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+        (branchId ? `&branchId=${branchId}` : ''),
+    ),
+  /** D9: unknown device users — punches under a PIN enrolled to nobody, one line per (device, PIN). */
+  getDeviceQuarantine: (branchId?: number | null) =>
+    apiRequest<QuarantinedDeviceUser[]>(`/api/attendance/device-quarantine${branchId ? `?branchId=${branchId}` : ''}`),
+  /** D9: enrols the PIN, hands the waiting punches to the employee and replays them (ATTENDANCE_IMPORT). */
+  mapDeviceQuarantine: (request: QuarantineMapRequest) =>
+    apiRequest<QuarantineMapResult>('/api/attendance/device-quarantine/map', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
   getAnomalies: (from: string, to: string, onlyUndecided = false, branchId?: number | null) =>
     apiRequest<AttendanceAnomaly[]>(
       `/api/attendance/anomalies?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +

@@ -142,7 +142,8 @@
     "core": {
       "group": "Core",
       "currencies": "Currencies",
-      "exchangeRates": "Exchange Rates"
+      "exchangeRates": "Exchange Rates",
+      "holidays": "Holidays"
     },
     "reports": {
       "group": "Reports",
@@ -514,13 +515,21 @@
       "countedInclusively": "— counted inclusively, weekends included.",
       "relationAllows": " A {{relation}} allows up to {{days}}.",
       "overCap": "{{type}} allows up to {{days}} for a {{relation}}. Shorten the dates, or this will be refused.",
-      "overBalance": "That is more than the {{type}} balance of {{days}}. You can still submit — the approver decides whether to grant it, and may grant fewer days.",
+      "overBalance": "That is more than the {{type}} balance of {{days}}. The request will be refused unless the company allows a negative balance.",
       "missingType": "a leave type",
       "missingRelation": "the relation",
       "noticeShortWithPreferred": "This was raised at short notice — sooner than the {{count}} days’ notice this leave type prefers, so your approver may ask about it.",
       "noticeShort": "This was raised at short notice — sooner than preferred, so your approver may ask about it.",
       "period": "Leave period",
-      "missingPeriod": "the leave period"
+      "missingPeriod": "the leave period",
+      "wholeDay": "Whole day",
+      "halfAm": "Morning off (AM)",
+      "halfPm": "Afternoon off (PM)",
+      "halfHint": "Half a day of the balance. The other half of the shift is worked and measured as usual.",
+      "workingDays_one": "{{value}} of the balance",
+      "workingDays_other": "{{value}} of the balance",
+      "costNothing": "— working days only: of the {{calendar}} calendar day(s), {{rest}} rest day(s) and {{holidays}} public holiday(s) cost nothing.",
+      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays."
     },
     "tip": {
       "branchPlaceholder": "Which branch?",
@@ -763,7 +772,8 @@
       "type": {
         "LateArrival": "Late arrival",
         "EarlyDeparture": "Early departure",
-        "MissingPunch": "Missing punch"
+        "MissingPunch": "Missing punch",
+        "HalfDayAbsence": "Half-day absence"
       },
       "decision": {
         "Undecided": "Undecided",
@@ -862,6 +872,11 @@
         "allText": "No punch in this month{{branch}} fell outside the tolerance and none is missing. If you expected one, check the month above — a day is only listed once its punches have been processed.",
         "forBranch": " for {{branch}}",
         "noMatch": "Nothing matches the search."
+      },
+      "views": {
+        "anomalies": "Anomalies",
+        "unrostered": "Worked without roster",
+        "devices": "Unknown device punches"
       }
     },
     "home": {
@@ -944,6 +959,39 @@
       "summary_other": "{{count}} pairs — total {{total}}",
       "none": "No complete pairs on this day — every punch is still waiting for a partner.",
       "seePunches": "See Punches view"
+    },
+    "unrostered": {
+      "help": "Days someone punched although the approved roster for that month gives them no row. Nothing is paid or deducted for such a day. Add the day to the roster — the next reprocess derives it — or leave it if the punches were not work.",
+      "emptyTitle": "Nobody worked off-roster in {{month}}",
+      "emptyText": "Every punch of the month falls on a day its approved roster knows about.",
+      "date": "Date",
+      "employee": "Employee",
+      "branch": "Branch that day",
+      "firstPunch": "First punch",
+      "lastPunch": "Last punch",
+      "punches": "Punches",
+      "worked": "Between them",
+      "openRoster": "Open roster"
+    },
+    "quarantine": {
+      "help": "Punches that arrived under a device PIN enrolled to nobody. They are kept, not dropped. Map the PIN to its employee: the waiting punches become theirs and every day they fall on is derived again. Days already paid stay as paid — raise a payroll adjustment for those.",
+      "emptyTitle": "No unknown device users",
+      "emptyText": "Every punch the terminals sent belongs to an enrolled employee.",
+      "device": "Device",
+      "branch": "Branch",
+      "pin": "PIN",
+      "punches": "Punches waiting",
+      "first": "First punch",
+      "last": "Last punch",
+      "map": "Map to employee",
+      "mapTitle": "Who is PIN {{pin}}?",
+      "mapBody": "{{count}} punch(es) from {{device}} are waiting under this PIN. The employee chosen here is enrolled with it, receives them, and their days are derived again.",
+      "employee": "Employee",
+      "employeePlaceholder": "Search by name…",
+      "pickEmployee": "Choose the employee this PIN belongs to.",
+      "mapped": "{{count}} punch(es) given to {{employee}}.",
+      "result": "PIN {{pin}} is now {{employee}}: {{punches}} punch(es) resolved, {{days}} day(s) derived again.",
+      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them."
     }
   },
   "payroll": {
@@ -1088,7 +1136,10 @@
       "phoneInvalid": "Enter a Lebanese phone number: 8 digits (e.g. 03 123 456) or +961 followed by the number.",
       "contactRequired": "Phone number and e-mail are required for a new employee.",
       "phoneHint": "8 digits (03 123 456) or +961 followed by the number. Stored as +961…",
-      "noContactHint": "No phone / e-mail — notifications cannot reach this employee."
+      "noContactHint": "No phone / e-mail — notifications cannot reach this employee.",
+      "transferFrom": "Transfer effective from",
+      "transferToday": "Today",
+      "transferHint": "This is a transfer out of {{from}}. Days before this date stay under {{from}} in rosters, attendance and payroll. A future date is recorded now and applied on that day."
     },
     "employeeForm": {
       "tierPlaceholder": "Select the tier…",
@@ -1192,6 +1243,25 @@
       "deleted": "“{{name}}” deleted.",
       "deactivated": "“{{name}}” deactivated — it no longer appears in pick-lists.",
       "reactivated": "“{{name}}” reactivated."
+    },
+    "branchHistory": {
+      "tab": "Branch history",
+      "intro": "The branch this employee belonged to, and from when. Rosters, attendance and payroll read the branch as of the day they are about. To transfer, edit the employee and change the branch.",
+      "empty": "No branch history recorded yet.",
+      "branch": "Branch",
+      "from": "From",
+      "to": "To",
+      "note": "Note",
+      "recordedBy": "Recorded by",
+      "current": "Current",
+      "planned": "Planned",
+      "cancel": "Cancel transfer",
+      "keep": "Keep it",
+      "cancelTitle": "Cancel the planned transfer",
+      "cancelBody": "The transfer to {{branch}} on {{date}} has not started yet. Cancelling it keeps the employee where they are.",
+      "cancelled": "Planned transfer cancelled.",
+      "cancelFailed": "Could not cancel the transfer.",
+      "loadFailed": "Could not load the branch history."
     }
   },
   "settings": {
@@ -1503,6 +1573,51 @@
     "live": {
       "newWebsiteTitle": "New booking from the website — {{ref}}",
       "newWebsiteBody": "{{guest}} · {{room}} · {{date}}. Click to open and confirm."
+    }
+  },
+  "holidays": {
+    "title": "Public holidays",
+    "subtitle": "Days that are a holiday for every branch or for one. A holiday is paid and never an absence; leave does not spend a day on it; working it earns the holiday premium.",
+    "new": "New holiday",
+    "year": "Year",
+    "branch": "Branch",
+    "search": "Search",
+    "everyBranch": "Every branch",
+    "paid": "Paid",
+    "unpaid": "Unpaid",
+    "edit": "Edit",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "save": "Save",
+    "created": "Holiday recorded. The attendance days it touches were re-derived.",
+    "saved": "Holiday saved. The attendance days it touches were re-derived.",
+    "deleted": "Holiday removed. The attendance days it touched were re-derived.",
+    "empty": "No holidays recorded for {{year}}.",
+    "newTitle": "New public holiday",
+    "editTitle": "Edit public holiday",
+    "deleteTitle": "Remove this holiday?",
+    "deleteBody": "{{name}} on {{date}} ({{branch}}) will no longer be a holiday: the days become ordinary working days again and attendance is re-derived.",
+    "formNote": "A month that is already paid cannot take a new holiday — that is a payroll adjustment.",
+    "cols": {
+      "date": "Date",
+      "name": "Name",
+      "nameAr": "Arabic name",
+      "branch": "Applies to",
+      "paid": "Pay",
+      "actions": "Actions"
+    },
+    "fields": {
+      "date": "Date",
+      "name": "Name",
+      "nameAr": "Arabic name",
+      "branch": "Applies to",
+      "branchHint": "Every branch also covers branches opened later.",
+      "paid": "Paid holiday",
+      "paidHint": "Off = nobody is absent, but whoever was rostered to work it loses the day."
+    },
+    "errors": {
+      "date": "Choose the date.",
+      "name": "Give the holiday a name."
     }
   }
 }

@@ -100,6 +100,15 @@ const KNOWN: Record<
     min: 0,
     step: 1,
   },
+  /* QA2 (scripts 82–86). The rows come from core.SETTING — Section 'Leave' and 'Payroll', each its own card under
+     Advanced — with their descriptions; these entries only give the titles a person would say and keep a typo from
+     paying a holiday at 20x or carrying over minus three days. */
+  HolidayWorkRate: { title: 'Holiday work rate (× the day rate)', min: 1, max: 5, step: 0.25 },
+  LeavePayoutOnTermination: { title: 'Pay the leave balance on termination' },
+  LeaveCountsRestDays: { title: 'Leave counts rest days and holidays' },
+  LeaveAllowNegativeBalance: { title: 'Allow a negative leave balance' },
+  LeaveCarryOverMaxDays: { title: 'Carry-over cap (days; blank = no cap)', min: 0, max: 365, step: 0.5 },
+  LeaveCarryOverExpiresOn: { title: 'Carried-over days expire on (MM-DD; blank = never)' },
   // A per-person choice about the reader's own screen. Its PLACEMENT is core.SETTING's to state —
   // the row's Section is 'Preferences' — and this entry now only supplies the friendlier title.
   [SHOW_PAGE_HELP_KEY]: { title: 'Show page help' },

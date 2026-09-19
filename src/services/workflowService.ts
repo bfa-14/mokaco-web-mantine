@@ -32,6 +32,7 @@ import type {
   LeaveBalanceSummary,
   LeaveRequestCreated,
   LeaveRequestCreateRequest,
+  LeaveWorkingDays,
   LeaveRequestDecideResult,
   LeaveRequestPayload,
   LongHold,
@@ -670,6 +671,17 @@ export const leaveRequestsService = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+
+  /**
+   * "N working days" BEFORE the request is raised (D2): the same count the procedure will store — rest days of the
+   * employee's roster and public holidays of their branch cost nothing; a half day is 0.5.
+   */
+  workingDays: (employeeId: number, leaveTypeId: number | null, fromYMD: string, toYMD: string, halfDay: 'AM' | 'PM' | null) => {
+    const query = new URLSearchParams({ employeeId: String(employeeId), from: fromYMD, to: toYMD })
+    if (leaveTypeId != null) query.set('leaveTypeId', String(leaveTypeId))
+    if (halfDay) query.set('halfDay', halfDay)
+    return apiRequest<LeaveWorkingDays>(`/api/leave-requests/working-days?${query.toString()}`)
+  },
 
   /**
    * THE TYPED APPROVAL. Approving leave goes through here, not the generic /approve, because the

@@ -590,8 +590,51 @@ export interface HrAdjustDayRequest {
 
 /* ── Anomalies (tolerance-based late / early / missing punch, decided by HR) ── */
 
-/** LateArrival | EarlyDeparture | MissingPunch. */
-export type AnomalyType = 'LateArrival' | 'EarlyDeparture' | 'MissingPunch'
+/**
+ * LateArrival | EarlyDeparture | MissingPunch | HalfDayAbsence. The last is a half-day-leave day (D3) whose WORKED half
+ * shows no punch: minutes to rule on like a late arrival — Excused covers them, Deducted takes them off the day.
+ */
+export type AnomalyType = 'LateArrival' | 'EarlyDeparture' | 'MissingPunch' | 'HalfDayAbsence'
+
+/** GET /api/attendance/worked-without-roster — punches on a day an APPROVED roster month gives the employee no row for. */
+export interface WorkedWithoutRoster {
+  employeeId: number
+  employeeName: string
+  /** The branch the employee belonged to ON that day (D7), not necessarily today's. */
+  branchId: number
+  branchName: string
+  workDate: string
+  firstPunch: string
+  lastPunch: string
+  punchCount: number
+  workedMinutes: number
+}
+
+/** GET /api/attendance/device-quarantine — one unknown device user: a (device, PIN) enrolled to nobody, with punches waiting. */
+export interface QuarantinedDeviceUser {
+  deviceId: number
+  serialNumber: string | null
+  deviceName: string | null
+  branchId: number | null
+  branchName: string | null
+  enrollPin: string
+  punchCount: number
+  firstPunch: string
+  lastPunch: string
+}
+
+export interface QuarantineMapRequest {
+  deviceId: number
+  enrollPin: string
+  employeeId: number
+}
+
+/** What "map to employee" did: punches handed over, days re-derived, and days left alone because they are already paid. */
+export interface QuarantineMapResult {
+  punchesResolved: number
+  daysDerived: number
+  daysAlreadyPaid: number
+}
 
 /** null = undecided (the minutes are covered in pay meanwhile) | Excused | Deducted | Corrected. */
 export type AnomalyDecision = 'Excused' | 'Deducted' | 'Corrected'

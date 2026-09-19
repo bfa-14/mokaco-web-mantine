@@ -59,6 +59,8 @@ interface ConfirmState {
 interface FormState {
   fullName: string
   branchId: number | null
+  /** D7: the day a branch CHANGE takes effect (yyyy-MM-dd). Only shown, and only sent, when the branch differs from the one held. */
+  branchEffectiveFrom: string
   departmentId: number | null
   positionId: number | null
   hireDate: string
@@ -84,6 +86,7 @@ interface FormState {
 const EMPTY: FormState = {
   fullName: '',
   branchId: null,
+  branchEffectiveFrom: '',
   departmentId: null,
   positionId: null,
   hireDate: '',
@@ -182,6 +185,8 @@ export function EmployeeFormPopup({
   const [form, setForm] = useState<FormState>(EMPTY)
   const [saving, setSaving] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  /** D7: editing someone INTO another branch — the save is then a dated transfer, not a plain field edit. */
+  const isTransfer = employee !== null && form.branchId != null && form.branchId !== employee.branchId
   /**
    * A manager choice that a TIER CHANGE has just invalidated and removed.
    *
@@ -280,6 +285,7 @@ export function EmployeeFormPopup({
       setForm({
         fullName: employee.fullName,
         branchId: employee.branchId,
+        branchEffectiveFrom: '',
         departmentId: employee.departmentId,
         positionId: employee.positionId,
         hireDate: employee.hireDate?.slice(0, 10) ?? '',
@@ -457,6 +463,8 @@ export function EmployeeFormPopup({
           preferredLanguage: form.preferredLanguage,
           hireDate: form.hireDate,
           terminationDate: form.terminationDate || null,
+          // Only a CHANGE of branch is a transfer; blank = today in Beirut, decided by the procedure.
+          branchEffectiveFrom: isTransfer ? form.branchEffectiveFrom || null : null,
         })
         // The account is linked separately (usp_Employee_Update does not touch UserId). Only when the
         // picked account actually changed — leaving the field alone must never re-link or clear.
@@ -593,6 +601,32 @@ export function EmployeeFormPopup({
               }}
             />
           </div>
+
+          {/* A BRANCH CHANGE IS A TRANSFER WITH A DATE (D7). Rosters, attendance and payroll read the branch as of the
+              day they are about, so the days before this date stay under the old branch. The field exists only while
+              the branch differs from the one held — putting it back makes it disappear, and nothing is sent. */}
+          {isTransfer && (
+            <div className="form-field">
+              <label className="form-label" htmlFor="emp-branch-from">
+                {t('hr.employee.transferFrom')}
+              </label>
+              <DatePickerInput
+                id="emp-branch-from"
+                valueFormat="DD/MM/YYYY"
+                leftSection={<IconCalendar size={14} />}
+                clearable
+                placeholder={t('hr.employee.transferToday')}
+                value={form.branchEffectiveFrom || null}
+                disabled={saving}
+                onChange={(v) => setForm((f) => ({ ...f, branchEffectiveFrom: v ?? '' }))}
+              />
+              <div className="hint">
+                {t('hr.employee.transferHint', {
+                  from: branches.find((b) => b.branchId === employee?.branchId)?.name ?? employee?.branchName ?? '',
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="form-field">
             <label className="form-label" htmlFor="emp-dept">

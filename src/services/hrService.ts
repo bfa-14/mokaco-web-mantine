@@ -11,6 +11,7 @@ import type {
   Department,
   Document,
   DocumentCreateRequest,
+  EmployeeBranchHistoryRow,
   EmployeeCreateRequest,
   EmployeeLinkResult,
   EmployeeListItem,
@@ -239,6 +240,13 @@ export const employeesService = {
     }),
   remove: (id: number) =>
     apiRequest<void>(`/api/employees/${id}`, { method: 'DELETE' }),
+
+  /** D7: where the employee belonged and from when (EMP_VIEW) — oldest first, a planned transfer last. */
+  getBranchHistory: (id: number) =>
+    apiRequest<EmployeeBranchHistoryRow[]>(`/api/employees/${id}/branch-history`),
+  /** Takes back a transfer that has NOT started yet (EMP_EDIT). The procedure refuses a row that has. */
+  cancelFutureTransfer: (id: number, historyId: number) =>
+    apiRequest<void>(`/api/employees/${id}/branch-history/${historyId}`, { method: 'DELETE' }),
 
   /**
    * EVERY LEAVE TYPE'S BALANCE FOR ONE LEAVE YEAR (EMP_VIEW). Defaults to the current year.

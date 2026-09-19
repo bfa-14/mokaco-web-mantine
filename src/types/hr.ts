@@ -317,6 +317,26 @@ export interface EmployeeUpdateRequest {
   phoneNumber: string | null
   /** 'en' or 'ar'. Never null: the column is NOT NULL and every employee has one. */
   preferredLanguage: string
+  /**
+   * D7: only read when branchId CHANGES — the day the transfer takes effect (yyyy-MM-dd; omitted = today in Beirut).
+   * Days before it stay under the old branch; a date ahead is recorded now and applied on that day.
+   */
+  branchEffectiveFrom?: string | null
+}
+
+/** One row of GET /api/employees/{id}/branch-history: the branch the employee belonged to from a date on. */
+export interface EmployeeBranchHistoryRow {
+  employeeBranchHistoryId: number
+  employeeId: number
+  branchId: number
+  branchName: string
+  effectiveFrom: string
+  /** The day before the next transfer; null for the last row (the branch they are in, or will be in). */
+  effectiveTo: string | null
+  note: string | null
+  createdAt: string
+  createdBy: number | null
+  createdByName: string | null
 }
 
 /**

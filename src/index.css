@@ -160,6 +160,18 @@ code {
   border: 1px solid #f3c9bd;
 }
 
+.alert--success {
+  color: #166534;
+  background: #edf7ef;
+  border: 1px solid #bfe3c7;
+}
+
+.alert--warning {
+  color: #8a5a00;
+  background: #fdf6e3;
+  border: 1px solid #f0dca6;
+}
+
 /* Status badges */
 .badge {
   display: inline-block;

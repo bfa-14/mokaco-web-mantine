@@ -1,5 +1,5 @@
 import { apiRequest } from '../api/client'
-import type { Currency, ExchangeRate } from '../types/core'
+import type { Currency, ExchangeRate, Holiday, HolidayInput } from '../types/core'
 
 /** Currencies — read requires EMP_VIEW, write requires EMP_EDIT. */
 export const currenciesService = {
@@ -62,5 +62,29 @@ export const exchangeRatesService = {
 
   remove(exchangeRateId: number): Promise<void> {
     return apiRequest<void>(`/api/exchange-rates/${exchangeRateId}`, { method: 'DELETE' })
+  },
+}
+
+/**
+ * Public holidays (D1). Reading is open to everybody signed in (the leave form and the roster need it); writing
+ * needs CORE_MANAGE. The API refuses a second holiday on the same date and branch, and one on a month that is
+ * already paid for somebody it applies to — both as a sentence to show as it is.
+ */
+export const holidaysService = {
+  getAll(year?: number | null, branchId?: number | null): Promise<Holiday[]> {
+    const query = new URLSearchParams()
+    if (year) query.set('year', String(year))
+    if (branchId) query.set('branchId', String(branchId))
+    const qs = query.toString()
+    return apiRequest<Holiday[]>(`/api/holidays${qs ? `?${qs}` : ''}`)
+  },
+  create(input: HolidayInput): Promise<Holiday> {
+    return apiRequest<Holiday>('/api/holidays', { method: 'POST', body: JSON.stringify(input) })
+  },
+  update(holidayId: number, input: HolidayInput): Promise<Holiday> {
+    return apiRequest<Holiday>(`/api/holidays/${holidayId}`, { method: 'PUT', body: JSON.stringify(input) })
+  },
+  remove(holidayId: number): Promise<void> {
+    return apiRequest<void>(`/api/holidays/${holidayId}`, { method: 'DELETE' })
   },
 }

@@ -953,7 +953,8 @@ a.pipeline-stat:hover {
   background: #fbebc7;
 }
 
-.badge--missing {
+.badge--missing,
+.badge--halfday {
   color: #b91c1c;
   background: #f6e0da;
 }

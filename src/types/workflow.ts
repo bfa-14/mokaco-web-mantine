@@ -1022,9 +1022,26 @@ export interface LeaveBalanceSummary {
  * Raise a leave request. The day count is deliberately ABSENT: the procedure counts inclusive
  * calendar days itself, so the client cannot disagree with the stored figure.
  */
+/**
+ * GET /api/leave-requests/working-days — what a range would COST before it is requested (D2): the employee's rostered
+ * working days in it, with the rest days and public holidays that cost nothing counted beside them.
+ */
+export interface LeaveWorkingDays {
+  calendarDays: number
+  /** What the request will use: working days, 0.5 for a half day, calendar days for a fixed-entitlement type. */
+  workingDays: number
+  restDays: number
+  holidays: number
+  /** True for a type with a fixed entitlement (maternity): a span of the calendar, every day counts. */
+  countsCalendarDays: boolean
+  balance: number
+}
+
 export interface LeaveRequestCreateRequest {
   employeeId: number
   leaveTypeId: number
+  /** D3: 'AM' | 'PM' makes a ONE-day request half a day (0.5 of the balance). Omitted = whole days. */
+  halfDay?: 'AM' | 'PM' | null
   /** yyyy-MM-dd. */
   fromDate: string
   /** yyyy-MM-dd. */

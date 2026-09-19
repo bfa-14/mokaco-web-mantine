@@ -150,6 +150,7 @@ const GROUPS: NavGroup[] = [
     children: [
       { to: '/core/currencies', labelKey: 'nav.core.currencies', icon: 'money' },
       { to: '/core/exchange-rates', labelKey: 'nav.core.exchangeRates', icon: 'chart' },
+      { to: '/core/holidays', labelKey: 'nav.core.holidays', icon: 'event' },
     ],
   },
   {

@@ -31,7 +31,8 @@ function sourceBadge(l: PayslipLine, period: string) {
     case 'Statutory': return <span className="pr-src">statutory</span>
     case 'Attendance': return <span className="pr-src">attendance</span>
     default:
-      return <span className="pr-src">{l.sourceType.toLowerCase()} #{l.sourceId ?? ''}</span>
+      // Holiday work, the leave balance paid on termination… come from the month, not from one record: no '#'.
+      return <span className="pr-src">{l.sourceType.toLowerCase()}{l.sourceId != null ? ` #${l.sourceId}` : ''}</span>
   }
 }
 
