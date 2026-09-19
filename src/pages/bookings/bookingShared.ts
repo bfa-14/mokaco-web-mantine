@@ -30,6 +30,15 @@ export const BOOKING_MANAGE = 'BOOKING_MANAGE'
 
 export const PERMISSIONS = { view: BOOKING_VIEW, manage: BOOKING_MANAGE } as const
 
+/**
+ * The address that opens one booking's drawer: the list, narrowed to the booking's day (it may be
+ * weeks outside the default range), with ?open= naming the row. BookingsListPage reads both and
+ * drops them once the drawer is open. Used by the "new booking from the website" toast.
+ */
+export function bookingDrawerLink(booking: { bookingId: number; date: string }): string {
+  return `/bookings/list?date=${encodeURIComponent(booking.date)}&open=${booking.bookingId}`
+}
+
 /* ── dates ───────────────────────────────────────────────────────────────────────────────────── */
 
 /** A Date as 'yyyy-MM-dd', built from its local parts so no timezone can shift it. */

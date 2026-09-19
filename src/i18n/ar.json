@@ -1583,6 +1583,10 @@
       "Due": "استرداد مستحق",
       "Partial": "مستردّ جزئياً",
       "Refunded": "مستردّ"
+    },
+    "live": {
+      "newWebsiteTitle": "حجز جديد من الموقع — {{ref}}",
+      "newWebsiteBody": "{{guest}} · {{room}} · {{date}}. اضغط للفتح والتأكيد."
     }
   }
 }

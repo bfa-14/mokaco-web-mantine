@@ -43,6 +43,11 @@ const RUN_TYPES: { value: PayrollRunType; text: string }[] = [
   { value: 'Supplemental', text: 'Supplemental (off-cycle)' },
 ]
 
+
+/** Today in Beirut as yyyy-MM-dd — the same "today" the API's readiness gate counts up to. */
+function beirutToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Beirut' }).format(new Date())
+}
 /**
  * Each readiness count links to the page where it gets fixed. The link is built FROM the readiness
  * row, so a count can carry its own period into the page it opens: "3 undecided anomalies" must land
@@ -220,8 +225,9 @@ export default function PayrollRunsPage() {
       navigate(`/payroll/runs/${r.payrollRunId}`)
     } catch (e) {
       // The procedure's refusal, verbatim — and for a supplemental this is the ONLY gate the user
-      // sees: "the primary is not locked yet", "nothing for a supplemental to pay", "one open
-      // supplemental already". Each names its own cause better than a pre-check could.
+      // sees: "nothing for a supplemental to pay", "one open supplemental already". (It may be created
+      // at any time now — the "primary is not locked yet" refusal is gone, SQL 81.) Each names its
+      // own cause better than a pre-check could.
       setError(getErrorMessage(e))
     } finally {
       setSaving(false)
@@ -444,8 +450,9 @@ export default function PayrollRunsPage() {
           {runType === 'Supplemental' && (
             <div className="pr-ready">
               <div className="pr-ready-verdict">
-                Pays approved, unconsumed adjustments for the period. Possible only after the
-                primary is locked.
+                Pays approved, unpaid adjustments for the period, and can be created at any time —
+                before, during or after the primary run. What it pays is never paid again: the
+                primary leaves those adjustments out.
               </div>
             </div>
           )}
@@ -465,6 +472,12 @@ export default function PayrollRunsPage() {
                 {ready.isReady
                   ? 'Attendance is ready — the run can be created.'
                   : 'Attendance is not ready — every count above must reach zero first.'}
+                {/* A primary may be run on any day of its period (SQL 81): the counts cover the days
+                    up to today, and the days still to come are paid as scheduled. Said only while
+                    the period is still running, which is the only time it is true. */}
+                {ready.periodEnd.slice(0, 10) > beirutToday() && (
+                  <> The counts cover the days up to today; later days are paid as scheduled.</>
+                )}
               </div>
             </div>
           )}

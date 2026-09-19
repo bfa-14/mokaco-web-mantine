@@ -74,6 +74,7 @@ import {
   weekdayName,
 } from './bookingShared'
 import { BookingDrawer } from './BookingDrawer'
+import { useBookingChanged } from '../../live/bookingLive'
 import { NewBookingModal } from './NewBookingModal'
 import { BlockRoomModal } from './BlockRoomModal'
 import './bookings.css'
@@ -292,6 +293,10 @@ export default function BookingCalendarPage() {
     if (!canView) return
     void load()
   }, [canView, load])
+
+  /* LIVE: a booking made on the website, or decided / paid / cancelled at another till, redraws the
+     grid without a reload. The message is only the trigger; the blocks still come from the same GET. */
+  useBookingChanged(() => void load(), canView)
 
   /* ── which rooms, which days ───────────────────────────────────────────────────────────────── */
 

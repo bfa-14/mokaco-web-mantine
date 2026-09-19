@@ -8,6 +8,7 @@ import { IconLogout } from '@tabler/icons-react'
 import { useAuth } from '../auth/useAuth'
 import { SideNav } from './SideNav'
 import { BrandWordmark } from '../components/Brand'
+import { BookingLiveToasts } from '../pages/bookings/BookingLiveToasts'
 import './AppLayout.css'
 
 /**
@@ -149,6 +150,8 @@ export function AppLayout() {
             page clears a caught error. */}
         <main className="app-content">
           <RouteErrorBoundary resetKey={location.pathname}>
+            {/* Renders nothing: listens on /hubs/booking and toasts a new website booking on any page. */}
+            <BookingLiveToasts />
             <Outlet />
           </RouteErrorBoundary>
         </main>

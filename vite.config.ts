@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+/** Where the dev proxy forwards /api AND /hubs: the port `npm run dev` starts the API on. */
+const DEV_API_TARGET = process.env.VITE_DEV_API_TARGET ?? 'http://localhost:5078'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -10,7 +13,7 @@ export default defineConfig({
     // backend's self-signed HTTPS certificate (secure: false).
     proxy: {
       '/api': {
-        target: 'http://localhost:5078',
+        target: DEV_API_TARGET,
         changeOrigin: true,
         secure: false,
       },
@@ -23,9 +26,14 @@ export default defineConfig({
        * `ws: true` is the part that is easy to miss and impossible to work around: negotiate is
        * ordinary HTTP and would be forwarded without it, so the connection would get through
        * negotiation and then fail at the upgrade — a hub that "connects and then dies".
+       *
+       * SAME TARGET AS /api, from one constant. This entry used to point at
+       * https://localhost:44332 (an IIS Express port) while /api pointed at :5078, the port
+       * `npm run dev` actually starts the API on — so every hub negotiate came back 502 and live
+       * updates were silently off in development. Override both with VITE_DEV_API_TARGET.
        */
       '/hubs': {
-        target: 'https://localhost:44332',
+        target: DEV_API_TARGET,
         changeOrigin: true,
         secure: false,
         ws: true,

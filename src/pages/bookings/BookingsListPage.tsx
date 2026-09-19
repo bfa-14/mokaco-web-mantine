@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import {
   createColumnHelper,
   flexRender,
@@ -37,6 +38,7 @@ import {
   today,
 } from './bookingShared'
 import { BookingDrawer } from './BookingDrawer'
+import { useBookingChanged } from '../../live/bookingLive'
 import './bookings.css'
 
 /**
@@ -115,6 +117,45 @@ export default function BookingsListPage() {
     if (!canView) return
     void load()
   }, [canView, load])
+
+  /* LIVE: any booking change on /hubs/booking re-reads the range on screen. The message is only the
+     trigger — what the table shows still comes from the same GET, with the same filters. */
+  useBookingChanged(() => void load(), canView)
+
+  /**
+   * ?date=yyyy-MM-dd&open=<bookingId> — how the "new booking from the website" toast lands here.
+   * The range is narrowed to that day (the booking may be weeks outside the default fortnight), and
+   * once the rows are in, the booking's drawer is opened and the two parameters are dropped, so a
+   * reload or the back button does not reopen a drawer the user closed.
+   */
+  const [searchParams, setSearchParams] = useSearchParams()
+  const openId = Number(searchParams.get('open')) || null
+  const openDate = searchParams.get('date')
+
+  useEffect(() => {
+    if (!openId || !openDate || !/^\d{4}-\d{2}-\d{2}$/.test(openDate)) return
+    setFrom(openDate)
+    setTo(openDate)
+    setRoomFilter(null)
+    setStatusFilter(null)
+  }, [openId, openDate])
+
+  useEffect(() => {
+    if (!openId || loading) return
+    const row = rows.find((candidate) => candidate.bookingId === openId)
+    if (!row) return
+    setSelected(row)
+    setDrawerOpen(true)
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        next.delete('open')
+        next.delete('date')
+        return next
+      },
+      { replace: true },
+    )
+  }, [openId, loading, rows, setSearchParams])
 
   const columns = useMemo(
     () => [

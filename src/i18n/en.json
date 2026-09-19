@@ -1499,6 +1499,10 @@
       "Due": "Refund due",
       "Partial": "Partly refunded",
       "Refunded": "Refunded"
+    },
+    "live": {
+      "newWebsiteTitle": "New booking from the website — {{ref}}",
+      "newWebsiteBody": "{{guest}} · {{room}} · {{date}}. Click to open and confirm."
     }
   }
 }
