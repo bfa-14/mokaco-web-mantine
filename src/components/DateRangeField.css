@@ -1,6 +1,8 @@
 /* The from–to field: two text boxes that look like ONE Mantine input. Logical properties only, so it mirrors in Arabic. */
+/* The minimum beats a caller's narrower `w`: a field too narrow for two dates cuts the year off or sits on its neighbour. */
 .drf-wrapper {
-  min-width: 0;
+  min-width: 252px;
+  max-width: 100%;
 }
 
 .drf {
@@ -8,6 +10,8 @@
   align-items: center;
   gap: 4px;
   min-height: 36px;
+  /* two full dates ('15/08/2026') plus the icon and the X — narrower than this and the year is cut off */
+  min-width: 252px;
   padding-inline: 10px 6px;
   border: 1px solid var(--mantine-color-gray-4);
   border-radius: var(--mantine-radius-md);
@@ -37,14 +41,15 @@
 
 .drf-input {
   flex: 1 1 0;
-  min-width: 0;
-  width: 5.6em;
+  min-width: 84px;
+  width: 84px;
   border: 0;
   outline: 0;
   padding: 0 2px;
   background: transparent;
   font: inherit;
-  font-size: var(--mantine-font-size-sm);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
   color: inherit;
   text-align: center;
 }
