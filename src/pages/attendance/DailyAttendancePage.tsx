@@ -1189,8 +1189,6 @@ export default function DailyAttendancePage() {
     )
   }
 
-  const setFrom = (value: string) => setRange({ from: value })
-  const setTo = (value: string) => setRange({ to: value })
 
   const navigate = useNavigate()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
@@ -1450,7 +1448,8 @@ export default function DailyAttendancePage() {
         },
       }),
       columnHelper.accessor('fullName', { header: 'Employee' }),
-      columnHelper.accessor('workDate', { header: 'Date', size: 110 }),
+      // The API sends the day as '2026-08-14T00:00:00'; a day has no time, and the grid was printing the whole stamp.
+      columnHelper.accessor((row) => formatDate(row.workDate), { id: 'workDate', header: 'Date', size: 110 }),
 
       // Times and durations sort on the raw value and match on the rendered one — "08:05" is what
       // the user reads, and the timestamp behind it is not something anyone would type.
@@ -1826,11 +1825,11 @@ export default function DailyAttendancePage() {
             w={230}
             from={from}
             to={to}
+            defaultFrom={initialRange.from}
+            defaultTo={initialRange.to}
+            // ONE write for the pair. The field only ever hands over a complete range (its half-picked state is its own).
             onChange={(nextFrom, nextTo) => {
-              if (nextFrom && nextTo) {
-                setFrom(nextFrom)
-                setTo(nextTo)
-              }
+              if (nextFrom && nextTo) setRange({ from: nextFrom, to: nextTo })
             }}
           />
         </div>

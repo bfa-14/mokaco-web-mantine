@@ -429,8 +429,6 @@ export default function ExitVariancesPage() {
     )
   }
 
-  const setFrom = (value: string) => setRange({ from: value })
-  const setTo = (value: string) => setRange({ to: value })
   const [onlyUndecided, setOnlyUndecided] = useState(true)
 
   const [rows, setRows] = useState<ExitVariance[]>([])
@@ -567,11 +565,11 @@ export default function ExitVariancesPage() {
             id="variance-period"
             from={from}
             to={to}
+            defaultFrom={defaultRange.from}
+            defaultTo={defaultRange.to}
+            // ONE write for the pair. The field only ever hands over a complete range (its half-picked state is its own).
             onChange={(nextFrom, nextTo) => {
-              if (nextFrom && nextTo) {
-                setFrom(nextFrom)
-                setTo(nextTo)
-              }
+              if (nextFrom && nextTo) setRange({ from: nextFrom, to: nextTo })
             }}
           />
         </div>

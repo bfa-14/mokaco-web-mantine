@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button, Loader, Popover, SegmentedControl, Select } from '@mantine/core'
 import { DateRangeField } from '../../components/DateRangeField'
+import { useDateRangeParams } from '../../components/useDateRangeParams'
 import { notifications } from '@mantine/notifications'
 import {
   IconCheck,
@@ -424,8 +425,8 @@ export default function RequestsHubPage() {
   // Filters — session state only. Dates start EMPTY on purpose; status starts at "All" unless the
   // opening link named one. (Unchanged.)
   const [status, setStatus] = useState<StatusFilter>(() => openingStatus(opening) ?? 'All')
-  const [fromDate, setFromDate] = useState<string | null>(null)
-  const [toDate, setToDate] = useState<string | null>(null)
+  /* An OPTIONAL period (no parameters = no date filter), kept in the URL so it survives a reload. */
+  const { from: fromDate, to: toDate, setRange: setDateRange } = useDateRangeParams(null)
   const [typeId, setTypeId] = useState<number | null>(null)
 
   /** A ?type=CODE still to be resolved to an id — see the original's note on the raisable fallback. */
@@ -611,8 +612,7 @@ export default function RequestsHubPage() {
 
   function clearFilters() {
     setStatus('All')
-    setFromDate(null)
-    setToDate(null)
+    setDateRange(null, null)
     setTypeId(null)
   }
 
@@ -695,10 +695,7 @@ export default function RequestsHubPage() {
             w={230}
             from={fromDate}
             to={toDate}
-            onChange={(nextFrom, nextTo) => {
-              setFromDate(nextFrom)
-              setToDate(nextTo)
-            }}
+            onChange={setDateRange}
           />
         </div>
         {types.length > 1 && (
@@ -745,7 +742,7 @@ export default function RequestsHubPage() {
               <button
                 type="button"
                 aria-label={t('requests.filters.clearFrom')}
-                onClick={() => setFromDate(null)}
+                onClick={() => setDateRange(null, null)}
               >
                 ×
               </button>
@@ -757,7 +754,7 @@ export default function RequestsHubPage() {
               <button
                 type="button"
                 aria-label={t('requests.filters.clearTo')}
-                onClick={() => setToDate(null)}
+                onClick={() => setDateRange(null, null)}
               >
                 ×
               </button>

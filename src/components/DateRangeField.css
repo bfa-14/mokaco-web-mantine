@@ -1,0 +1,113 @@
+/* The from–to field: two text boxes that look like ONE Mantine input. Logical properties only, so it mirrors in Arabic. */
+.drf-wrapper {
+  min-width: 0;
+}
+
+.drf {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding-inline: 10px 6px;
+  border: 1px solid var(--mantine-color-gray-4);
+  border-radius: var(--mantine-radius-md);
+  background: var(--mantine-color-white);
+  cursor: text;
+  transition: border-color 100ms ease;
+}
+
+.drf:focus-within {
+  border-color: var(--mantine-primary-color-filled);
+}
+
+.drf[data-invalid] {
+  border-color: var(--mantine-color-red-6);
+}
+
+.drf[data-disabled] {
+  background: var(--mantine-color-gray-1);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.drf-icon {
+  flex: none;
+  color: var(--mantine-color-gray-6);
+}
+
+.drf-input {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 5.6em;
+  border: 0;
+  outline: 0;
+  padding: 0 2px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--mantine-font-size-sm);
+  color: inherit;
+  text-align: center;
+}
+
+.drf-input[aria-invalid='true'] {
+  color: var(--mantine-color-red-7);
+}
+
+.drf-input:disabled {
+  cursor: not-allowed;
+}
+
+.drf-sep {
+  flex: none;
+  color: var(--mantine-color-gray-6);
+}
+
+.drf-clear {
+  flex: none;
+}
+
+.drf-dropdown {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.drf-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 118px;
+  padding-inline-end: 12px;
+  border-inline-end: 1px solid var(--mantine-color-gray-3);
+}
+
+.drf-preset {
+  padding: 6px 10px;
+  border-radius: var(--mantine-radius-sm);
+  font-size: var(--mantine-font-size-sm);
+  text-align: start;
+}
+
+.drf-preset:hover {
+  background: var(--mantine-color-gray-1);
+}
+
+.drf-preset[data-active] {
+  background: var(--mantine-primary-color-light);
+  color: var(--mantine-primary-color-light-color);
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .drf-dropdown {
+    flex-direction: column;
+  }
+
+  .drf-presets {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding-inline-end: 0;
+    border-inline-end: 0;
+  }
+}

@@ -227,6 +227,8 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
           from={fromYMD}
           to={toYMD}
           disabled={saving}
+          // A request is for dates somebody names — "last month" is not a thing to ask leave for.
+          presets={false}
           onChange={(nextFrom, nextTo) => {
             setFromDate(nextFrom)
             setToDate(nextTo)

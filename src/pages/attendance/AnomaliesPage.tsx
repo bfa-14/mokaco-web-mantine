@@ -4,15 +4,13 @@ import { Trans, useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, SegmentedControl, Select, Table, Textarea, TextInput } from '@mantine/core'
-import { DateTimePicker, MonthPickerInput } from '@mantine/dates'
+import { DateTimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
 import { IconCalendar, IconCheck, IconClockEdit, IconMinus, IconRefresh, IconSearch } from '@tabler/icons-react'
 import { Modal } from '../../components/dialogs'
 import { getErrorMessage } from '../../api/errorMessage'
 import {
   dateTimeToPicker,
-  monthFromPicker,
-  monthToPicker,
   secondsDateTimeFromPicker,
 } from '../../components/date/pickerValue'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
@@ -29,6 +27,7 @@ import {
   type AttendanceAnomaly,
 } from '../../types/attendance'
 import type { Branch } from '../../types/hr'
+import { DateRangeField } from '../../components/DateRangeField'
 import { DeviceQuarantineList, WorkedWithoutRosterList } from './AnomalyExtraLists'
 import { currentPeriod, formatDate, formatMinutes, formatTime, periodLabel, periodRange } from './attendanceFormat'
 
@@ -742,17 +741,19 @@ export default function AnomaliesPage() {
 
       <div className="filter-bar">
         <div className="filter-field" style={view === 'devices' ? { display: 'none' } : undefined}>
-          <span className="filter-field-label">{t('attendance.anomalies.filters.month')}</span>
-          {/* Not clearable: the endpoint takes a range, and the bulk ruling is a month's. */}
-          <MonthPickerInput
-            valueFormat="MMMM YYYY"
-            leftSection={<IconCalendar size={14} />}
-            value={monthToPicker(month)}
-            onChange={(v) => {
-              const next = monthFromPicker(v)
-              if (!next) return
-              const range = periodRange(next)
-              setParams({ from: range.from, to: range.to })
+          <span className="filter-field-label">{t('common.period')}</span>
+          {/* A RANGE, like every other attendance list — "This month" / "Last month" are one click in its shortcuts.
+              Not clearable (the endpoint takes a range); the X goes back to this month. The bulk ruling still acts on
+              the month of `from`, and only goes through the month endpoint while the range IS that whole month. */}
+          <DateRangeField
+            id="anomaly-period"
+            w={230}
+            from={from}
+            to={to}
+            defaultFrom={defaultRange.from}
+            defaultTo={defaultRange.to}
+            onChange={(nextFrom, nextTo) => {
+              if (nextFrom && nextTo) setParams({ from: nextFrom, to: nextTo })
             }}
           />
         </div>

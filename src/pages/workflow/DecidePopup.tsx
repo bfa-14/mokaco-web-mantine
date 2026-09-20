@@ -647,7 +647,12 @@ export function DecidePopup({
             ? `${approved} min approved — cut from ${result.requestedMinutes}.`
             : `${approved} min approved.`
         }
-        await requestsService.approve(requestId, { comment: text || null, code: d.code, password: pw })
+        {
+          const result = await requestsService.approve(requestId, { comment: text || null, code: d.code, password: pw })
+          /* THE LAST SIGNATURE ON A ROSTER IS WHAT ACTIVATES IT — say so, to the person who just did it. */
+          if (requestTypeCode === 'ROSTER_APPROVAL' && result?.status === 'Approved')
+            return t('attendance.rosterApproval.activatedByYou')
+        }
         break
       case 'Reject':
         await requestsService.reject(requestId, text, { code: d.code, password: pw })

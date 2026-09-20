@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, Loader, SegmentedControl } from '@mantine/core'
 import { IconPrinter } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../api/errorMessage'
 import { DateRangeField } from '../../components/DateRangeField'
+import { useDateRangeParams } from '../../components/useDateRangeParams'
 import { PageHelp } from '../../components/PageHelp'
 import { bookingsService } from '../../services/bookingService'
 import type { BookingReport } from '../../types/booking'
@@ -30,8 +31,9 @@ export default function BookingReportPage() {
   const { hasPermission } = useAuth()
   const canView = hasPermission(PERMISSIONS.view)
 
-  const [from, setFrom] = useState<string | null>(addDays(today(), -30))
-  const [to, setTo] = useState<string | null>(today())
+  /* The period lives in the URL (?from=&to=). The last 30 days are the default. */
+  const defaultRange = useMemo(() => ({ from: addDays(today(), -30), to: today() }), [])
+  const { from, to, setRange } = useDateRangeParams(defaultRange)
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day')
 
   const [report, setReport] = useState<BookingReport | null>(null)
@@ -114,10 +116,9 @@ export default function BookingReportPage() {
           <DateRangeField
             from={from}
             to={to}
-            onChange={(nextFrom, nextTo) => {
-              setFrom(nextFrom)
-              setTo(nextTo)
-            }}
+            defaultFrom={defaultRange.from}
+            defaultTo={defaultRange.to}
+            onChange={setRange}
             w={240}
           />
         </div>

@@ -16,6 +16,7 @@ import { IconSearch } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../api/errorMessage'
 import { DateRangeField } from '../../components/DateRangeField'
+import { useDateRangeParams } from '../../components/useDateRangeParams'
 import { PageHelp } from '../../components/PageHelp'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
@@ -65,8 +66,9 @@ export default function BookingsListPage() {
   const canManage = hasPermission(PERMISSIONS.manage)
 
   /* A fortnight around today, so the page opens on something rather than on an empty range. */
-  const [from, setFrom] = useState<string | null>(addDays(today(), -7))
-  const [to, setTo] = useState<string | null>(addDays(today(), 7))
+  /* The period lives in the URL (?from=&to=): it survives a reload and travels in a link. The fortnight is the default. */
+  const defaultRange = useMemo(() => ({ from: addDays(today(), -7), to: addDays(today(), 7) }), [])
+  const { from, to, setRange } = useDateRangeParams(defaultRange)
   const [roomFilter, setRoomFilter] = useState<number | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
 
@@ -134,11 +136,10 @@ export default function BookingsListPage() {
 
   useEffect(() => {
     if (!openId || !openDate || !/^\d{4}-\d{2}-\d{2}$/.test(openDate)) return
-    setFrom(openDate)
-    setTo(openDate)
+    setRange(openDate, openDate)
     setRoomFilter(null)
     setStatusFilter(null)
-  }, [openId, openDate])
+  }, [openId, openDate, setRange])
 
   useEffect(() => {
     if (!openId || loading) return
@@ -315,10 +316,9 @@ export default function BookingsListPage() {
           <DateRangeField
             from={from}
             to={to}
-            onChange={(nextFrom, nextTo) => {
-              setFrom(nextFrom)
-              setTo(nextTo)
-            }}
+            defaultFrom={defaultRange.from}
+            defaultTo={defaultRange.to}
+            onChange={setRange}
             w={240}
           />
         </div>

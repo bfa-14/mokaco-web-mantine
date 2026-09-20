@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Button, Select, Tooltip } from '@mantine/core'
@@ -69,6 +69,7 @@ export function RosterApprovalBanner({
   branchId: pageBranchId = null,
   canManage,
   onCleared,
+  onApproved,
   onEditState,
   refreshToken = 0,
 }: {
@@ -80,6 +81,8 @@ export function RosterApprovalBanner({
   canManage: boolean
   /** Called after "Clear roster" succeeded — the grid behind has to refetch its month. */
   onCleared?: () => void
+  /** The month was SEEN to go from waiting to approved (the last approver signed elsewhere) — the grid refetches and unlocks. */
+  onApproved?: () => void
   /** Told whenever the month's editability changes — see {@link RosterEditState}. */
   onEditState?: (state: RosterEditState) => void
   /**
@@ -122,7 +125,10 @@ export function RosterApprovalBanner({
       // The reader's own branch is the one they came to look at; with a single branch there is
       // nothing to choose. Neither guess overrides a later, deliberate switch.
       const mine = me != null ? active.find((b) => b.branchId === me.branchId) : null
-      const start = mine ?? (active.length === 1 ? active[0] : null)
+      // A login with no employee behind it (admin, an owner's account) has no branch of its own. It used to get NO
+      // banner at all with more than one branch — the person who signs the roster off could not see that it was. The
+      // first branch is a starting point, not a claim: the selector is right there, and the page's filter overrides it.
+      const start = mine ?? active[0] ?? null
       if (start) setBranchId((prev) => prev ?? start.branchId)
     })
     return () => {
@@ -154,6 +160,21 @@ export function RosterApprovalBanner({
 
   // refreshToken is not read inside load; it is here so a bump re-runs it.
   useEffect(() => load(), [load, refreshToken])
+
+  /* THE APPROVAL HAPPENS SOMEWHERE ELSE — on the Requests page, usually in somebody else's browser. A roster page left
+     open used to say "Waiting for approval" for ever. Coming back to the tab re-reads the month (one small GET); the
+     page's live subscription does the same without anybody touching anything (see RosterPage). */
+  useEffect(() => {
+    const onReturn = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    window.addEventListener('focus', onReturn)
+    document.addEventListener('visibilitychange', onReturn)
+    return () => {
+      window.removeEventListener('focus', onReturn)
+      document.removeEventListener('visibilitychange', onReturn)
+    }
+  }, [load])
 
   async function submit() {
     if (branchId == null) return
@@ -216,6 +237,29 @@ export function RosterApprovalBanner({
     status == null ? 'draft' : openRequestId != null ? 'pending' : stateOf(status.status)
   const changedSinceApproval = state === 'approved' && status?.changedSinceApproval === true
   const readOnly = openRequestId != null
+
+  /* SAID ONCE, WHEN IT IS SEEN TO HAPPEN: the same branch and month were waiting on the last read and are approved on
+     this one. Opening a month that was approved last week says nothing — only the transition does. */
+  const lastSeen = useRef<{ key: string; pending: boolean } | null>(null)
+  useEffect(() => {
+    if (status == null || branchId == null) return
+    const key = `${branchId}:${monthDate}`
+    const before = lastSeen.current
+    lastSeen.current = { key, pending: state === 'pending' }
+    if (before?.key === key && before.pending && state === 'approved') {
+      notifications.show({
+        message: t('attendance.rosterApproval.approvedToast', {
+          month: periodLabel(period),
+          branch: branches.find((b) => b.branchId === branchId)?.name ?? '',
+        }),
+        color: 'green',
+        autoClose: 7000,
+      })
+      onApproved?.()
+    }
+    // The toast depends on the month's state alone; the rest is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, state])
 
   // Reported after render, and only when it actually changed, so the page never re-renders for
   // a banner that re-read the same answer.

@@ -27,6 +27,8 @@ import { rosterService, shiftsService } from '../../services/attendanceService'
 import { branchesService, employeesService } from '../../services/hrService'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
+import { useLive } from '../../live/useLive'
+import { useLiveEnabled } from '../../live/useLiveSettings'
 import { PageHelp } from '../../components/PageHelp'
 import { PERMISSIONS } from '../../types/attendance'
 import type {
@@ -477,6 +479,11 @@ export default function RosterPage() {
     setLoading(true)
     void load()
   }
+
+  /* LIVE. A roster changes under this page from elsewhere — a shift swap applied, a colleague's edit — and its APPROVAL
+     always does: the last approver signs on the Requests page. 'workflow' is the topic a decision raises, 'attendance'
+     the one a roster write raises; either re-reads the month, and the banner re-reads its status with it. */
+  useLive(['attendance', 'workflow'], () => void load(), useLiveEnabled('attendance'))
 
   /** Moving month re-fetches everything, so show the spinner rather than a stale grid. */
   function goToPeriod(next: string) {
@@ -999,6 +1006,7 @@ export default function RosterPage() {
         branchId={branchFilter}
         canManage={canManage}
         onCleared={refresh}
+        onApproved={() => void load()}
         onEditState={setEditState}
         refreshToken={rosterVersion}
       />
@@ -1350,6 +1358,7 @@ export default function RosterPage() {
                 the standing range is kept until a complete one replaces it. */}
             <DateRangeField
               id="roster-gen-period"
+              presets={false}
               from={generateForm.fromDate}
               to={generateForm.toDate}
               onChange={(nextFrom, nextTo) => {

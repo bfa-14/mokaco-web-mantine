@@ -737,7 +737,9 @@
       "cleared_one": "Roster cleared — {{count}} assignment removed.",
       "cleared_other": "Roster cleared — {{count}} assignments removed.",
       "clearRefusedTitle": "Roster not cleared",
-      "readOnly": "Read-only while request #{{id}} waits for approval."
+      "readOnly": "Read-only while request #{{id}} waits for approval.",
+      "approvedToast": "Roster for {{month}} approved — {{branch}}. It is now the active roster.",
+      "activatedByYou": "Roster approved. It is now the month's active roster — attendance is measured against it."
     },
     "status": {
       "Present": "Present",
@@ -1621,5 +1623,17 @@
       "date": "Choose the date.",
       "name": "Give the holiday a name."
     }
+  },
+  "dateRange": {
+    "from": "From",
+    "to": "To",
+    "placeholder": "DD/MM/YYYY",
+    "presets": "Quick ranges",
+    "thisMonth": "This month",
+    "lastMonth": "Last month",
+    "last7Days": "Last 7 days",
+    "custom": "Custom",
+    "reset": "Back to the default period",
+    "clear": "Clear the period"
   }
 }
