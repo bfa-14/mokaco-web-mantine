@@ -4,7 +4,7 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
 import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
-import { IconPencil, IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPencil, IconPlus, IconRefresh, IconSearch, IconTrash } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { currenciesService } from '../../services/coreService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
@@ -32,7 +32,7 @@ const columnHelper = createColumnHelper<Currency>()
 const WIDTHS: Record<string, number | undefined> = {
   currencyCode: 100,
   decimalPlaces: 110,
-  actions: 110,
+  actions: 190,
 }
 
 /** The page sizes the original pager offered. */
@@ -42,11 +42,13 @@ function CurrenciesGrid({
   rows,
   canManage,
   onEdit,
+  onDelete,
 }: {
   rows: Currency[]
   /** False for a CORE_MANAGE-less reader: the grid still reads, the Actions column goes. */
   canManage: boolean
   onEdit: (row: Currency) => void
+  onDelete: (row: Currency) => void
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -74,13 +76,22 @@ function CurrenciesGrid({
                   >
                     Edit
                   </Button>
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    size="compact-sm"
+                    leftSection={<IconTrash size={14} />}
+                    onClick={() => onDelete(info.row.original)}
+                  >
+                    Delete
+                  </Button>
                 </div>
               ),
             }),
           ]
         : []),
     ],
-    [onEdit, canManage],
+    [onEdit, onDelete, canManage],
   )
 
   const table = useReactTable({
@@ -263,6 +274,18 @@ export default function CurrenciesPage() {
     setPopupVisible(true)
   }
 
+  /** Only an unused currency can go: the API refuses a used one and says where it is used. */
+  async function remove(row: Currency) {
+    if (!window.confirm(`Delete currency ${row.currencyCode} (${row.name})? Its exchange rates are deleted with it.`)) return
+    try {
+      await currenciesService.remove(row.currencyCode)
+      notify('Deleted.', 'success', 2000)
+      await reload()
+    } catch (err) {
+      notify(getErrorMessage(err), 'error', 8000)
+    }
+  }
+
   async function submit() {
     // The Validators' work, done by hand now they are gone — same messages, same order.
     const code = currencyCode.trim()
@@ -334,7 +357,7 @@ export default function CurrenciesPage() {
           <Loader size={40} />
         </div>
       ) : (
-        <CurrenciesGrid rows={rows} canManage={canManage} onEdit={openEdit} />
+        <CurrenciesGrid rows={rows} canManage={canManage} onEdit={openEdit} onDelete={remove} />
       )}
 
       <Modal

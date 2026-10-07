@@ -13,6 +13,10 @@ export const currenciesService = {
       body: JSON.stringify(currency),
     })
   },
+  /** Delete a currency nothing uses (CORE_MANAGE). A used one is refused with 409 naming where. */
+  remove(currencyCode: string): Promise<void> {
+    return apiRequest<void>(`/api/currencies/${encodeURIComponent(currencyCode)}`, { method: 'DELETE' })
+  },
 }
 
 /**
