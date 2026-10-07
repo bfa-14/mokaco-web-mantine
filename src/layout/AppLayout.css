@@ -310,3 +310,22 @@
 .app-header-side {
   min-width: 0;
 }
+
+/* THE TEST ENVIRONMENT CANNOT BE MISTAKEN FOR PRODUCTION: the header turns red and carries a TEST
+   badge on every page (environment.ts sets <html data-env>). The badge is not "optional text" -
+   it stays at every width. */
+html[data-env='test'] .app-header {
+  background: #8f1d1d;
+}
+
+.app-env-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #8f1d1d;
+  background: #fff;
+  text-transform: uppercase;
+}

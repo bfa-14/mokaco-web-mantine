@@ -19,6 +19,11 @@
     "errorGeneric": "Unable to sign in. Please try again.",
     "errorUnknown": "Something went wrong. Please try again."
   },
+  "environment": {
+    "badge": "TEST",
+    "switchLabel": "Test environment",
+    "switchHint": "On: practise on the test copy of the data. Off: the live system."
+  },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome back, <name>{{name}}</name>. Here is what needs you today.",

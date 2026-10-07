@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { Button, PasswordInput, TextInput } from '@mantine/core'
+import { Button, PasswordInput, Switch, TextInput } from '@mantine/core'
 import { useAuth } from '../auth/useAuth'
 import { safeNextPath } from '../auth/sessionRedirect'
 import { ApiError } from '../api/client'
 import { BrandWordmark, BrandSlogan } from '../components/Brand'
+import { pageEnvironment, switchEnvironment } from '../environment'
 import './LoginPage.css'
 
 interface FromState {
@@ -89,6 +90,9 @@ export default function LoginPage() {
         <form className="login-card" onSubmit={(e) => void handleSubmit(onSubmit)(e)} noValidate>
           <div className="login-header">
             <span className="login-tag">HRMS</span>
+            {pageEnvironment === 'test' && (
+              <span className="login-tag login-tag--test">{t('environment.badge')}</span>
+            )}
             <h1 className="login-title">{t('auth.title')}</h1>
             <p className="login-subtitle">{t('auth.subtitle')}</p>
           </div>
@@ -126,6 +130,24 @@ export default function LoginPage() {
           <Button type="submit" fullWidth h={44} loading={loading}>
             {loading ? t('auth.signingIn') : t('auth.signIn')}
           </Button>
+
+          {/* Production or the test copy. nginx does the routing (see environment.ts); the Vite
+              dev server has no such routing, so the switch would do nothing there and is hidden. */}
+          {!import.meta.env.DEV && (
+            <Switch
+              className="login-env-switch"
+              color="red"
+              checked={pageEnvironment === 'test'}
+              disabled={loading}
+              label={t('environment.switchLabel')}
+              description={t('environment.switchHint')}
+              onChange={(event) => {
+                // Read before anything else: React may recycle the event after this handler.
+                const on = event.currentTarget.checked
+                switchEnvironment(on ? 'test' : 'production')
+              }}
+            />
+          )}
         </form>
       </div>
     </div>

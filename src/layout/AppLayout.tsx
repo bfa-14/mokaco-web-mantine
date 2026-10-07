@@ -9,6 +9,7 @@ import { useAuth } from '../auth/useAuth'
 import { SideNav } from './SideNav'
 import { BrandWordmark } from '../components/Brand'
 import { BookingLiveToasts } from '../pages/bookings/BookingLiveToasts'
+import { pageEnvironment } from '../environment'
 import './AppLayout.css'
 
 /**
@@ -92,6 +93,7 @@ export function AppLayout() {
           <span className="app-brand">
             <BrandWordmark className="app-brand-mark" />
             <span className="app-brand-tag">HRMS</span>
+            {pageEnvironment === 'test' && <span className="app-env-badge">{t('environment.badge')}</span>}
           </span>
         </div>
         <div className="app-header-side">

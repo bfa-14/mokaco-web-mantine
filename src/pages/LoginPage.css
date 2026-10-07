@@ -150,3 +150,16 @@
     flex-basis: 100%;
   }
 }
+
+/* Test environment: a red tag beside HRMS, and the switch under the sign-in button. */
+.login-tag--test {
+  margin-inline-start: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #fff;
+  background: #b42318;
+}
+
+.login-env-switch {
+  margin-top: 22px;
+}

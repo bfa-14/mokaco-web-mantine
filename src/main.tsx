@@ -11,6 +11,8 @@ import './index.css'
 // document attributes at import time, so the very first paint is already correct rather than
 // flipping a frame later.
 import './i18n'
+// Also before App: marks <html data-env> for the test environment on the first paint.
+import './environment'
 import { DirectionProvider, MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { theme } from './theme'
