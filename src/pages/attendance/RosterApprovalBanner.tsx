@@ -72,6 +72,7 @@ export function RosterApprovalBanner({
   onApproved,
   onEditState,
   refreshToken = 0,
+  heldReason = null,
 }: {
   /** 'yyyy-MM' — the month the grid is showing. */
   period: string
@@ -90,6 +91,11 @@ export function RosterApprovalBanner({
    * an approved month is what flips changedSinceApproval, and the banner has to say so at once.
    */
   refreshToken?: number
+  /**
+   * Why the page holds Submit and Clear off for now (an auto-roster draft is open over the month),
+   * shown as their tooltip. Null leaves them to the month's own state.
+   */
+  heldReason?: string | null
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -335,13 +341,17 @@ export function RosterApprovalBanner({
           )}
 
           {canManage && (
-            <Tooltip label={blockedReason} disabled={blockedReason == null} withArrow>
+            <Tooltip
+              label={heldReason ?? blockedReason}
+              disabled={heldReason == null && blockedReason == null}
+              withArrow
+            >
               {/* A span so the tooltip still fires over a disabled button. */}
               <span>
                 <Button
                   leftSection={<IconSend size={16} />}
                   loading={submitting}
-                  disabled={blockedReason != null || clearing}
+                  disabled={blockedReason != null || heldReason != null || clearing}
                   onClick={() => void submit()}
                 >
                   {t('attendance.rosterApproval.submit')}
@@ -351,15 +361,19 @@ export function RosterApprovalBanner({
           )}
 
           {canManage && (
-            <Button
-              variant="default"
-              color="red"
-              leftSection={<IconTrash size={16} />}
-              disabled={submitting}
-              onClick={() => setClearState({ refused: null })}
-            >
-              {t('attendance.rosterApproval.clear')}
-            </Button>
+            <Tooltip label={heldReason} disabled={heldReason == null} withArrow>
+              <span>
+                <Button
+                  variant="default"
+                  color="red"
+                  leftSection={<IconTrash size={16} />}
+                  disabled={submitting || heldReason != null}
+                  onClick={() => setClearState({ refused: null })}
+                >
+                  {t('attendance.rosterApproval.clear')}
+                </Button>
+              </span>
+            </Tooltip>
           )}
 
           {(openRequestId ?? (state !== 'draft' ? requestId : null)) != null && (

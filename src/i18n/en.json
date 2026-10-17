@@ -999,6 +999,240 @@
       "mapped": "{{count}} punch(es) given to {{employee}}.",
       "result": "PIN {{pin}} is now {{employee}}: {{punches}} punch(es) resolved, {{days}} day(s) derived again.",
       "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them."
+    },
+    "roster": {
+      "auto": {
+        "button": "Auto-roster (6/5)…",
+        "disabled": {
+          "allBranches": "Choose one branch first — the auto-roster plans one branch and month at a time.",
+          "readOnly": "Read-only while request #{{id}} waits for approval.",
+          "draftOpen": "Save or discard the draft first."
+        },
+        "drawer": {
+          "title": "Auto-roster (6/5)",
+          "intro": "Every employee alternates a 6-day week (1 rest day) and a 5-day week (2 rest days), and Saturdays and Sundays off are shared fairly. Leave, public holidays, locked days and your own edits are respected. A preview writes nothing.",
+          "month": "Month",
+          "branch": "Branch",
+          "loading": "Reading the branch's staff and settings…",
+          "loadFailed": "The auto-roster could not be opened. {{error}}",
+          "waiting": "Request #{{id}} is waiting for approval on this month. Nothing can be planned until it is decided.",
+          "preview": "Preview",
+          "previewing": "Planning…"
+        },
+        "mode": {
+          "label": "What to plan",
+          "FillEmpty": "Fill empty days",
+          "FillEmptyHint": "Only days with nothing on them. Every saved day stays as it is.",
+          "ReplanAuto": "Re-plan generated days",
+          "ReplanAutoHint": "Empty days, and days still as the auto-roster wrote them. Days changed by hand stay.",
+          "ReplanAll": "Re-plan everything",
+          "ReplanAllHint": "Every day except pinned, locked and leave days — days set by hand included.",
+          "confirmAll": "Yes, re-plan the days set by hand too."
+        },
+        "rhythm": {
+          "label": "Rhythm start",
+          "Aligned": "Aligned",
+          "AlignedHint": "Everyone's first planned week is a 6-day week, then 5, 6, 5…",
+          "Staggered": "Staggered",
+          "StaggeredHint": "Half the team starts on a 5-day week, so the number on duty stays even from week to week.",
+          "storedNote": "Only for people whose rhythm is not stored yet; a stored rhythm carries on across months."
+        },
+        "defaultShift": {
+          "label": "Default shift",
+          "hint": "For a working day with no weekly-pattern shift and no usual shift in the last 4 weeks.",
+          "placeholder": "The first active shift"
+        },
+        "staff": {
+          "title": "Staff",
+          "name": "Employee",
+          "onRotation": "On rotation",
+          "firstWeek": "First week",
+          "firstWeekHint": "The week of {{date}}: 6 working days (1 rest) or 5 (2 rests). Change it to flip that person's rhythm from this week on.",
+          "flipped": "Flipped",
+          "firstWeekAuto": "set at preview",
+          "firstWeekAutoHint": "A week left blank is set by the planner at preview (rhythm start: {{start}}); pick 6 or 5 to hold it.",
+          "none": "Nobody belongs to this branch in {{month}}.",
+          "offHint": "Off rotation: shown on the grid, never planned.",
+          "count_one": "{{count}} on rotation",
+          "count_other": "{{count}} on rotation"
+        },
+        "holidays": {
+          "title": "Public holidays",
+          "none": "No public holidays in {{month}}.",
+          "cover": "Working",
+          "coverHint": "0 = closed. Cover goes to whoever worked the fewest holidays in the last 12 months. A holiday off is a day with no row; it does not use up the week's rest days.",
+          "paid": "Paid",
+          "unpaid": "Unpaid",
+          "unpaidWarn": "Unpaid holiday: a rostered shift that is not worked costs that person a day, whether or not the month is approved."
+        },
+        "staffing": {
+          "title": "Minimum on duty",
+          "hint": "Per weekday, for this branch; saved with the branch. Rest days come first: a day below the minimum is flagged, nobody loses a rest day to cover it.",
+          "day": "Day",
+          "min": "Minimum",
+          "target": "Target",
+          "save": "Save minimums",
+          "saved": "Minimums saved.",
+          "unsaved": "Not saved yet — saved when you preview.",
+          "perShift_one": "{{count}} per-shift row is kept as it is.",
+          "perShift_other": "{{count}} per-shift rows are kept as they are.",
+          "targetBelowMin": "A target cannot be below the minimum ({{day}}).",
+          "targetWithoutMin": "{{day}}: a target needs a minimum — enter one (0 for none)."
+        },
+        "card": {
+          "title": "Draft roster — not saved",
+          "subtitle": "{{month}} · {{branch}} · {{mode}}",
+          "inserts_one": "{{count}} new day",
+          "inserts_other": "{{count}} new days",
+          "updates_one": "{{count}} day changes",
+          "updates_other": "{{count}} days change",
+          "deletes_one": "{{count}} day removed",
+          "deletes_other": "{{count}} days removed",
+          "unchanged_one": "{{count}} unchanged",
+          "unchanged_other": "{{count}} unchanged",
+          "kept_one": "{{count}} kept as saved",
+          "kept_other": "{{count}} kept as saved",
+          "edits_one": "{{count}} day edited by hand — Regenerate plans around it.",
+          "edits_other": "{{count}} days edited by hand — Regenerate plans around them.",
+          "edited": "Edited since the preview: the issues and the 6·5 strip are re-checked when you Regenerate.",
+          "stale_one": "{{count}} day of the saved roster changed since this preview. Regenerate to plan with it — a save over a changed day is refused.",
+          "stale_other": "{{count}} days of the saved roster changed since this preview. Regenerate to plan with them — a save over a changed day is refused.",
+          "payroll": "Payroll still assumes 26 working days a month; the Work column shows what this roster gives (6/5 is about 24).",
+          "save": "Save roster",
+          "saving": "Saving…",
+          "regenerate": "Regenerate",
+          "options": "Options…",
+          "discard": "Discard",
+          "discardConfirm_one": "Discard the draft and the day you edited?",
+          "discardConfirm_other": "Discard the draft and the {{count}} days you edited?",
+          "keepEditing": "Keep editing",
+          "saveBlocked": "Fix the errors first: edit the days, then Regenerate.",
+          "saved": "Roster saved: {{inserted}} added, {{updated}} changed, {{deleted}} removed. Submit the month for approval when it is ready.",
+          "discarded": "Draft discarded. Nothing was saved."
+        },
+        "issues": {
+          "title": "Issues",
+          "none": "No issues: every rule holds.",
+          "refused": "The save was refused for these:",
+          "errors_one": "{{count}} error",
+          "errors_other": "{{count}} errors",
+          "warnings_one": "{{count}} warning",
+          "warnings_other": "{{count}} warnings",
+          "infos_one": "{{count}} note",
+          "infos_other": "{{count}} notes",
+          "jump": "Show on the grid"
+        },
+        "severity": {
+          "error": "Error",
+          "warning": "Warning",
+          "info": "Note"
+        },
+        "issue": {
+          "MONTH_LOCKED": "The month is waiting for approval",
+          "WORK_WITHOUT_SHIFT": "A working day without an active shift",
+          "REST_ON_HOLIDAY": "A rest day on a public holiday",
+          "CONSECUTIVE_CAP": "Too many working days in a row",
+          "HOLIDAY_HIDDEN_BY_REST": "A rest day hides a public holiday",
+          "RHYTHM_SHORT": "Fewer rest days than the week's rhythm",
+          "RHYTHM_OVER": "More rest days than the week's rhythm",
+          "REST_ABSORBED_BY_LEAVE": "The week's rest falls inside a leave",
+          "SHORT_STAFFED": "Below the minimum on duty",
+          "TURNAROUND": "Too little time between two shifts",
+          "WEEKLY_REST_HOURS": "The weekly rest is shorter than the legal minimum",
+          "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
+          "LONG_RUN": "A long run of working days"
+        },
+        "reason": {
+          "REST_WEEKEND_OWED": "Rest: owed a weekend day off",
+          "REST_LEVEL": "Rest: the day with the most people on duty",
+          "REST_PAIR": "Rest: next to the other rest day of a 5-day week",
+          "REST_PATTERN": "Rest: the weekly pattern's rest day",
+          "REST_CONSECUTIVE": "Rest: breaks a long run of working days",
+          "WORK_HOLIDAY_COVER": "Working the public holiday (cover)",
+          "HOLIDAY_OFF": "Public holiday: a day off, no row"
+        },
+        "reasonArgs": {
+          "owed": "owed {{value}}",
+          "worked": "{{value}} holidays worked in 12 months"
+        },
+        "origin": {
+          "planned": "Planned",
+          "fact": "Kept as saved",
+          "locked": "Locked: paid, in the past, or attendance recorded",
+          "pinned": "Pinned: kept when regenerating",
+          "leave": "Inside a leave: kept",
+          "holiday": "Public holiday",
+          "draft": "Your edit",
+          "ghost": "Next month's plan (not saved)",
+          "outside": "Another month"
+        },
+        "change": {
+          "insert": "new",
+          "update": "changes",
+          "delete": "removed",
+          "unchanged": "unchanged",
+          "kept": "kept"
+        },
+        "cell": {
+          "holidayOff": "Hol",
+          "holidayOffTitle": "{{name}} — {{date}}: public holiday, a day off (no row needed).",
+          "leaveWork": "Rostered {{shift}} under the leave — normal: the leave is priced on this working day.",
+          "setByHand": "Set by hand",
+          "auto": "Set by the auto-roster"
+        },
+        "pin": {
+          "label": "Keep when regenerating",
+          "hintDraft": "The auto-roster never re-plans a pinned day. Saved with the roster.",
+          "hintSaved": "Pins the saved day. It does not change the roster, so it needs no new approval.",
+          "failed": "The day was set, but the pin was not saved: {{error}}"
+        },
+        "edit": {
+          "skipped_one": "{{count}} day could not be changed: locked, pinned, inside a leave, or not part of this branch's plan.",
+          "skipped_other": "{{count}} days could not be changed: locked, pinned, inside a leave, or not part of this branch's plan.",
+          "nothing": "None of these days can be changed in the draft: they are locked, pinned, inside a leave, or not part of this branch's plan.",
+          "restOnHoliday": "A public holiday is not a rest day. Leave it as a holiday, or set a working shift to cover it.",
+          "inactiveKept": "{{name}} is no longer active: the draft leaves this day as it is. Choose an active shift to change it.",
+          "inactivePin": "{{name}} is no longer active, so the draft cannot save this day — not even its pin. Choose an active shift, or pin the day once the draft is saved or discarded.",
+          "applied_one": "{{count}} day changed in the draft.",
+          "applied_other": "{{count}} days changed in the draft."
+        },
+        "legend": {
+          "draft": "Draft day (not saved yet)",
+          "edited": "Your edit",
+          "pinned": "Pinned (kept when regenerating)",
+          "locked": "Locked",
+          "holiday": "Public holiday",
+          "weekStart": "A thicker line starts each week (Monday)"
+        },
+        "sum": {
+          "work": "Work",
+          "workTitle": "Working days this month (payroll assumes 26)",
+          "rest": "Rest",
+          "restTitle": "Rest days this month",
+          "sat": "Sat",
+          "satTitle": "Saturdays off",
+          "sun": "Sun",
+          "sunTitle": "Sundays off",
+          "weeks": "6·5",
+          "weeksTitle": "The 6·5 rhythm, one figure per week (Monday first). Red: the week does not hold its rest days.",
+          "owed": "Weekend balance: Saturday {{sat}}, Sunday {{sun}} (positive = owed a day off)"
+        },
+        "strip": {
+          "week_one": "Week of {{date}}: {{count}} rest day",
+          "week_other": "Week of {{date}}: {{count}} rest days",
+          "type": "a {{type}}-day week",
+          "should": "should be {{quota}}",
+          "broken": "the 6/5 alternation is broken",
+          "unjudged": "not judged: part of the week is unknown, or on leave"
+        },
+        "foot": {
+          "onDuty": "On duty",
+          "title": "On duty: {{count}}",
+          "min": "On duty: {{count}} — minimum {{min}}",
+          "short": "On duty: {{count}} — below the minimum of {{min}}"
+        },
+        "holidayHeader": "Public holiday: {{name}}"
+      }
     }
   },
   "payroll": {
