@@ -4,6 +4,7 @@ import { AuthContext } from './authContext'
 import type { AuthContextValue } from './authContext'
 import { tokenStorage } from './tokenStorage'
 import * as authService from '../services/authService'
+import { isGateError } from '../api/gateResponse'
 import type { LoginRequest, User } from '../types/auth'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -33,15 +34,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsInitializing(false)
         return
       }
+      let reloadingForGate = false
       try {
         const current = await authService.fetchCurrentUser()
         if (!cancelled) {
           setUser(current)
         }
-      } catch {
-        tokenStorage.clear()
+      } catch (err) {
+        // The Google sign-in gate's 401 says nothing about the token: the session is KEPT, so it is
+        // still in this tab when Google lets the reload back in. While that reload is underway the
+        // loader stays up — going to /login now could only change the address being reloaded.
+        if (isGateError(err)) reloadingForGate = err.data.reloading
+        else tokenStorage.clear()
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !reloadingForGate) {
           setIsInitializing(false)
         }
       }

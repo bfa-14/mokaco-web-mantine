@@ -1339,7 +1339,8 @@
       "COMPONENT_MANAGE": "Manage salary component types",
       "CORE_MANAGE": "Manage currencies & exchange rates",
       "PAYROLL_VIEW": "View payroll runs & payslips",
-      "REPORT_VIEW": "View reports"
+      "REPORT_VIEW": "View reports",
+      "ACCESS_MANAGE": "Turn Google sign-in on or off and manage who can open the HRMS"
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",
@@ -1369,7 +1370,7 @@
     "employee": {
       "email": "Email",
       "emailPlaceholder": "name@company.com",
-      "emailHint": "Where the system sends the notice when one of their requests is approved or rejected. Leave empty and none is sent.",
+      "emailHint": "Where the system sends the notice when one of their requests is approved or rejected. Leave empty and none is sent. If Google sign-in is on, this must be the Gmail they sign in with.",
       "emailInvalid": "That does not look like an email address.",
       "phoneNumber": "Phone number",
       "preferredLanguage": "Preferred language",
@@ -1514,7 +1515,8 @@
       "danger": "Danger zone",
       "notifications": "Notifications",
       "leave": "Leave",
-      "payroll": "Payroll"
+      "payroll": "Payroll",
+      "google": "Google sign-in"
     },
     "punchDirection": {
       "title": "Punch direction",
@@ -1874,5 +1876,147 @@
     "custom": "Custom",
     "reset": "Back to the default period",
     "clear": "Clear the period"
+  },
+  "googleGate": {
+    "title": "Google sign-in",
+    "description": "An extra front door for the HRMS. When it is on, people first sign in with Google, and only the Gmail addresses below get through. The normal HRMS login follows.",
+    "requiredLabel": "Require Google sign-in to open the HRMS",
+    "requiredOn": "On. Everyone signs in with Google before the HRMS login.",
+    "requiredOff": "Off. The HRMS opens as usual.",
+    "lastChanged": "Last changed {{when}}",
+    "clientIdLabel": "Google client ID",
+    "clientIdHint": "Ends with .apps.googleusercontent.com. See How to set it up below.",
+    "clientIdPlaceholder": "1234567890-abc.apps.googleusercontent.com",
+    "daysLabel": "Days a Google sign-in lasts",
+    "daysHint": "After this, the browser asks for Google again. 1 to 365.",
+    "saved": "Google sign-in settings saved.",
+    "turnedOn": "Google sign-in is on.",
+    "turnedOff": "Google sign-in is off. The HRMS opens as usual.",
+    "confirmOn": {
+      "title": "Turn on Google sign-in?",
+      "body": "From now on, anyone who opens the HRMS must first sign in with a Google account on the list. People without a Gmail on their employee record will be kept out.",
+      "button": "Turn on"
+    },
+    "browser": {
+      "label": "This browser",
+      "verified": "Verified",
+      "notVerified": "Not verified",
+      "verifiedAs": "Verified in this browser as {{who}}.",
+      "notVerifiedHint": "Not verified in this browser. Test Google sign-in first: Google sign-in can only be turned on from a verified browser, so you can't lock yourself out.",
+      "test": "Test Google sign-in",
+      "signOut": "Sign this browser out of Google",
+      "signedOut": "This browser is signed out of Google.",
+      "signOutTitle": "Sign this browser out of Google?",
+      "signOutBody": "Google sign-in is on, so the HRMS will ask you to sign in with Google again."
+    },
+    "test": {
+      "title": "Test Google sign-in",
+      "intro": "Sign in with the Google account you use for the HRMS. This only checks the setup. It changes nothing for anyone else.",
+      "noClientId": "Save the Google client ID first.",
+      "loading": "Loading Google…",
+      "loadFailed": "Google's sign-in could not load. Check the connection and try again.",
+      "checking": "Checking…",
+      "success": "Verified as {{who}}.",
+      "tooMany": "Too many tries. Wait a minute and try again.",
+      "retry": "Try again",
+      "help": "If the button does nothing, allow pop-ups for this site."
+    },
+    "howTo": {
+      "title": "How to set it up",
+      "step1": "In Google Cloud, open Google Auth Platform, press Get started and choose External as the audience. The full steps are in {{doc}}.",
+      "step2": "Under Audience, press Publish app so it says In production. In Testing, only the test users listed there can sign in.",
+      "step3": "Under Clients, create a client of type Web application, with {{origin}} under Authorized JavaScript origins.",
+      "step4": "Paste the client ID above and press Save.",
+      "step5": "Press Test Google sign-in and sign in with your own Gmail.",
+      "step6": "Turn the switch on."
+    },
+    "people": {
+      "title": "Who can open the HRMS",
+      "description": "Employees pass with the Gmail on their employee record, if they have an active HRMS login and have not left. To change a Gmail, edit the employee.",
+      "summary": "{{allowed}} of {{total}} employees can open the HRMS.",
+      "search": "Search name, Gmail or branch",
+      "statusFilter": "Status",
+      "allStatuses": "All statuses",
+      "cols": {
+        "name": "Employee",
+        "email": "Gmail",
+        "status": "Status",
+        "lastSignIn": "Last Google sign-in",
+        "allowed": "Allowed"
+      },
+      "allowAria": "Allow {{name}} to open the HRMS",
+      "never": "Never",
+      "empty": "No employees match.",
+      "blocked": "Google sign-in is off for {{name}}.",
+      "unblocked": "{{name}} can open the HRMS again.",
+      "status": {
+        "Allowed": "Allowed",
+        "Blocked": "Blocked",
+        "NoEmail": "No Gmail",
+        "NoUser": "No HRMS login",
+        "UserDisabled": "Login disabled",
+        "Left": "Left"
+      }
+    },
+    "extras": {
+      "title": "Extra Google accounts",
+      "description": "People who are not employees, such as the owner or the accountant.",
+      "add": "Add account",
+      "cols": {
+        "email": "Gmail",
+        "note": "Note",
+        "active": "Active",
+        "lastSignIn": "Last Google sign-in",
+        "actions": "Actions"
+      },
+      "empty": "No extra accounts.",
+      "addTitle": "Add a Google account",
+      "editTitle": "Edit Google account",
+      "emailLabel": "Gmail",
+      "emailPlaceholder": "name@gmail.com",
+      "noteLabel": "Note",
+      "notePlaceholder": "Who this is, for example Owner",
+      "activeLabel": "Can open the HRMS",
+      "emailRequired": "Enter a full Google email address.",
+      "added": "{{email}} added.",
+      "saved": "{{email}} saved.",
+      "removed": "{{email}} removed.",
+      "activeAria": "{{email}} can open the HRMS",
+      "editAria": "Edit {{email}}",
+      "removeAria": "Remove {{email}}",
+      "removeTitle": "Remove this account?",
+      "removeBody": "{{email}} will no longer be able to open the HRMS.",
+      "remove": "Remove"
+    },
+    "recent": {
+      "title": "Recent sign-ins",
+      "description": "The last 100 Google sign-ins, allowed and refused.",
+      "cols": {
+        "when": "When",
+        "email": "Gmail",
+        "result": "Result",
+        "person": "Employee",
+        "ip": "IP address"
+      },
+      "empty": "No sign-ins yet.",
+      "showAll": "Show all {{count}}",
+      "showLess": "Show fewer",
+      "outcome": {
+        "Allowed": "Allowed",
+        "NotFound": "Not on the list",
+        "Blocked": "Blocked",
+        "NoUser": "No HRMS login",
+        "Left": "Left"
+      }
+    },
+    "signOutAll": {
+      "title": "Sign everyone out",
+      "description": "Ends every Google sign-in on every browser. Everyone signs in with Google again the next time they open the HRMS. You stay signed in on this browser.",
+      "button": "Sign everyone out…",
+      "confirmTitle": "Sign everyone out of Google?",
+      "confirmBody": "Everyone will need to sign in with Google again. You stay signed in on this browser.",
+      "confirmButton": "Sign everyone out",
+      "done": "Everyone was signed out of Google."
+    }
   }
 }

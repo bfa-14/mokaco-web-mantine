@@ -1,0 +1,288 @@
+/* ── The Google sign-in gate page ───────────────────────────────────────────────────────────────
+   Mobile first: it is opened on phones, often from a link in a chat. One card, the brand's
+   graphite band with the wordmark on top, Google's button in the middle.
+
+   The brand values are copied from the app's index.css, not imported — this page is served before
+   the app and must not depend on any of its files. Logical properties only, so Arabic mirrors by
+   construction. Touch targets are at least 44 px. */
+
+:root {
+  --brand-graphite: #2e2e2a;
+  --brand-black: #171d1a;
+  --brand-desert: #bd8648;
+  --brand-desert-deep: #8d6132;
+  --brand-stone: #e3e2dc;
+  --brand-offwhite: #f6f5f3;
+  --ink: #2e2e2a;
+  --ink-muted: #6f6b62;
+  --border: #e3e2dc;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--brand-offwhite);
+  color: var(--ink);
+  font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Tahoma, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Poppins has no Arabic letters; the phone's own font is the better reader there. */
+html[lang='ar'] body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+}
+
+:focus-visible {
+  outline: 3px solid var(--brand-desert);
+  outline-offset: 2px;
+}
+
+.gate {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgba(46, 46, 42, 0.05),
+    0 8px 24px rgba(46, 46, 42, 0.06);
+}
+
+.gate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: radial-gradient(
+    120% 140% at 0% 0%,
+    #35352f 0%,
+    var(--brand-graphite) 50%,
+    var(--brand-black) 100%
+  );
+}
+
+.gate-logo {
+  display: block;
+  width: auto;
+  height: 28px;
+}
+
+.gate-lang {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid rgba(246, 245, 243, 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand-offwhite);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.gate-lang:hover {
+  background: rgba(246, 245, 243, 0.12);
+}
+
+.gate-body {
+  padding: 22px 20px 24px;
+}
+
+.gate-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.gate-tag {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--brand-desert-deep);
+}
+
+.gate-tag--test {
+  padding: 1px 8px;
+  border-radius: 4px;
+  color: #fff;
+  background: #b42318;
+  letter-spacing: 0.1em;
+}
+
+html[lang='ar'] .gate-tag {
+  letter-spacing: 0;
+}
+
+.gate-title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.gate-lead {
+  margin: 0 0 20px;
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+
+.gate-status {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+
+.gate-alert {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #f3c9bd;
+  border-radius: 10px;
+  background: #fdf2ef;
+  color: #b91c1c;
+  font-size: 15px;
+}
+
+.gate-alert p {
+  margin: 0;
+}
+
+.gate-alert p + p {
+  margin-top: 6px;
+}
+
+/* "Not set up yet" is information, not a fault. */
+.gate-alert--info {
+  border-color: #f0dca6;
+  background: #fdf6e3;
+  color: #8a5a00;
+}
+
+.gate-google {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+  margin: 4px 0 8px;
+}
+
+.gate-google[aria-busy='true'] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gate-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.gate-btn {
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid #c9c6bd;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.gate-btn:hover {
+  background: var(--brand-offwhite);
+}
+
+.gate-btn--primary {
+  border-color: var(--brand-graphite);
+  background: var(--brand-graphite);
+  color: #fff;
+}
+
+.gate-btn--primary:hover {
+  background: var(--brand-black);
+}
+
+.gate-warn {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #f0dca6;
+  border-radius: 10px;
+  background: #fdf6e3;
+  color: #8a5a00;
+  font-size: 14px;
+}
+
+.gate-help {
+  margin: 18px 0 0;
+  padding-block-start: 14px;
+  border-block-start: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--ink-muted);
+}
+
+.gate-help--strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.gate-foot {
+  margin: 16px 0 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
+.gate-noscript {
+  max-width: 420px;
+  margin: 16px auto;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fdf6e3;
+  color: #8a5a00;
+  text-align: center;
+}
+
+/* A desk or a tablet: the card sits in the middle of the screen rather than at the top. */
+@media (min-width: 600px) {
+  .gate {
+    justify-content: center;
+    padding: 32px;
+  }
+
+  .gate-body {
+    padding: 26px 28px 28px;
+  }
+
+  .gate-head {
+    padding: 18px 28px;
+  }
+}

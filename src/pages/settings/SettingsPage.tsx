@@ -11,6 +11,7 @@ import { settingsService } from '../../services/settingsService'
 import { getErrorMessage } from '../../api/errorMessage'
 import {
   ALLOW_SYSTEM_RESET_KEY,
+  GOOGLE_SIGNIN_KEYS,
   MACHINE_PULL_KEYS,
   PUNCH_DIRECTION_KEYS,
   SHOW_PAGE_HELP_KEY,
@@ -24,6 +25,8 @@ import { PunchDirectionRows } from './PunchDirectionSection'
 import { DangerZone } from './DangerZone'
 import { LiveUpdatesRows } from './LiveUpdatesSection'
 import { LanguageRow } from './LanguageSection'
+import { GoogleSignInSection } from './GoogleSignInSection'
+import { ACCESS_MANAGE_PERMISSION } from '../../types/access'
 import './settings.css'
 
 /** Only SETTING_MANAGE may read the full list or write any of it — these values decide what people are paid. */
@@ -40,6 +43,7 @@ const TAB_IDS = [
   'payroll',
   'workflow',
   'notifications',
+  'google',
   'advanced',
   'danger',
 ] as const
@@ -68,6 +72,11 @@ export default function SettingsPage() {
   // whether it has anything to show before it renders a label somebody would click into an empty
   // panel.
   const canReset = hasPermission(SYSTEM_RESET_PERMISSION)
+  // Google sign-in has its own permission (Admin, Owner) and its own endpoints, so its tab shows for
+  // ACCESS_MANAGE whether or not the person may touch the rest of the settings.
+  const canAccess = hasPermission(ACCESS_MANAGE_PERMISSION)
+  /** Bumped by Refresh, so the Google sign-in tab — which loads its own data — reloads too. */
+  const [accessRefresh, setAccessRefresh] = useState(0)
 
   // Changing the help flag must take effect everywhere immediately, not on the next reload.
   const { refresh: refreshUiSettings } = useSettings()
@@ -124,8 +133,11 @@ export default function SettingsPage() {
   }, [canManage])
 
   function refresh() {
-    setLoading(true)
-    void load()
+    if (canManage) {
+      setLoading(true)
+      void load()
+    }
+    setAccessRefresh((n) => n + 1)
   }
 
   async function save(setting: Setting) {
@@ -172,15 +184,17 @@ export default function SettingsPage() {
   /**
    * The settings that render as ordinary rows, filed by tab.
    *
-   * The three exclusions are unchanged and each has its own home elsewhere on the page: the arming
-   * flag belongs to the Danger zone, the machine-pull keys are the schedule for the machines they
-   * poll, and the punch pair is one decision rather than two loose values.
+   * Each exclusion has its own home elsewhere on the page: the arming flag belongs to the Danger
+   * zone, the machine-pull keys are the schedule for the machines they poll, the punch pair is one
+   * decision rather than two loose values, and the four Google* keys belong to the Google sign-in
+   * tab — the generic save would be refused for them anyway.
    */
   const listed = settings.filter(
     (s) =>
       s.settingKey !== ALLOW_SYSTEM_RESET_KEY &&
       !MACHINE_PULL_KEYS.includes(s.settingKey) &&
-      !PUNCH_DIRECTION_KEYS.includes(s.settingKey),
+      !PUNCH_DIRECTION_KEYS.includes(s.settingKey) &&
+      !GOOGLE_SIGNIN_KEYS.includes(s.settingKey),
   )
   /**
    * EVERY listed setting, filed by the tab its SECTION names — and filed exactly once.
@@ -319,6 +333,7 @@ export default function SettingsPage() {
     ...(canManage && notificationBands.bands.length + notificationBands.loose.length > 0
       ? [{ id: 'notifications' as TabId, label: t('settings.tabs.notifications') }]
       : []),
+    ...(canAccess ? [{ id: 'google' as TabId, label: t('settings.tabs.google') }] : []),
     ...(canManage ? [{ id: 'advanced' as TabId, label: t('settings.tabs.advanced') }] : []),
     // LAST, always — it belongs to a different kind of act than everything before it.
     ...(canReset ? [{ id: 'danger' as TabId, label: t('settings.tabs.danger'), danger: true }] : []),
@@ -350,7 +365,7 @@ export default function SettingsPage() {
   const refusedTab =
     requestedIsSystemTab &&
     !visible.some((tab) => tab.id === requested) &&
-    (requested === 'danger' ? !canReset : !canManage)
+    (requested === 'danger' ? !canReset : requested === 'google' ? !canAccess : !canManage)
   if (refusedTab) return <AccessDenied />
 
   function selectTab(value: string | null) {
@@ -371,7 +386,7 @@ export default function SettingsPage() {
             The rules the whole system is measured against.
           </p>
         </div>
-        {canManage && (
+        {(canManage || canAccess) && (
           <div className="page-head-actions">
             <ActionIcon
               variant="default"
@@ -564,6 +579,15 @@ export default function SettingsPage() {
                 </>
               )}
             </div>
+          </Tabs.Panel>
+        )}
+
+        {/* ── GOOGLE SIGN-IN — the optional front door before the HRMS login ──────────────────
+            Hand-built and self-loading, like the Danger zone: its four keys never reach the
+            generic list, and it reads and writes only api/access. */}
+        {canAccess && (
+          <Tabs.Panel value="google" className="set-panel">
+            <GoogleSignInSection refreshKey={accessRefresh} />
           </Tabs.Panel>
         )}
 

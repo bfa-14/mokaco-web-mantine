@@ -7,6 +7,8 @@ import {
 import { API_BASE_URL } from '../config'
 import { tokenStorage } from '../auth/tokenStorage'
 import { redirectToLogin } from '../auth/sessionRedirect'
+import { reloadForGate } from '../api/client'
+import { refusedByGate } from '../api/gateResponse'
 
 /**
  * ONE hub connection for the whole tab.
@@ -90,6 +92,20 @@ function isUnauthorized(err: unknown): boolean {
   return /\b401\b|Unauthorized/i.test(message)
 }
 
+/**
+ * Was that 401 the GOOGLE SIGN-IN GATE rather than the token? nginx refuses /hubs with the gate's
+ * header while the session itself is fine, but SignalR's errors carry no headers — so the negotiate
+ * is asked once more by hand and its answer read (src/api/gateResponse.ts).
+ */
+function gateRefusedHandshake(): Promise<boolean> {
+  return refusedByGate(() =>
+    fetch(`${API_BASE_URL}/hubs/live/negotiate?negotiateVersion=1`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenStorage.getAccessToken() ?? ''}` },
+    }),
+  )
+}
+
 async function ensureStarted(): Promise<void> {
   if (connection && connection.state === HubConnectionState.Connected) return
   if (!connection) connection = build()
@@ -104,7 +120,10 @@ async function ensureStarted(): Promise<void> {
       // login page must not leave a retry loop behind it hammering a hub it cannot enter.
       if (isUnauthorized(err)) {
         await liveClient.stop()
-        redirectToLogin()
+        // The gate's 401 is not the session ending: reload into the gate and KEEP the tokens, as
+        // the API client does, so the person is back where they were after Google.
+        if (await gateRefusedHandshake()) reloadForGate()
+        else redirectToLogin()
         return
       }
       // Anything else — server down, network gone — genuinely IS a degraded feature, never a broken
