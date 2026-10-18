@@ -1,6 +1,7 @@
 /**
  * The roster's counters, as pure functions: per-employee work / rest / Saturday off / Sunday off,
- * the 6·5 week strip, the number on duty per day and the minimum it is measured against.
+ * the 6·5 week strip, the number on duty per day (and, under a draft, per shift to cover) and the
+ * minimum it is measured against.
  *
  * WHY THEY ARE COMPUTED HERE AND NOT ONLY READ FROM THE PREVIEW. The counters are always visible —
  * on a saved month, and on a draft the manager is editing cell by cell without a server call. They
@@ -243,6 +244,53 @@ export function onDutyUnderDraft(
   for (const move of moves) {
     if (move.was === move.now || !previewCount.has(move.date) || !result.has(move.date)) continue
     result.set(move.date, (result.get(move.date) ?? 0) + (move.now ? 1 : -1))
+  }
+  return result
+}
+
+/* ── on duty per shift, under a draft (D16) ── */
+
+/** One shift a day must cover, as the preview counted it (AutoRosterShiftCounter's shape). */
+export interface ShiftDuty {
+  shiftId: number
+  onDuty: number
+  min: number
+  target?: number | null
+}
+
+/**
+ * An edited draft day, for the rows per shift: the shift it was on duty on in the preview (`was`)
+ * and now (`now`) — null when on none: a rest day, no row, or away on a full-day leave.
+ */
+export interface ShiftMove {
+  date: string
+  was: number | null
+  now: number | null
+}
+
+/**
+ * On duty per shift and day under a draft: the preview's count of each shift a day must cover,
+ * moved by every day edited since — a day taken off a shift is one fewer on it, a day put on one is
+ * one more. The same rule as onDutyUnderDraft, shift by shift, and for the same reason: the preview
+ * knows which leave is a half day. Only the shifts the preview lists for a day are counted; a shift
+ * the day need not cover has no minimum to be measured against.
+ */
+export function onShiftUnderDraft(
+  previewDays: Iterable<{ date: string; shifts?: ShiftDuty[] | null }>,
+  moves: Iterable<ShiftMove>,
+): Map<string, Map<number, number>> {
+  const result = new Map<string, Map<number, number>>()
+  for (const day of previewDays) {
+    result.set(day.date.slice(0, 10), new Map((day.shifts ?? []).map((s) => [s.shiftId, s.onDuty])))
+  }
+  for (const move of moves) {
+    if (move.was === move.now) continue
+    const counts = result.get(move.date.slice(0, 10))
+    if (!counts) continue
+    if (move.was != null && counts.has(move.was)) {
+      counts.set(move.was, Math.max(0, (counts.get(move.was) ?? 0) - 1))
+    }
+    if (move.now != null && counts.has(move.now)) counts.set(move.now, (counts.get(move.now) ?? 0) + 1)
   }
   return result
 }

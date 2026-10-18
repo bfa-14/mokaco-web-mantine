@@ -16,6 +16,7 @@ import {
   mondayOf,
   onDutyByDay,
   onDutyUnderDraft,
+  onShiftUnderDraft,
   rosterWindow,
   staffingForDay,
   stripText,
@@ -195,6 +196,62 @@ test("under a draft the footer is the preview's count, moved only by the days ed
     ['2026-12-08', 3],
     ['2026-12-09', 2],
   ])
+})
+
+test("per shift under a draft: the preview's count, moved off and onto shifts by the days edited since", () => {
+  const MORNING = 1
+  const EVENING = 2
+  const NIGHT = 3
+  const preview = [
+    {
+      date: '2026-12-07',
+      onDuty: 3,
+      shifts: [
+        { shiftId: MORNING, onDuty: 2, min: 1, target: null },
+        { shiftId: EVENING, onDuty: 1, min: 1, target: 2 },
+      ],
+    },
+    {
+      date: '2026-12-08T00:00:00', // the API's own date shape
+      onDuty: 2,
+      shifts: [
+        { shiftId: MORNING, onDuty: 1, min: 1 },
+        { shiftId: EVENING, onDuty: 1, min: 1 },
+      ],
+    },
+    { date: '2026-12-25', onDuty: 0, shifts: [] }, // a closed holiday: nothing to cover
+  ]
+  const duty = onShiftUnderDraft(preview, [
+    { date: '2026-12-07', was: EVENING, now: null }, // the only evening made a rest day: nobody left
+    { date: '2026-12-07', was: MORNING, now: MORNING }, // re-pinned, still on the morning
+    { date: '2026-12-08', was: MORNING, now: EVENING }, // moved to the evening
+    { date: '2026-12-08', was: null, now: NIGHT }, // put on a shift the day need not cover
+    { date: '2026-12-25', was: null, now: MORNING }, // a holiday has no shift row to move
+    { date: '2026-12-31', was: null, now: MORNING }, // a day the preview did not count
+  ])
+  assert.deepEqual([...duty.get('2026-12-07') ?? []], [
+    [MORNING, 2],
+    [EVENING, 0],
+  ])
+  assert.deepEqual([...duty.get('2026-12-08') ?? []], [
+    [MORNING, 0],
+    [EVENING, 2],
+  ])
+  assert.deepEqual([...duty.get('2026-12-25') ?? []], [])
+  assert.equal(duty.has('2026-12-31'), false)
+})
+
+test('per shift under a draft: a day off a shift and back again is no move, and a count never goes below 0', () => {
+  const preview = [{ date: '2026-12-09', shifts: [{ shiftId: 1, onDuty: 0, min: 1 }] }]
+  assert.deepEqual([...(onShiftUnderDraft(preview, [{ date: '2026-12-09', was: 1, now: 1 }]).get('2026-12-09') ?? [])], [
+    [1, 0],
+  ])
+  // A day the preview did not count on the shift (another branch's, say) cannot take it below nobody.
+  assert.deepEqual([...(onShiftUnderDraft(preview, [{ date: '2026-12-09', was: 1, now: null }]).get('2026-12-09') ?? [])], [
+    [1, 0],
+  ])
+  // No preview counts at all (an older server): nothing to show, nothing to move.
+  assert.equal(onShiftUnderDraft([{ date: '2026-12-09' }], [{ date: '2026-12-09', was: null, now: 1 }]).get('2026-12-09')?.size, 0)
 })
 
 test('staffing: a weekday row beats an every-day row; per-shift minimums add up', () => {

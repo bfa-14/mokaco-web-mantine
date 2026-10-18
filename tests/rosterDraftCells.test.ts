@@ -32,6 +32,7 @@ function cell(overrides: Partial<DraftCell> & { employeeId: number; workDate: st
     edited: false,
     isPinned: null,
     previewState: overrides.state ?? 'work',
+    previewShiftId: overrides.shiftId === undefined ? 1 : overrides.shiftId,
     ...overrides,
   }
 }
@@ -65,6 +66,15 @@ test('an edit keeps the state the preview gave the day, for the footer', () => {
   const edited = applyEditTo(day, { shiftId: null, isRestDay: true, isPinned: null })
   assert.equal(edited.state, 'rest')
   assert.equal(edited.previewState, 'work')
+})
+
+test("an edit keeps the preview's shift too, for the footer's rows per shift", () => {
+  const day = cell({ employeeId: 1, workDate: '2026-12-07', shiftId: 1 })
+  const moved = applyEditTo(day, { shiftId: 2, isRestDay: false, isPinned: null })
+  assert.equal(moved.shiftId, 2)
+  assert.equal(moved.previewShiftId, 1)
+  // A second edit of the same day still measures against the preview, not against the first edit.
+  assert.equal(applyEditTo(moved, { shiftId: null, isRestDay: true, isPinned: null }).previewShiftId, 1)
 })
 
 test('Save sends the month days the plan may write, and an edited fact', () => {

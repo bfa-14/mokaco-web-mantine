@@ -107,6 +107,7 @@ export function useRosterDraft(): RosterDraft {
             edited: false,
             isPinned: null,
             previewState: cell.state,
+            previewShiftId: cell.shiftId ?? null,
           })
         }
         // The plan already holds the edits (sent as draftCells); laying them over again is what keeps

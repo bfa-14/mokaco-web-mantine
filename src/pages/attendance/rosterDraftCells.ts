@@ -37,6 +37,8 @@ export interface DraftCell {
    * counting again.
    */
   previewState: string
+  /** The shift the preview gave the day — the same, for the footer's count per shift (D16). */
+  previewShiftId: number | null
 }
 
 /** What the Set-day dialog applies to the draft. */

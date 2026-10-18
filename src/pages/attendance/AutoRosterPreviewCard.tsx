@@ -13,6 +13,7 @@ import {
 } from '@tabler/icons-react'
 import type { AutoRosterIssue } from '../../types/attendance'
 import { formatDayLabel } from './attendanceFormat'
+import { shiftInText } from './shiftCover'
 import type { RosterDraft } from './useRosterDraft'
 
 const SEVERITY_ORDER: Record<string, number> = { error: 0, warning: 1, info: 2 }
@@ -42,6 +43,7 @@ export function AutoRosterPreviewCard({
   monthLabel,
   branchName,
   employeeName,
+  shiftName,
   stale,
   onSave,
   onRegenerate,
@@ -52,6 +54,8 @@ export function AutoRosterPreviewCard({
   monthLabel: string
   branchName: string
   employeeName: (employeeId: number) => string
+  /** A shift's name, for the issues about one shift (D16). */
+  shiftName?: (shiftId: number) => string
   /** Days of the saved roster that moved under the draft since its preview (0 = none). */
   stale: number
   onSave: () => void
@@ -210,7 +214,15 @@ export function AutoRosterPreviewCard({
         ) : (
           <ul className="auto-issues-list">
             {issues.map((issue, index) => {
-              const title = t(`attendance.roster.auto.issue.${issue.code}`, { defaultValue: issue.message || issue.code })
+              const generic = t(`attendance.roster.auto.issue.${issue.code}`, { defaultValue: issue.message || issue.code })
+              // A shift's issue names the shift (D16), in the page's language rather than the server's sentence.
+              const title =
+                issue.shiftId != null && shiftName
+                  ? t(`attendance.roster.auto.issueShift.${issue.code}`, {
+                      shift: shiftInText(shiftName(issue.shiftId)),
+                      defaultValue: generic,
+                    })
+                  : generic
               const where = [
                 issue.employeeId != null ? employeeName(issue.employeeId) : null,
                 issue.date ? formatDayLabel(issue.date) : null,

@@ -15,31 +15,25 @@ import type {
 } from '../../types/attendance'
 import { formatDayLabel, periodLabel, periodRange } from './attendanceFormat'
 import { mondayOf } from './rosterCounters'
-
-/** One weekday's minimum/target as typed — '' is "not set", which is different from 0. */
-interface StaffingDay {
-  min: number | ''
-  target: number | ''
-}
+import {
+  sameShiftCover,
+  setLineCovered,
+  setupCover,
+  shiftCoverLines,
+  shiftInText,
+  staffingDays,
+  staffingToSave,
+  weekdayShiftRules,
+} from './shiftCover'
+import type { ShiftCoverLine, StaffingDay, StaffingProblem } from './shiftCover'
 
 const MODES: AutoRosterMode[] = ['FillEmpty', 'ReplanAuto', 'ReplanAll']
 
 /**
- * The weekday rows the drawer edits: day-level rows only (no shift). A weekday row wins over an
- * every-day row, so an every-day row shows as the value of each day that has none of its own.
- */
-function staffingDays(rows: StaffingRequirementDto[]): StaffingDay[] {
-  const dayRows = rows.filter((r) => r.shiftId == null)
-  const everyDay = dayRows.find((r) => r.dayOfWeek == null)
-  return [1, 2, 3, 4, 5, 6, 7].map((dow) => {
-    const row = dayRows.find((r) => r.dayOfWeek === dow) ?? everyDay
-    return { min: row ? row.minOnDuty : '', target: row?.targetOnDuty ?? '' }
-  })
-}
-
-/**
  * THE AUTO-ROSTER'S OPTIONS for one branch and month — everything Preview sends, nothing saved by it
- * except the branch's minimums (they belong to the branch, not to the run).
+ * except the branch's staffing: the shifts every day must cover and the minimums on duty (they
+ * belong to the branch, not to the run). Both are one save, and Preview makes it first when either
+ * has changed: the planner reads them from the database.
  *
  * Opens on the branch's last saved run (setup.lastParams), or on the draft on screen when reopened
  * from it with "Options…", so a second look changes one thing rather than re-entering everything.
@@ -75,7 +69,10 @@ export function AutoRosterDrawer({
   /** The preview's refusal, verbatim, in the drawer the person is looking at. */
   error: string | null
   onPreview: (request: AutoRosterRequest) => void
-  /** The minimums were saved: the page's footer measures the days against them from now on. */
+  /**
+   * The staffing was saved — these rows are now all of the branch's: the page's footer measures the
+   * days against them, and the next opening starts from them (setupAfterStaffingSave).
+   */
   onStaffingSaved: (rows: StaffingRequirementDto[]) => void
 }) {
   const { t } = useTranslation()
@@ -96,12 +93,28 @@ export function AutoRosterDrawer({
   const [firstWeek, setFirstWeek] = useState<Map<number, number>>(new Map())
   const [cover, setCover] = useState<Map<string, number>>(new Map())
   const [staffing, setStaffing] = useState<StaffingDay[]>(() => staffingDays([]))
-  const [staffingDirty, setStaffingDirty] = useState(false)
+  /** A weekday minimum or target was typed since the drawer opened (or last saved). */
+  const [daysDirty, setDaysDirty] = useState(false)
+  /** "Shifts to cover every day" as the editor holds it — one line per active shift. */
+  const [shiftCover, setShiftCover] = useState<ShiftCoverLine[]>([])
+  /**
+   * The cover the branch has now — what the editor opened on, then what the last save wrote — and
+   * whether it was detected. The editor is "changed" against these lines (a tick taken back is no
+   * change), and a detected cover the editor never changed is not written (see shiftCover.ts).
+   */
+  const [coverSaved, setCoverSaved] = useState<{ lines: ShiftCoverLine[]; detected: boolean }>({
+    lines: [],
+    detected: false,
+  })
   const [savingStaffing, setSavingStaffing] = useState(false)
   const [staffingError, setStaffingError] = useState<string | null>(null)
 
+  const shiftCoverChanged = !sameShiftCover(shiftCover, coverSaved.lines)
+  /** One unsaved state for the whole staffing: the weekdays and the shifts are one save. */
+  const staffingDirty = daysDirty || shiftCoverChanged
+
   /* FILLED ONCE EACH TIME IT OPENS, from the draft on screen, else the last saved run, else the
-     settings. Not on every setup change while open: saving the minimums updates the setup, and a
+     settings. Not on every setup change while open: saving the staffing updates the setup, and a
      refill then would undo the mode and the staff choices the person had already made. */
   const [filled, setFilled] = useState(false)
   useEffect(() => {
@@ -137,7 +150,11 @@ export function AutoRosterDrawer({
     }
     setCover(covers)
     setStaffing(staffingDays(setup.staffing ?? []))
-    setStaffingDirty(false)
+    setDaysDirty(false)
+    const source = setupCover(setup)
+    const lines = shiftCoverLines(setup.shifts, source.rows)
+    setShiftCover(lines)
+    setCoverSaved({ lines, detected: source.detected })
     setStaffingError(null)
   }, [opened, setup, filled, current, firstMonday, period])
 
@@ -147,10 +164,8 @@ export function AutoRosterDrawer({
     [setup, period],
   )
 
-  const perShiftRows = useMemo(
-    () => (setup?.staffing ?? []).filter((r) => r.shiftId != null),
-    [setup],
-  )
+  /** Stored rules for a single weekday of a shift: not on the editor, kept as they are. */
+  const weekdayRules = useMemo(() => weekdayShiftRules(setup?.staffing ?? []).length, [setup])
 
   /**
    * WHAT THE SETUP'S "FIRST WEEK" CAN BE TRUSTED FOR. The setup resolved it under the branch's stored
@@ -169,35 +184,45 @@ export function AutoRosterDrawer({
     return staff.anchorWeekStart != null || setupWeeksHold
   }
 
-  /** The rows a save writes: the seven weekdays as typed, and the per-shift rows untouched. */
-  function staffingRows(): StaffingRequirementDto[] | string {
-    const rows: StaffingRequirementDto[] = []
-    for (let i = 0; i < 7; i++) {
-      const { min, target } = staffing[i]
-      // A target alone would be dropped with its day — said here rather than lost on save.
-      if (min === '' && target !== '') {
-        return t('attendance.roster.auto.staffing.targetWithoutMin', { day: t(`common.weekday.${i + 1}`) })
-      }
-      if (min === '') continue
-      if (target !== '' && target < min) {
-        return t('attendance.roster.auto.staffing.targetBelowMin', { day: t(`common.weekday.${i + 1}`) })
-      }
-      rows.push({ dayOfWeek: i + 1, shiftId: null, minOnDuty: min, targetOnDuty: target === '' ? null : target })
+  function shiftName(shiftId: number): string {
+    return setup?.shifts.find((s) => s.shiftId === shiftId)?.name ?? `#${shiftId}`
+  }
+
+  function problemText(problem: StaffingProblem): string {
+    switch (problem.kind) {
+      case 'targetWithoutMin':
+        return t('attendance.roster.auto.staffing.targetWithoutMin', { day: t(`common.weekday.${problem.dayOfWeek}`) })
+      case 'targetBelowMin':
+        return t('attendance.roster.auto.staffing.targetBelowMin', { day: t(`common.weekday.${problem.dayOfWeek}`) })
+      case 'shiftMin':
+        return t('attendance.roster.auto.shiftCover.minRequired', { shift: shiftInText(shiftName(problem.shiftId)) })
+      case 'shiftTargetBelowMin':
+        return t('attendance.roster.auto.shiftCover.targetBelowMin', { shift: shiftInText(shiftName(problem.shiftId)) })
     }
-    return [...rows, ...perShiftRows]
   }
 
   async function saveStaffing(): Promise<boolean> {
-    const rows = staffingRows()
-    if (typeof rows === 'string') {
-      setStaffingError(rows)
+    // Read before the await: the editor is disabled while saving, but what was sent is what was saved.
+    const lines = shiftCover
+    const result = staffingToSave({
+      days: staffing,
+      lines,
+      stored: setup?.staffing ?? [],
+      coverChanged: shiftCoverChanged,
+      coverDetected: coverSaved.detected,
+    })
+    if (!result.ok) {
+      setStaffingError(problemText(result.problem))
       return false
     }
+    const { rows } = result
     setSavingStaffing(true)
     setStaffingError(null)
     try {
       await autoRosterService.saveStaffing(branchId, rows)
-      setStaffingDirty(false)
+      setDaysDirty(false)
+      // Rows per shift make the cover the branch's own from now on; none leave the detection in charge.
+      setCoverSaved((saved) => ({ lines, detected: saved.detected && !rows.some((r) => r.shiftId != null) }))
       onStaffingSaved(rows)
       return true
     } catch (err) {
@@ -210,7 +235,7 @@ export function AutoRosterDrawer({
 
   async function preview() {
     if (!setup) return
-    // The planner reads the minimums from the database, so unsaved ones would be planned without.
+    // The planner reads the staffing from the database, so an unsaved one would be planned without.
     if (staffingDirty && !(await saveStaffing())) return
     const rhythmOverrides = setup.staff
       .filter((s) => firstWeek.has(s.employeeId) && !offRotation.has(s.employeeId))
@@ -491,6 +516,85 @@ export function AutoRosterDrawer({
             )}
           </div>
 
+          {/* ── shifts to cover every day (D16) ── */}
+          <div className="form-section">
+            <h3 className="form-section-title">{t('attendance.roster.auto.shiftCover.title')}</h3>
+            {setup.shifts.length === 0 ? (
+              <div className="hint">{t('attendance.roster.auto.shiftCover.noShifts')}</div>
+            ) : (
+              <>
+                <table className="auto-roster-table auto-roster-cover">
+                  <thead>
+                    <tr>
+                      <th>{t('attendance.roster.auto.shiftCover.shift')}</th>
+                      <th>{t('attendance.roster.auto.shiftCover.cover')}</th>
+                      <th>{t('attendance.roster.auto.staffing.min')}</th>
+                      <th>{t('attendance.roster.auto.staffing.target')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shiftCover.map((line) => {
+                      const name = shiftName(line.shiftId)
+                      return (
+                        <tr key={line.shiftId} className={line.covered ? undefined : 'auto-roster-off'}>
+                          <td>
+                            <div className="auto-roster-name">{name}</div>
+                          </td>
+                          <td>
+                            <Checkbox
+                              aria-label={`${t('attendance.roster.auto.shiftCover.cover')}: ${name}`}
+                              checked={line.covered}
+                              onChange={(e) => {
+                                const checked = e.currentTarget.checked
+                                setShiftCover((lines) =>
+                                  lines.map((l) => (l.shiftId === line.shiftId ? setLineCovered(l, checked) : l)),
+                                )
+                              }}
+                              disabled={busy || savingStaffing}
+                            />
+                          </td>
+                          {(['min', 'target'] as const).map((field) => (
+                            <td key={field}>
+                              <NumberInput
+                                aria-label={`${t(`attendance.roster.auto.staffing.${field}`)}: ${name}`}
+                                size="xs"
+                                min={1}
+                                allowDecimal={false}
+                                // Unticked: nothing asked, so nothing shown — what was typed comes back with the tick.
+                                value={line.covered ? line[field] : ''}
+                                onChange={(v) =>
+                                  setShiftCover((lines) =>
+                                    lines.map((l) =>
+                                      l.shiftId === line.shiftId ? { ...l, [field]: typeof v === 'number' ? v : '' } : l,
+                                    ),
+                                  )
+                                }
+                                disabled={busy || savingStaffing || !line.covered}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <div className="hint" style={{ marginTop: 6 }}>
+                  {coverSaved.detected && (
+                    <>
+                      {coverSaved.lines.some((l) => l.covered)
+                        ? t('attendance.roster.auto.shiftCover.detected')
+                        : t('attendance.roster.auto.shiftCover.detectedNone')}{' '}
+                    </>
+                  )}
+                  {t('attendance.roster.auto.shiftCover.hint')}
+                  {weekdayRules > 0 && (
+                    <> {t('attendance.roster.auto.shiftCover.weekdayRules', { count: weekdayRules })}</>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* ── minimum on duty ── */}
           <div className="form-section">
             <h3 className="form-section-title">{t('attendance.roster.auto.staffing.title')}</h3>
@@ -518,7 +622,7 @@ export function AutoRosterDrawer({
                             setStaffing((rows) =>
                               rows.map((r, j) => (j === i ? { ...r, [field]: typeof v === 'number' ? v : '' } : r)),
                             )
-                            setStaffingDirty(true)
+                            setDaysDirty(true)
                           }}
                           disabled={busy || savingStaffing}
                         />
@@ -530,10 +634,8 @@ export function AutoRosterDrawer({
             </table>
             <div className="hint" style={{ marginTop: 6 }}>
               {t('attendance.roster.auto.staffing.hint')}
-              {perShiftRows.length > 0 && (
-                <> {t('attendance.roster.auto.staffing.perShift', { count: perShiftRows.length })}</>
-              )}
             </div>
+            {/* One save for both sections, so a problem in either is said here, by the button. */}
             {staffingError && <div className="form-error">{staffingError}</div>}
             <div className="form-actions" style={{ justifyContent: 'flex-start', alignItems: 'center' }}>
               <Button

@@ -1009,7 +1009,7 @@ export interface AutoRosterCell {
   /** insert · update · delete · unchanged · kept. "kept" is never sent back to the commit. */
   change: string
   reasonCode?: string | null
-  /** A small JSON object with the reason's figures, e.g. '{"owed":0.86}'. */
+  /** A small JSON object with the reason's figures, e.g. '{"owed":0.86}' or '{"shift":"Evening"}'. */
   reasonArgs?: string | null
   expected: AutoRosterCellExpected
 }
@@ -1050,22 +1050,37 @@ export interface AutoRosterEmployeeCounters {
   weeks: AutoRosterWeekCounter[]
 }
 
+/** On duty on one shift a day must cover (D16), against that shift's minimum and target. */
+export interface AutoRosterShiftCounter {
+  shiftId: number
+  onDuty: number
+  min: number
+  target?: number | null
+}
+
 /** The footer cell under a day. On a public holiday `min` is the cover asked for. */
 export interface AutoRosterDayCounters {
   date: string
   onDuty: number
   min?: number | null
   target?: number | null
+  /**
+   * Each shift the day must cover (D16), in the order they start. Empty on a closed holiday, and
+   * when the branch has no shift to cover.
+   */
+  shifts: AutoRosterShiftCounter[]
 }
 
 /** Something the plan could not satisfy, or a rule an edit breaks. An error blocks the save. */
 export interface AutoRosterIssue {
   /** error · warning · info. */
   severity: string
-  /** The §2.7 code — translated under attendance.roster.auto.issue. */
+  /** The §2.7 code (and D16's SHIFT_UNCOVERED) — translated under attendance.roster.auto.issue. */
   code: string
   employeeId?: number | null
   date?: string | null
+  /** D16: the shift a SHIFT_UNCOVERED or per-shift SHORT_STAFFED issue is about — named on the card in the page's language. */
+  shiftId?: number | null
   /** The server's English sentence with the figures; shown when the code is unknown here. */
   message: string
 }
@@ -1184,7 +1199,17 @@ export interface AutoRosterSetup {
   monthDate: string
   settings: AutoRosterSettings
   staff: AutoRosterSetupStaff[]
+  /** The branch's stored rows, day-level and per shift, exactly as saved. */
   staffing: StaffingRequirementDto[]
+  /**
+   * D16 — the shifts every day must cover, as the planner will read them (active shifts only). The
+   * branch's stored per-shift rows when it has any — a row with minOnDuty 0 is "this shift need not
+   * be covered" — else the shifts it actually runs, found from its last 8 weeks of roster and weekly
+   * patterns, each { dayOfWeek: null, minOnDuty: 1, targetOnDuty: null }.
+   */
+  shiftCover: StaffingRequirementDto[]
+  /** shiftCover was found, not stored: the branch has no per-shift row. True with an empty list = nothing found. */
+  shiftCoverDetected: boolean
   holidays: AutoRosterSetupHoliday[]
   /** Active shifts only — an inactive shift is never written. */
   shifts: AutoRosterSetupShift[]

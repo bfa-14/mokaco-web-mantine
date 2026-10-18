@@ -1065,17 +1065,28 @@
           "unpaid": "Unpaid",
           "unpaidWarn": "Unpaid holiday: a rostered shift that is not worked costs that person a day, whether or not the month is approved."
         },
+        "shiftCover": {
+          "title": "Shifts to cover every day",
+          "shift": "Shift",
+          "cover": "Cover every day",
+          "detected": "Found from this branch's roster of the last 8 weeks. Saving keeps them; change them if they are wrong.",
+          "detectedNone": "No regular shift was found in the last 8 weeks. Tick the shifts that every day must cover.",
+          "hint": "Each ticked shift gets at least its minimum every day. The planner spreads the rest days so each day has enough people, then moves people between shifts to cover each one. A day it cannot cover is flagged.",
+          "weekdayRules_one": "{{count}} rule for a single weekday is kept as it is; on its day it replaces the figure above.",
+          "weekdayRules_other": "{{count}} rules for a single weekday are kept as they are; on their day they replace the figures above.",
+          "minRequired": "{{shift}}: enter a minimum of 1 or more, or untick it.",
+          "targetBelowMin": "{{shift}}: the target cannot be below the minimum.",
+          "noShifts": "There is no active shift. Add one under Attendance → Shifts first."
+        },
         "staffing": {
           "title": "Minimum on duty",
           "hint": "Per weekday, for this branch; saved with the branch. Rest days come first: a day below the minimum is flagged, nobody loses a rest day to cover it.",
           "day": "Day",
           "min": "Minimum",
           "target": "Target",
-          "save": "Save minimums",
-          "saved": "Minimums saved.",
+          "save": "Save staffing",
+          "saved": "Staffing saved.",
           "unsaved": "Not saved yet — saved when you preview.",
-          "perShift_one": "{{count}} per-shift row is kept as it is.",
-          "perShift_other": "{{count}} per-shift rows are kept as they are.",
           "targetBelowMin": "A target cannot be below the minimum ({{day}}).",
           "targetWithoutMin": "{{day}}: a target needs a minimum — enter one (0 for none)."
         },
@@ -1137,10 +1148,15 @@
           "RHYTHM_OVER": "More rest days than the week's rhythm",
           "REST_ABSORBED_BY_LEAVE": "The week's rest falls inside a leave",
           "SHORT_STAFFED": "Below the minimum on duty",
+          "SHIFT_UNCOVERED": "Nobody on a shift that must be covered",
           "TURNAROUND": "Too little time between two shifts",
           "WEEKLY_REST_HOURS": "The weekly rest is shorter than the legal minimum",
           "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
           "LONG_RUN": "A long run of working days"
+        },
+        "issueShift": {
+          "SHORT_STAFFED": "Below the minimum on {{shift}}",
+          "SHIFT_UNCOVERED": "Nobody on {{shift}}"
         },
         "reason": {
           "REST_WEEKEND_OWED": "Rest: owed a weekend day off",
@@ -1149,6 +1165,7 @@
           "REST_PATTERN": "Rest: the weekly pattern's rest day",
           "REST_CONSECUTIVE": "Rest: breaks a long run of working days",
           "WORK_HOLIDAY_COVER": "Working the public holiday (cover)",
+          "WORK_SHIFT_COVER": "Moved to {{shift}} so that shift is covered",
           "HOLIDAY_OFF": "Public holiday: a day off, no row"
         },
         "reasonArgs": {
@@ -1229,7 +1246,15 @@
           "onDuty": "On duty",
           "title": "On duty: {{count}}",
           "min": "On duty: {{count}} — minimum {{min}}",
-          "short": "On duty: {{count}} — below the minimum of {{min}}"
+          "short": "On duty: {{count}} — below the minimum of {{min}}",
+          "shift": {
+            "label": "On duty on {{shift}}",
+            "min": "{{shift}}: {{count}} on duty — minimum {{min}}",
+            "short": "{{shift}}: {{count}} on duty — below the minimum of {{min}}",
+            "none": "{{shift}}: nobody on duty — it needs {{min}}",
+            "target": "target {{target}}",
+            "off": "{{shift}}: need not be covered this day"
+          }
         },
         "holidayHeader": "Public holiday: {{name}}"
       }

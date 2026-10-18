@@ -662,11 +662,13 @@
   color: #a29d93;
 }
 
-/* The footer: on duty per day, against the minimum. Sticky at the bottom of the scroll. */
+/* The footer: on duty per day, against the minimum — and under a draft, per shift to cover. Sticky at
+   the bottom of the scroll; each row sits on the rows under it (--roster-foot-below, measured by the
+   page). */
 .roster-table tfoot th,
 .roster-table tfoot td {
   position: sticky;
-  bottom: 0;
+  bottom: var(--roster-foot-below, 0px);
   z-index: 2;
   background: var(--brand-offwhite);
   border-top: 1px solid var(--border);
@@ -688,6 +690,8 @@
   text-align: center;
   font-size: 11px;
   font-weight: 600;
+  /* Tight: under a draft the footer holds a row per shift too, all of it sticky over the grid. */
+  line-height: 1.25;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
@@ -701,6 +705,24 @@
 .roster-table td.roster-duty--short {
   background: #fde3de;
   color: #b91c1c;
+}
+
+/* A shift with nobody on it: the one figure in the footer that must not be missed. */
+.roster-table td.roster-duty--none {
+  background: #f6b8ad;
+  color: #8f1414;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #d9705f;
+}
+
+/* A shift's row under "On duty": its name, set in from the row it details. */
+.roster-table tfoot .roster-emp.roster-foot-shift {
+  padding-inline-start: 24px !important;
+  font-weight: 500;
+}
+
+.roster-table tfoot tr + tr > * {
+  border-top-color: #f0eee9;
 }
 
 .roster-swatch--holiday {
@@ -893,7 +915,7 @@
   color: var(--ink-muted);
 }
 
-/* The drawer's small tables: staff, holidays, minimums. */
+/* The drawer's small tables: staff, holidays, shifts to cover, minimums. */
 .auto-roster-table {
   width: 100%;
   border-collapse: collapse;
@@ -940,6 +962,14 @@
 
 .auto-roster-staffing td:first-child {
   width: 40%;
+}
+
+.auto-roster-cover td:first-child {
+  width: 30%;
+}
+
+.auto-roster-cover td:nth-child(2) {
+  width: 22%;
 }
 
 /* Cancel / Preview stay at the bottom of the drawer however long the staff list is. */

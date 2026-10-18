@@ -75,13 +75,15 @@ import {
   isMonday,
   onDutyByDay,
   onDutyUnderDraft,
+  onShiftUnderDraft,
   rosterWindow,
   staffingForDay,
   stripText,
   weekStartsBetween,
   weekStrip,
 } from './rosterCounters'
-import type { CounterCell, EmployeeCounts, StripWeek } from './rosterCounters'
+import type { CounterCell, EmployeeCounts, ShiftMove, StripWeek } from './rosterCounters'
+import { setupAfterStaffingSave, shiftInText } from './shiftCover'
 
 /**
  * The roster matrix. Employees down the side, days across the top, one month at a time.
@@ -211,27 +213,36 @@ function shownFromDraft(cell: DraftCell): ShownCell {
   return { state, shiftId: state === 'work' ? cell.shiftId : null, draft: cell }
 }
 
-/** A reason code with its figures, in words: 'Rest: owed a weekend day off · owed 0.9'. */
-function reasonText(code: string | null, args: string | null): string {
+/**
+ * A reason code with its figures, in words: 'Rest: owed a weekend day off · owed 0.9'.
+ *
+ * A shift the reason names ('Moved to Evening so that shift is covered') is part of the sentence,
+ * not a figure after it. A saved day carries no figures (only its code is stored), and its own
+ * shift — `shift`, the day's — is the one the planner moved it to.
+ */
+function reasonText(code: string | null, args: string | null, shift = ''): string {
   if (!code) return ''
-  let text = t(`attendance.roster.auto.reason.${code}`, { defaultValue: code })
+  let figures: Record<string, unknown> = {}
   if (args) {
     try {
-      const parsed = JSON.parse(args) as Record<string, unknown>
-      const parts = Object.entries(parsed)
-        .filter(([key, value]) => value != null && key !== 'holiday')
-        .map(([key, value]) =>
-          t(`attendance.roster.auto.reasonArgs.${key}`, {
-            value: typeof value === 'number' ? Math.round(value * 100) / 100 : String(value),
-            defaultValue: `${key} ${String(value)}`,
-          }),
-        )
-      if (typeof parsed.holiday === 'string') text = `${text} — ${parsed.holiday}`
-      if (parts.length > 0) text = `${text} · ${parts.join(' · ')}`
+      const parsed: unknown = JSON.parse(args)
+      if (parsed != null && typeof parsed === 'object') figures = parsed as Record<string, unknown>
     } catch {
       /* not JSON: the code alone still says why */
     }
   }
+  const named = typeof figures.shift === 'string' && figures.shift !== '' ? figures.shift : shift
+  let text = t(`attendance.roster.auto.reason.${code}`, { defaultValue: code, shift: shiftInText(named) })
+  const parts = Object.entries(figures)
+    .filter(([key, value]) => value != null && key !== 'holiday' && key !== 'shift')
+    .map(([key, value]) =>
+      t(`attendance.roster.auto.reasonArgs.${key}`, {
+        value: typeof value === 'number' ? Math.round(value * 100) / 100 : String(value),
+        defaultValue: `${key} ${String(value)}`,
+      }),
+    )
+  if (typeof figures.holiday === 'string') text = `${text} — ${figures.holiday}`
+  if (parts.length > 0) text = `${text} · ${parts.join(' · ')}`
   return text
 }
 
@@ -1306,7 +1317,12 @@ export default function RosterPage() {
           : inMonth
             ? `[data-duty="${date}"]`
             : null
-    const target = selector ? document.querySelector<HTMLElement>(selector) : null
+    // A shift's issue (D16) points at that shift's footer cell, when the footer shows the shift.
+    const shiftCell =
+      issue.shiftId != null && inMonth
+        ? document.querySelector<HTMLElement>(`[data-shift-duty="${issue.shiftId}|${date}"]`)
+        : null
+    const target = shiftCell ?? (selector ? document.querySelector<HTMLElement>(selector) : null)
     if (!target) return
     target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
     // Straight on the element: React leaves a class it did not set alone, and nothing re-renders for it.
@@ -1415,6 +1431,59 @@ export default function RosterPage() {
     if (!setup || holidayByDate.has(date)) return null
     return staffingForDay(setup.staffing ?? [], date).min
   }
+
+  /* UNDER A DRAFT, ONE FOOTER ROW PER SHIFT THE DAYS MUST COVER (D16) — every shift the preview lists
+     on any day, in the order they start. Outside a draft there are none: what each shift has to cover
+     is the planner's reading (detected, or stored), and only a preview carries it. */
+  const footShifts = useMemo(() => {
+    if (!draft.active) return []
+    const ids = new Set<number>()
+    for (const day of draft.preview?.perDay ?? []) {
+      for (const counter of day.shifts ?? []) ids.add(counter.shiftId)
+    }
+    const start = (shiftId: number) => shiftById.get(shiftId)?.startTime ?? '~'
+    return [...ids].sort((a, b) => start(a).localeCompare(start(b)) || a - b)
+  }, [draft.active, draft.preview, shiftById])
+
+  /* On duty per shift and day under the draft: the preview's counts, moved by the days edited since —
+     the rule of the row above, shift by shift. A day on full-day leave is on no shift. */
+  const shiftDuty = useMemo(() => {
+    if (!draft.active) return new Map<string, Map<number, number>>()
+    const moves: ShiftMove[] = []
+    for (const cell of draft.cells.values()) {
+      if (!cell.edited) continue
+      const away = leave.daysOnLeave(cell.employeeId, cell.workDate) >= 1
+      moves.push({
+        date: cell.workDate,
+        was: cell.previewState === 'work' && !away ? cell.previewShiftId : null,
+        now: cell.state === 'work' && !away ? cell.shiftId : null,
+      })
+    }
+    return onShiftUnderDraft(draft.preview?.perDay ?? [], moves)
+  }, [draft.active, draft.cells, draft.preview, leave])
+
+  /**
+   * THE FOOTER'S ROWS STACK at the bottom of the scroll: every footer cell is sticky, and a row sits
+   * on the rows under it, at their height — measured, since a row holds one line or two. The tfoot is
+   * keyed on its rows, so a row added, removed or moved mounts it afresh; a height that changes after
+   * that (a font arriving) is caught by the observer.
+   */
+  const stackFoot = useCallback((foot: HTMLTableSectionElement | null) => {
+    if (!foot) return
+    const place = () => {
+      let below = 0
+      for (let i = foot.rows.length - 1; i >= 0; i--) {
+        const row = foot.rows[i]
+        row.style.setProperty('--roster-foot-below', `${below}px`)
+        below += row.getBoundingClientRect().height
+      }
+    }
+    place()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(place)
+    Array.from(foot.rows).forEach((row) => observer.observe(row))
+    return () => observer.disconnect()
+  }, [])
 
   /** Why the auto-roster button is off, when it is. Read-only means a request is open on the month. */
   const autoBlockedReason =
@@ -1639,6 +1708,7 @@ export default function RosterPage() {
           monthLabel={periodLabel(period)}
           branchName={autoBranchName}
           employeeName={employeeName}
+          shiftName={(shiftId) => shiftById.get(shiftId)?.name ?? `#${shiftId}`}
           stale={draftMoved}
           onSave={() => void saveDraft()}
           onRegenerate={() => void regenerateDraft()}
@@ -1833,13 +1903,13 @@ export default function RosterPage() {
                           planned.change !== 'kept'
                             ? t(`attendance.roster.auto.change.${planned.change}`, { defaultValue: planned.change })
                             : '',
-                          reasonText(planned.reasonCode, planned.reasonArgs),
+                          reasonText(planned.reasonCode, planned.reasonArgs, shiftName),
                         ].filter(Boolean)
                         title += ` — ${why.join(' · ')}`
                       } else if (info && shown) {
                         title += ` — ${
                           info.isAuto
-                            ? [t('attendance.roster.auto.cell.auto'), reasonText(info.reasonCode ?? null, null)]
+                            ? [t('attendance.roster.auto.cell.auto'), reasonText(info.reasonCode ?? null, null, shiftName)]
                                 .filter(Boolean)
                                 .join(': ')
                             : t('attendance.roster.auto.cell.setByHand')
@@ -1910,8 +1980,9 @@ export default function RosterPage() {
                 })}
               </tbody>
               {/* ON DUTY PER DAY, against the minimum: red under it. Rest days beat staffing, so a
-                  short day is reported, not fixed by taking someone's rest day away. */}
-              <tfoot>
+                  short day is reported, not fixed by taking someone's rest day away. Under a draft,
+                  a row per shift to cover follows (D16). */}
+              <tfoot key={footShifts.join(',')} ref={stackFoot}>
                 <tr>
                   <th className="roster-emp" scope="row">
                     {t('attendance.roster.auto.foot.onDuty')}
@@ -1940,6 +2011,70 @@ export default function RosterPage() {
                   })}
                   <td className="roster-sum" />
                 </tr>
+                {/* Each shift the days must cover: who is on it, against its minimum — red under it,
+                    and nobody at all stands out. A day that need not cover the shift is left blank. */}
+                {footShifts.map((shiftId) => {
+                  const name = shiftById.get(shiftId)?.name ?? `#${shiftId}`
+                  const shift = shiftInText(name)
+                  return (
+                    <tr key={shiftId}>
+                      <th
+                        className="roster-emp roster-foot-shift"
+                        scope="row"
+                        title={t('attendance.roster.auto.foot.shift.label', { shift })}
+                      >
+                        {name}
+                      </th>
+                      {days.map((date) => {
+                        const counter = previewDays.get(date)?.shifts?.find((s) => s.shiftId === shiftId)
+                        if (!counter) {
+                          return (
+                            <td
+                              key={date}
+                              data-shift-duty={`${shiftId}|${date}`}
+                              className={dayColumnClass(date, 'roster-duty')}
+                              title={t('attendance.roster.auto.foot.shift.off', { shift })}
+                            />
+                          )
+                        }
+                        const count = shiftDuty.get(date)?.get(shiftId) ?? counter.onDuty
+                        const none = count === 0 && counter.min > 0
+                        const short = count < counter.min
+                        const said = t(
+                          none
+                            ? 'attendance.roster.auto.foot.shift.none'
+                            : short
+                              ? 'attendance.roster.auto.foot.shift.short'
+                              : 'attendance.roster.auto.foot.shift.min',
+                          { shift, count, min: counter.min },
+                        )
+                        return (
+                          <td
+                            key={date}
+                            data-shift-duty={`${shiftId}|${date}`}
+                            className={dayColumnClass(
+                              date,
+                              none
+                                ? 'roster-duty roster-duty--short roster-duty--none'
+                                : short
+                                  ? 'roster-duty roster-duty--short'
+                                  : 'roster-duty',
+                            )}
+                            title={
+                              counter.target != null
+                                ? `${said} · ${t('attendance.roster.auto.foot.shift.target', { target: counter.target })}`
+                                : said
+                            }
+                          >
+                            {count}
+                            <div className="roster-duty-min">{counter.min}</div>
+                          </td>
+                        )
+                      })}
+                      <td className="roster-sum" />
+                    </tr>
+                  )
+                })}
               </tfoot>
             </table>
           </div>
@@ -2489,7 +2624,7 @@ export default function RosterPage() {
           busy={draft.busy === 'preview'}
           error={autoOpen ? draft.error : null}
           onPreview={(request) => void runPreview(request)}
-          onStaffingSaved={(rows) => setSetup((current) => (current ? { ...current, staffing: rows } : current))}
+          onStaffingSaved={(rows) => setSetup((current) => (current ? setupAfterStaffingSave(current, rows) : current))}
         />
       )}
     </div>
