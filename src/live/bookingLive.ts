@@ -42,6 +42,20 @@ export interface BookingChangedMessage {
 type Handler = (message: BookingChangedMessage) => void
 
 /**
+ * CalendarChanged, to the group "staff": something WITHOUT a booking changed — a staff block was laid
+ * or lifted ('block'), or a room, its hours or its add-ons were edited ('room'). QA3 BKG-14: these
+ * used to publish nothing, so another till's calendar showed a room free that had just been blocked.
+ */
+export interface CalendarChangedMessage {
+  kind: 'block' | 'room' | string
+  roomId: number | null
+  /** yyyy-MM-dd for a block; null for a catalogue edit. */
+  date: string | null
+}
+
+type CalendarHandler = (message: CalendarChangedMessage) => void
+
+/**
  * Reconnect with backoff, and never give up: 0 s, 2 s, 5 s, 10 s, then every 30 s. SignalR's default
  * policy stops after four tries (about forty seconds), which a café's Wi-Fi outlasts daily — and a
  * calendar that silently stopped being live is worse than one that never was.
@@ -50,7 +64,11 @@ const RETRY_DELAYS_MS = [0, 2_000, 5_000, 10_000, 30_000]
 const retryDelay = (attempt: number) => RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]
 
 const handlers = new Set<Handler>()
+const calendarHandlers = new Set<CalendarHandler>()
 let connection: HubConnection | null = null
+
+/** Everybody listening, for either message: the connection lives while this is above zero. */
+const listeners = () => handlers.size + calendarHandlers.size
 let startTimer: ReturnType<typeof setTimeout> | null = null
 
 function build(): HubConnection {
@@ -70,6 +88,11 @@ function build(): HubConnection {
     handlers.forEach((handler) => handler(message))
   })
 
+  built.on('CalendarChanged', (message: CalendarChangedMessage) => {
+    if (!message || typeof message.kind !== 'string') return
+    calendarHandlers.forEach((handler) => handler(message))
+  })
+
   return built
 }
 
@@ -78,13 +101,13 @@ function build(): HubConnection {
  * ours to retry, with the same delays. Stops as soon as nobody is listening any more.
  */
 function start(attempt = 0): void {
-  if (handlers.size === 0) return
+  if (listeners() === 0) return
   connection ??= build()
   if (connection.state !== HubConnectionState.Disconnected) return
 
   const current = connection
   current.start().catch(() => {
-    if (connection !== current || handlers.size === 0) return
+    if (connection !== current || listeners() === 0) return
     startTimer = setTimeout(() => start(attempt + 1), retryDelay(attempt + 1))
   })
 }
@@ -104,7 +127,17 @@ export const bookingLive = {
     start()
     return () => {
       handlers.delete(handler)
-      if (handlers.size === 0) stop()
+      if (listeners() === 0) stop()
+    }
+  },
+
+  /** Listen for block and catalogue changes (staff only). Shares the one connection. */
+  onCalendarChanged(handler: CalendarHandler): () => void {
+    calendarHandlers.add(handler)
+    start()
+    return () => {
+      calendarHandlers.delete(handler)
+      if (listeners() === 0) stop()
     }
   },
 }
@@ -123,5 +156,22 @@ export function useBookingChanged(handler: Handler, enabled = true): void {
   useEffect(() => {
     if (!enabled) return
     return bookingLive.onBookingChanged((message) => latest.current(message))
+  }, [enabled])
+}
+
+/**
+ * Calls `handler` for every CalendarChanged while the component is mounted and `enabled` — a block
+ * laid or lifted, a room, its hours or its add-ons edited at another till (QA3 BKG-14). Same
+ * latest-handler ref as useBookingChanged.
+ */
+export function useCalendarChanged(handler: CalendarHandler, enabled = true): void {
+  const latest = useRef(handler)
+  useEffect(() => {
+    latest.current = handler
+  }, [handler])
+
+  useEffect(() => {
+    if (!enabled) return
+    return bookingLive.onCalendarChanged((message) => latest.current(message))
   }, [enabled])
 }

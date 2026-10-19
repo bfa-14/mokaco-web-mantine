@@ -91,6 +91,8 @@ export interface LeaveBalanceRow {
   accrued: number
   carriedOver: number
   used: number
-  /** Accrued + carried over − used. The column people open this report to read. */
+  /** QA3 (LEV-14): corrections, the year-end close and expired carry-over, signed. */
+  adjusted?: number
+  /** Accrued + carried over − used + adjusted. The column people open this report to read. */
   remaining: number
 }
