@@ -103,10 +103,19 @@ export interface PaymentMethod {
 
 export interface BookingRow {
   bookingId: number
+  /** MC-XXXXXXXX. */
+  bookingRef?: string
   roomId: number
   bookDate: string
   startTime: string
   endTime: string
+  /**
+   * Minutes from midnight of bookDate (QA3 BKG-2): startMin 0–1439, endMin up to 1800 — a 22:00–01:00
+   * booking is 1320–1500. Place the booking with these (bookingTimes.spanOf), never with the clock
+   * times, which wrap at midnight. Optional: read through spanOf, which falls back to the times.
+   */
+  startMin?: number
+  endMin?: number
   persons: number
   guestName: string
   guestPhone: string
@@ -128,8 +137,14 @@ export interface BookingRow {
   roomCode: string
   /** Sum of payments. Zero, never null. */
   paidAmount: number
-  /** totalAmount − paidAmount, computed server-side so no two screens can disagree. */
+  /**
+   * totalAmount − paidAmount, computed server-side so no two screens can disagree — and 0 on a
+   * Cancelled or NoShow booking, which owes nothing (QA3 BKG-8; read it through balanceOwed).
+   */
   balanceDue: number
+  /** The hour discount as applied, frozen on the booking. */
+  discountPercent?: number
+  discountAmount?: number
   decidedByUsername: string | null
 
   /* ── CANCELLATION AND REFUND. All optional: an older API omits them, and a booking that was
@@ -169,6 +184,9 @@ export interface BookingBlock {
   blockDate: string
   startTime: string
   endTime: string
+  /** Minutes from midnight of blockDate; a block past midnight ends after 1440 (QA3 BKG-2). */
+  startMin?: number
+  endMin?: number
   /** Internal only — the public availability feed never carries it. */
   reason: string | null
   createdByUserId: number | null
@@ -234,14 +252,20 @@ export interface ReceiptHeader {
   source: BookingSource
   totalAmount: number
   depositDue: number
+  /** The hour discount as applied — part of the stored total (QA3 BKG-10: the receipt prints it). */
+  discountPercent?: number
+  discountAmount?: number
   currencyCode: string
   note: string | null
   roomName: string
-  /** The room's CURRENT rate. Only the amounts on a receipt are historical, not the terms. */
+  /**
+   * The room's CURRENT rate — not what the booking was priced at, so the receipt does not print it
+   * (QA3 BKG-10); it derives the booked rate from the stored amounts (bookingMoney.receiptRoomLine).
+   */
   pricePerHour: number
   policyText: string | null
   paidAmount: number
-  /** Zero prints PAID; anything above prints BALANCE DUE. */
+  /** Zero prints PAID; anything above prints BALANCE DUE — never on a Cancelled or NoShow booking (QA3 BKG-8). */
   balanceDue: number
 }
 
@@ -342,6 +366,43 @@ export interface BookingPaymentPayload {
   paymentMethodId: number
   amount: number
   reference?: string | null
+}
+
+/**
+ * POST /api/bookings/quote — what a staff booking would cost (WEB-9 / QA3 BKG-10). The same times as
+ * the create: an end at or before the start is the next morning, up to 06:00.
+ */
+export interface StaffQuotePayload {
+  roomId: number
+  /** 'yyyy-MM-dd'. */
+  bookDate: string
+  /** 'HH:mm:ss'. */
+  startTime: string
+  endTime: string
+  addonIds?: number[]
+}
+
+/** The server's price of a slot — booking.usp_Booking_Quote: discount, lead-time deposit tier and floor included. */
+export interface StaffQuote {
+  roomId: number
+  roomCode: string
+  roomName: string
+  hours: number
+  pricePerHour: number
+  /** The room before any discount. */
+  roomGross: number
+  discountPercent: number
+  discountFromHours: number
+  discountAmount: number
+  /** roomGross less the discount; add-ons are never discounted. */
+  roomTotal: number
+  addonTotal: number
+  totalAmount: number
+  /** The lead-time tier that applies to this slot (or the room's own percentage). */
+  depositPercent: number
+  /** After the floor and capped at the total. */
+  depositDue: number
+  currencyCode: string
 }
 
 export interface BlockCreatePayload {
