@@ -2,65 +2,67 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState, Table as TableInstance } from '@tanstack/react-table'
-import { ActionIcon, Button, Loader, NumberInput, Select, Table } from '@mantine/core'
+import { Button, Loader, NumberInput, Select, Table } from '@mantine/core'
 import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { IconCalendar, IconPencil, IconPlus, IconTrash } from '@tabler/icons-react'
+import { IconCalendar, IconCalendarOff, IconPencil, IconPlus } from '@tabler/icons-react'
 import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/GridFilterRow'
 import { currenciesService } from '../../services/coreService'
-import { componentTypesService, salaryComponentsService } from '../../services/hrService'
+import { componentTypesService, salaryAdminService } from '../../services/hrService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 import { fmtDate, fmtNumber } from './hrFormat'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
-import { isActiveRow } from '../../types/hr'
-import type { ComponentType, SalaryComponent } from '../../types/hr'
+import type { ComponentType, EmployeeSalaryComponent } from '../../types/hr'
 import type { Currency } from '../../types/core'
 import { parseDecimal } from '../../components/numeric'
 import type { NumberInputValue } from '../../components/numeric'
+import { assignableTypes, canEndOn, isBasicType, isOpenRow, salaryRowState, sortSalaryRows } from './salaryRows'
+import type { SalaryRowState } from './salaryRows'
 
-interface FormState {
+/**
+ * THE SALARY TAB, ON THE HISTORY-PRESERVING PATH (QA3 PAY-6 / REL-2).
+ *
+ * It used to insert, edit in place and hard-delete hr.SALARY_COMPONENT rows through POST / PUT / DELETE
+ * /api/salary-components: no locked-month check, and a raise added as a second row left the first one
+ * open, so payroll paid both in full. Those routes are gone. A salary now changes FROM a date
+ * (PUT /api/employees/{id}/salary-components — the standing value ends the day before, a locked month is
+ * refused with the earliest date that works) and a component stops on a date (POST …/{id}/end). Closed
+ * rows are history: read-only, never deleted, so a month already paid keeps saying what it paid. The
+ * pure rules — row state, which types may be assigned, the order — are in salaryRows.ts.
+ */
+
+interface SetFormState {
   componentTypeId: number | null
   /** As the box hands it over ("12." while typing) — coerced in submit. See components/numeric.ts. */
   amount: NumberInputValue
   currencyCode: string
   effectiveFrom: string
-  effectiveTo: string
 }
 
-const EMPTY: FormState = {
-  componentTypeId: null,
-  amount: 0,
-  currencyCode: '',
-  effectiveFrom: '',
-  effectiveTo: '',
-}
+const EMPTY: SetFormState = { componentTypeId: null, amount: '', currencyCode: '', effectiveFrom: '' }
 
-/**
- * notify(msg, type, ms) → Mantine notifications, adapted once so every call site below
- * stays byte-identical to the original.
- */
 function notify(message: string, type: 'success' | 'error', ms: number) {
   notifications.show({ message, color: type === 'success' ? 'green' : 'red', autoClose: ms })
 }
 
-/**
- * DevExtreme's `confirm(message, title)` dialog, rebuilt as a promise-backed Mantine Modal so the
- * call site keeps its `const ok = await …; if (!ok) return` shape. Any other close answers "no".
- */
-interface ConfirmState {
-  title: string
-  message: React.ReactNode
-  resolve: (proceed: boolean) => void
+/** Today in Beirut, YYYY-MM-DD — the company's day, which is what "current" and "ended" are judged on. */
+function beirutToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Beirut', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
 }
 
-/* The formatters are SHARED and null-safe — see hrFormat.ts. Declared locally they were typed
-   `(v: number)`, a promise the API cannot keep the moment a column is added server-side. */
+const STATE_BADGE: Record<SalaryRowState, string> = {
+  current: 'badge badge--on',
+  scheduled: 'badge badge--muted',
+  ended: 'badge badge--off',
+}
 
-/* PORT NOTE: the DevExtreme DataGrid is TanStack Table + Mantine Table, per RequestsGrid.tsx. The
-   source grid declared no pager, search or export, so none is added; showBorders → withTableBorder,
-   rowAlternationEnabled → striped, Sorting mode="multiple" → enableMultiSort. */
+/* The DevExtreme DataGrid port, kept: TanStack Table + Mantine Table, a filter row, no pager. */
 function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText: string }) {
   const columnCount = table.getAllColumns().length
   return (
@@ -77,11 +79,7 @@ function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText
                   whiteSpace: 'nowrap',
                   userSelect: 'none',
                 }}
-                onClick={
-                  header.column.getCanSort()
-                    ? header.column.getToggleSortingHandler()
-                    : undefined
-                }
+                onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
               >
                 <GridHeaderContent header={header} table={table} />
               </Table.Th>
@@ -94,18 +92,14 @@ function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText
         {table.getRowModel().rows.length === 0 ? (
           <Table.Tr>
             <Table.Td colSpan={columnCount}>
-              <div className="empty-hint" style={{ padding: 16 }}>
-                {emptyText}
-              </div>
+              <div className="empty-hint" style={{ padding: 16 }}>{emptyText}</div>
             </Table.Td>
           </Table.Tr>
         ) : (
           table.getRowModel().rows.map((row) => (
             <Table.Tr key={row.id}>
               {row.getVisibleCells().map((cell) => (
-                <Table.Td key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </Table.Td>
+                <Table.Td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</Table.Td>
               ))}
             </Table.Tr>
           ))
@@ -115,20 +109,7 @@ function GridTable<T>({ table, emptyText }: { table: TableInstance<T>; emptyText
   )
 }
 
-const columnHelper = createColumnHelper<SalaryComponent>()
-
-/**
- * Which component type is the BASIC salary — the one the tier band constrains.
- *
- * MATCHED ON NAME because the DTO carries no code: hr.COMPONENT_TYPE gives this screen an id, a
- * name, a category and a sign, and none of the other three distinguishes basic pay from any other
- * earning. That makes this a heuristic, and it is allowed to be one: it decides only whether an
- * ADVISORY HINT appears. The rule itself is a database trigger, so a name this fails to recognise
- * costs the user the hint, never the enforcement.
- */
-function isBasicComponent(type: ComponentType | undefined): boolean {
-  return /\bbasic\b/i.test(type?.name ?? '')
-}
+const columnHelper = createColumnHelper<EmployeeSalaryComponent>()
 
 export function SalaryComponentsTab({
   employeeId,
@@ -142,60 +123,41 @@ export function SalaryComponentsTab({
   approvalTier?: number | null
 }) {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
+  /* The two writes are EMP_EDIT, the endpoints' own code; the procedure then admits HR (or Admin) and
+     says so in a sentence. A reader sees the history and nothing to press. */
+  const canEdit = hasPermission(PERMISSION.EMP_EDIT)
   const { tiers, tierName } = useApprovalTiers()
-  const [rows, setRows] = useState<SalaryComponent[]>([])
+  const [rows, setRows] = useState<EmployeeSalaryComponent[]>([])
   const [componentTypes, setComponentTypes] = useState<ComponentType[]>([])
   const [currencies, setCurrencies] = useState<Currency[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const today = beirutToday()
 
-  const [popupVisible, setPopupVisible] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [form, setForm] = useState<FormState>(EMPTY)
+  /** The Set dialog: null closed; `changing` is the open row being changed, null for a new component. */
+  const [setOpen, setSetOpen] = useState(false)
+  const [changing, setChanging] = useState<EmployeeSalaryComponent | null>(null)
+  const [form, setForm] = useState<SetFormState>(EMPTY)
+  const [fieldErrors, setFieldErrors] = useState<{ componentTypeId?: string; currencyCode?: string; effectiveFrom?: string; amount?: string }>({})
+
+  /** The End dialog. */
+  const [ending, setEnding] = useState<EmployeeSalaryComponent | null>(null)
+  const [endOn, setEndOn] = useState('')
+
   const [saving, setSaving] = useState(false)
-  /* PORT NOTE: DX ValidationGroup/RequiredRule → the same required checks, message for message,
-     run in submit() and shown as field-level errors. */
-  const [fieldErrors, setFieldErrors] = useState<{
-    componentTypeId?: string
-    currencyCode?: string
-    effectiveFrom?: string
-    amount?: string
-  }>({})
-
-  /** The API's own refusal — the tier-band trigger's sentence, chiefly. Cleared on each attempt. */
+  /** The API's own refusal — the locked-through sentence with its earliest date, the tier band. */
   const [serverError, setServerError] = useState<string | null>(null)
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-
-  /** The confirm dialog currently on screen, if any — see ConfirmState. */
-  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
-
-  const askConfirm = (message: React.ReactNode, title: string): Promise<boolean> =>
-    new Promise<boolean>((resolve) => setConfirmState({ title, message, resolve }))
-
-  function settleConfirm(proceed: boolean) {
-    confirmState?.resolve(proceed)
-    setConfirmState(null)
-  }
-
-  async function reload() {
-    try {
-      setRows(await salaryComponentsService.getByEmployee(employeeId))
-      setError(null)
-    } catch (err) {
-      setError(getErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }
 
   useEffect(() => {
     let cancelled = false
     async function load() {
       try {
         const [comps, types, curr] = await Promise.all([
-          salaryComponentsService.getByEmployee(employeeId),
+          salaryAdminService.getForEmployee(employeeId),
           componentTypesService.getAll().catch(() => [] as ComponentType[]),
           currenciesService.getAll().catch(() => [] as Currency[]),
         ])
@@ -212,136 +174,102 @@ export function SalaryComponentsTab({
       }
     }
     void load()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [employeeId])
 
-  function openCreate() {
-    setEditingId(null)
+  function openAdd() {
+    setChanging(null)
     setFieldErrors({})
     setServerError(null)
     setForm({ ...EMPTY, currencyCode: currencies[0]?.currencyCode ?? '' })
-    setPopupVisible(true)
+    setSetOpen(true)
   }
 
-  function openEdit(row: SalaryComponent) {
-    setEditingId(row.salaryComponentId)
+  function openChange(row: EmployeeSalaryComponent) {
+    setChanging(row)
     setFieldErrors({})
     setServerError(null)
-    setForm({
-      componentTypeId: row.componentTypeId,
-      amount: row.amount,
-      currencyCode: row.currencyCode,
-      effectiveFrom: row.effectiveFrom.slice(0, 10),
-      effectiveTo: row.effectiveTo?.slice(0, 10) ?? '',
-    })
-    setPopupVisible(true)
+    setForm({ componentTypeId: row.componentTypeId, amount: row.amount, currencyCode: row.currencyCode, effectiveFrom: '' })
+    setSetOpen(true)
+  }
+
+  function openEnd(row: EmployeeSalaryComponent) {
+    setEnding(row)
+    setEndOn('')
+    setServerError(null)
   }
 
   /**
-   * The band hint for the component being edited, or null when there is nothing to say.
-   *
-   * Null in every case where the sentence would be a guess or a half-truth: the employee has no
-   * tier, the tier is not in the dictionary, the chosen type is not the basic salary, or the tier
-   * carries no band. "Hide when the tier has no range" is the same rule as all the others here.
+   * The band hint for the component being set, or null when there is nothing to say: no tier, a tier
+   * not in the dictionary, a type that is not the basic salary, or a tier without a band.
    */
   const basicBand = useMemo(() => {
     if (approvalTier == null) return null
     const selected = componentTypes.find((x) => x.componentTypeId === form.componentTypeId)
-    if (!isBasicComponent(selected)) return null
-
+    if (!isBasicType(selected)) return null
     const tier = tiers.find((x) => x.tierNo === approvalTier)
-    // A band needs a currency AND at least one side; without either there is no rule to state.
     if (!tier?.salaryCurrency) return null
     if (tier.minBasicSalary == null && tier.maxBasicSalary == null) return null
-
-    return {
-      tier: tierName(approvalTier),
-      min: tier.minBasicSalary,
-      max: tier.maxBasicSalary,
-      currency: tier.salaryCurrency,
-    }
+    return { tier: tierName(approvalTier), min: tier.minBasicSalary, max: tier.maxBasicSalary, currency: tier.salaryCurrency }
   }, [approvalTier, componentTypes, form.componentTypeId, tiers, tierName])
 
-  async function submit() {
-    /* The DX "Amount is required" rule is not reproduced: the state coerces an empty box to 0, so
-       that rule could never fire in the original either (0 satisfies a RequiredRule). */
-    const errors: {
-      componentTypeId?: string
-      currencyCode?: string
-      effectiveFrom?: string
-      amount?: string
-    } = {}
+  async function submitSet() {
+    const errors: typeof fieldErrors = {}
     // Coerced HERE, once — the box holds raw text until now so a decimal can actually be typed.
     const amount = parseDecimal(form.amount)
     if (form.componentTypeId == null) errors.componentTypeId = 'Component type is required'
+    // A zero is the server's to refuse, with its own sentence: to remove a component, END it.
     if (amount == null) errors.amount = 'Amount must be a number'
     if (!form.currencyCode) errors.currencyCode = 'Currency is required'
     if (!form.effectiveFrom) errors.effectiveFrom = 'Start date is required'
     setFieldErrors(errors)
-    if (errors.componentTypeId || amount == null || errors.currencyCode || errors.effectiveFrom) return
+    if (Object.keys(errors).length > 0 || amount == null) return
     setServerError(null)
     setSaving(true)
     try {
-      if (editingId != null) {
-        await salaryComponentsService.update(editingId, {
-          amount,
-          currencyCode: form.currencyCode,
-          effectiveFrom: form.effectiveFrom,
-          effectiveTo: form.effectiveTo || null,
-        })
-        notify('Salary component updated.', 'success', 2000)
-      } else {
-        await salaryComponentsService.create({
-          employeeId,
-          componentTypeId: form.componentTypeId!,
-          amount,
-          currencyCode: form.currencyCode,
-          effectiveFrom: form.effectiveFrom,
-          effectiveTo: form.effectiveTo || null,
-        })
-        notify('Salary component added.', 'success', 2000)
-      }
-      setPopupVisible(false)
-      await reload()
+      // The procedure answers with the employee's rows as they now stand: render them, no second fetch.
+      setRows(await salaryAdminService.set(employeeId, {
+        componentTypeId: form.componentTypeId!,
+        amount,
+        currencyCode: form.currencyCode,
+        effectiveFrom: form.effectiveFrom,
+      }))
+      notify(t('hr.salaryComponents.saved'), 'success', 2000)
+      setSetOpen(false)
     } catch (err) {
-      /* IN THE FORM, NOT A TOAST. The tier-band trigger refuses an out-of-range basic with a
-         sentence naming what the figure must be between — that is the fix, and it has to stay on
-         screen next to the Amount box while it is corrected, not time out after four seconds. */
+      /* IN THE FORM, NOT A TOAST. The locked-through refusal names the earliest date that works, and
+         the tier band names what the basic must be between: the fix, kept beside the box it fixes. */
       setServerError(getErrorMessage(err))
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleDelete(row: SalaryComponent) {
-    const ok = await askConfirm(
-      <>
-        Delete the <b>{row.componentName}</b> component?
-      </>,
-      'Confirm delete',
-    )
-    if (!ok) return
+  async function submitEnd() {
+    if (!ending || !endOn) return
+    setServerError(null)
+    setSaving(true)
     try {
-      await salaryComponentsService.remove(row.salaryComponentId)
-      notify('Deleted.', 'success', 2000)
-      await reload()
+      setRows(await salaryAdminService.end(ending.salaryComponentId, endOn))
+      notify(t('hr.salaryComponents.ended'), 'success', 2000)
+      setEnding(null)
     } catch (err) {
-      notify(getErrorMessage(err), 'error', 4000)
+      setServerError(getErrorMessage(err))
+    } finally {
+      setSaving(false)
     }
   }
 
-  // Column defs are rebuilt per render on purpose — the action cells close over openEdit and
-  // handleDelete, which follow the current employeeId. This table is small.
+  const ordered = useMemo(() => sortSalaryRows(rows), [rows])
+
+  // Column defs are rebuilt per render on purpose — the action cells close over the current row
+  // handlers. This table is small.
   const columns = [
     columnHelper.accessor('componentName', { header: 'Component' }),
     columnHelper.accessor('amount', {
       header: 'Amount',
-      // 'right', not alignEnd() — a FIGURE column, and figures keep a fixed edge in both
-      // directions so digits line up. See the note in src/i18n/physical.ts.
+      // 'right', not alignEnd() — a FIGURE column: digits keep a fixed edge in both directions.
       cell: (c) => <div style={{ textAlign: 'right' }}>{fmtNumber(c.getValue())}</div>,
-      // fmtNumber groups thousands, so a salary line prints "1,500" where the row holds 1500.
       meta: { filterText: fmtNumber },
     }),
     columnHelper.accessor('currencyCode', {
@@ -355,57 +283,54 @@ export function SalaryComponentsTab({
       cell: (c) => fmtDate(c.getValue()),
       meta: { filterText: fmtDate },
     }),
-    // An open-ended component has no end date and prints blank; matching the blank is what a
-    // filter on this column can usefully do beyond the dates themselves.
     columnHelper.accessor('effectiveTo', {
       header: 'To',
       size: 130,
       cell: (c) => fmtDate(c.getValue()),
       meta: { filterText: fmtDate },
     }),
-    columnHelper.display({
-      id: 'actions',
-      header: 'Actions',
+    columnHelper.accessor((r) => t(`hr.salaryComponents.state.${salaryRowState(r, today)}`), {
+      id: 'state',
+      header: t('hr.salaryComponents.status'),
       size: 110,
-      cell: (c) => {
-        const row = c.row.original
-        return (
-          <div className="grid-actions">
-            <ActionIcon
-              variant="subtle"
-              title="Edit"
-              aria-label="Edit"
-              onClick={() => openEdit(row)}
-            >
-              <IconPencil size={16} />
-            </ActionIcon>
-            <ActionIcon
-              variant="subtle"
-              color="red"
-              title="Delete"
-              aria-label="Delete"
-              onClick={() => void handleDelete(row)}
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </div>
-        )
-      },
+      cell: (c) => <span className={STATE_BADGE[salaryRowState(c.row.original, today)]}>{c.getValue()}</span>,
     }),
+    ...(canEdit
+      ? [
+          columnHelper.display({
+            id: 'actions',
+            header: 'Actions',
+            size: 230,
+            cell: (c) => {
+              const row = c.row.original
+              // History is read-only: an ended row offers nothing — not a disabled button, nothing.
+              if (!isOpenRow(row)) return null
+              return (
+                <div className="grid-actions">
+                  <Button variant="subtle" size="compact-sm" leftSection={<IconPencil size={14} />} onClick={() => openChange(row)}>
+                    {t('hr.salaryComponents.change')}
+                  </Button>
+                  <Button variant="subtle" size="compact-sm" color="red" leftSection={<IconCalendarOff size={14} />} onClick={() => openEnd(row)}>
+                    {t('hr.salaryComponents.end')}
+                  </Button>
+                </div>
+              )
+            },
+          }),
+        ]
+      : []),
   ]
 
   const table = useReactTable({
-    data: rows,
+    data: ordered,
     columns,
     state: { sorting, columnFilters },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    // This tab had no search box; the filter row is its only narrowing control.
     defaultColumn: { filterFn: gridFilterFn },
     getFilteredRowModel: getFilteredRowModel(),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    // Sorting mode="multiple" on the source grid.
     enableMultiSort: true,
     getRowId: (r) => String(r.salaryComponentId),
   })
@@ -418,48 +343,44 @@ export function SalaryComponentsTab({
     )
   }
 
+  const typeOptions = assignableTypes(componentTypes, changing?.componentTypeId)
+
   return (
     <div>
-      {error && (
-        <div className="alert alert--error" role="alert">
-          {error}
+      {error && <div className="alert alert--error" role="alert">{error}</div>}
+
+      <p className="hint" style={{ marginTop: 0 }}>{t('hr.salaryComponents.intro')}</p>
+
+      {canEdit && (
+        <div className="tab-toolbar">
+          <Button leftSection={<IconPlus size={16} />} onClick={openAdd}>
+            {t('hr.salaryComponents.add')}
+          </Button>
         </div>
       )}
 
-      <div className="tab-toolbar">
-        <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-          Add Component
-        </Button>
-      </div>
+      <GridTable table={table} emptyText={t('hr.salaryComponents.empty')} />
 
-      <GridTable table={table} emptyText="No salary components yet." />
-
+      {/* SET: a new component, or an open one changed FROM a date. */}
       <Modal
-        opened={popupVisible}
-        onClose={() => setPopupVisible(false)}
-        title={editingId != null ? 'Edit Salary Component' : 'Add Salary Component'}
+        opened={setOpen}
+        onClose={() => setSetOpen(false)}
+        title={changing
+          ? t('hr.salaryComponents.changeTitle', { name: changing.componentName })
+          : t('hr.salaryComponents.addTitle')}
         size={460}
         centered
       >
         <div className="form-field">
           <label className="form-label">Component type</label>
           <Select
-            data={componentTypes
-              // A deactivated type is off the menu for NEW components; the one an existing row
-              // already carries stays, so editing it does not blank the box.
-              .filter((t) => isActiveRow(t) || t.componentTypeId === form.componentTypeId)
-              .map((t) => ({
-                value: String(t.componentTypeId),
-                label: t.name,
-              }))}
+            data={typeOptions.map((ct) => ({ value: String(ct.componentTypeId), label: ct.name }))}
             value={form.componentTypeId != null ? String(form.componentTypeId) : null}
             placeholder="Select type…"
             allowDeselect={false}
-            disabled={saving || editingId != null}
+            disabled={saving || changing != null}
             error={fieldErrors.componentTypeId}
-            onChange={(v) =>
-              setForm((f) => ({ ...f, componentTypeId: v != null ? Number(v) : null }))
-            }
+            onChange={(v) => setForm((f) => ({ ...f, componentTypeId: v != null ? Number(v) : null }))}
           />
         </div>
 
@@ -474,21 +395,14 @@ export function SalaryComponentsTab({
               error={fieldErrors.amount}
               onChange={(v) => setForm((f) => ({ ...f, amount: v }))}
             />
-            {/* THE RULE, BEFORE IT REFUSES. A trigger enforces this band on save; saying it here
-                turns a refusal into something the user could have avoided. Advisory only — the
-                form never blocks on it, because the trigger is the authority and this is a hint. */}
+            {/* THE RULE, BEFORE IT REFUSES. A trigger enforces the band on save; saying it here turns a
+                refusal into something the user could have avoided. Advisory only. */}
             {basicBand && (
               <p className="hint" style={{ marginTop: 6 }}>
                 {t('hr.salaryComponents.tierBand', {
                   tier: basicBand.tier,
-                  min:
-                    basicBand.min == null
-                      ? t('hr.salaryComponents.noBound')
-                      : fmtNumber(basicBand.min),
-                  max:
-                    basicBand.max == null
-                      ? t('hr.salaryComponents.noBound')
-                      : fmtNumber(basicBand.max),
+                  min: basicBand.min == null ? t('hr.salaryComponents.noBound') : fmtNumber(basicBand.min),
+                  max: basicBand.max == null ? t('hr.salaryComponents.noBound') : fmtNumber(basicBand.max),
                   currency: basicBand.currency,
                 })}
               </p>
@@ -498,10 +412,7 @@ export function SalaryComponentsTab({
           <div className="form-field">
             <label className="form-label">Currency</label>
             <Select
-              data={currencies.map((c) => ({
-                value: c.currencyCode,
-                label: c.currencyCode,
-              }))}
+              data={currencies.map((c) => ({ value: c.currencyCode, label: c.currencyCode }))}
               value={form.currencyCode || null}
               placeholder="Currency…"
               allowDeselect={false}
@@ -512,7 +423,7 @@ export function SalaryComponentsTab({
           </div>
 
           <div className="form-field">
-            <label className="form-label">Effective from</label>
+            <label className="form-label">{t('hr.salaryComponents.startsOn')}</label>
             {/* Required, so not clearable. State stays 'yyyy-MM-dd'. */}
             <DatePickerInput
               valueFormat="DD/MM/YYYY"
@@ -523,60 +434,54 @@ export function SalaryComponentsTab({
               onChange={(v) => setForm((f) => ({ ...f, effectiveFrom: v ?? '' }))}
             />
           </div>
-
-          <div className="form-field">
-            <label className="form-label">Effective to (optional)</label>
-            {/* PORT NOTE: the DX showClearButton + "— open-ended —" placeholder is back as the
-                picker's own clear button and placeholder. Empty means open-ended, so this one
-                MUST be clearable — re-opening a closed component is a real edit. */}
-            <DatePickerInput
-              valueFormat="DD/MM/YYYY"
-              leftSection={<IconCalendar size={14} />}
-              clearable
-              placeholder="— open-ended —"
-              value={form.effectiveTo || null}
-              disabled={saving}
-              onChange={(v) => setForm((f) => ({ ...f, effectiveTo: v ?? '' }))}
-            />
-          </div>
         </div>
 
-        {/* The tier-band refusal names the figures the basic must be between — kept on screen
-            beside the Amount box that caused it, rather than shown as a toast that times out. */}
-        {serverError && (
-          <div className="alert alert--error" role="alert">
-            {serverError}
-          </div>
-        )}
+        {serverError && <div className="alert alert--error" role="alert">{serverError}</div>}
 
         <div className="form-actions">
-          <Button variant="default" onClick={() => setPopupVisible(false)} disabled={saving}>
-            Cancel
+          <Button variant="default" onClick={() => setSetOpen(false)} disabled={saving}>
+            {t('common.cancel')}
           </Button>
-          <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+          <Button onClick={() => void submitSet()} disabled={saving}>
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </div>
       </Modal>
 
-      {/* The confirm dialog — devextreme/ui/dialog's confirm(), as a Mantine Modal. */}
-      {confirmState && (
-        <Modal
-          opened
-          onClose={() => settleConfirm(false)}
-          title={confirmState.title}
-          size={480}
-          centered
-        >
-          <div>{confirmState.message}</div>
-          <div className="form-actions">
-            <Button variant="default" onClick={() => settleConfirm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => settleConfirm(true)}>OK</Button>
-          </div>
-        </Modal>
-      )}
+      {/* END: an open row stops after a date. */}
+      <Modal
+        opened={ending != null}
+        onClose={() => setEnding(null)}
+        title={ending ? t('hr.salaryComponents.endTitle', { name: ending.componentName }) : ''}
+        size={420}
+        centered
+      >
+        <p className="hint" style={{ marginTop: 0 }}>{t('hr.salaryComponents.endHint')}</p>
+        <div className="form-field">
+          <label className="form-label">{t('hr.salaryComponents.lastDay')}</label>
+          <DatePickerInput
+            valueFormat="DD/MM/YYYY"
+            leftSection={<IconCalendar size={14} />}
+            value={endOn || null}
+            minDate={ending ? ending.effectiveFrom.slice(0, 10) : undefined}
+            disabled={saving}
+            onChange={(v) => setEndOn(v ?? '')}
+          />
+        </div>
+        {serverError && <div className="alert alert--error" role="alert">{serverError}</div>}
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setEnding(null)} disabled={saving}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            color="red"
+            onClick={() => void submitEnd()}
+            disabled={saving || !ending || !endOn || !canEndOn(ending, endOn)}
+          >
+            {saving ? t('common.saving') : t('hr.salaryComponents.end')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

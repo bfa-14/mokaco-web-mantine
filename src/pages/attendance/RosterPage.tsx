@@ -7,6 +7,7 @@ import {
   Loader,
   MultiSelect,
   Select,
+  Tooltip,
 } from '@mantine/core'
 import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
@@ -16,14 +17,20 @@ import { notifications } from '@mantine/notifications'
 import {
   IconCalendar,
   IconCalendarEvent,
+  IconCalendarRepeat,
   IconChevronLeft,
   IconChevronRight,
   IconCopy,
+  IconLock,
+  IconPinFilled,
   IconPlus,
   IconRefresh,
+  IconRefreshDot,
   IconSettings,
 } from '@tabler/icons-react'
 import { rosterService, shiftsService } from '../../services/attendanceService'
+import { autoRosterService } from '../../services/autoRosterService'
+import { holidaysService } from '../../services/coreService'
 import { branchesService, employeesService } from '../../services/hrService'
 import { getErrorMessage } from '../../api/errorMessage'
 import { useAuth } from '../../auth/useAuth'
@@ -32,26 +39,53 @@ import { useLiveEnabled } from '../../live/useLiveSettings'
 import { PageHelp } from '../../components/PageHelp'
 import { PERMISSIONS } from '../../types/attendance'
 import type {
+  AutoRosterIssue,
+  AutoRosterRequest,
+  AutoRosterSetup,
+  RosterCellInfo,
   RosterGap,
   Shift,
   ShiftAssignment,
   ShiftPatternUpsertRequest,
 } from '../../types/attendance'
-import type { Branch, EmployeeListItem, LeaveDay } from '../../types/hr'
+import type { Holiday } from '../../types/core'
+import type { Branch, EmployeeListItem } from '../../types/hr'
 import {
   currentPeriod,
   daysInPeriod,
-  formatDate,
+  formatDayLabel,
   isWeekend,
   periodLabel,
   periodRange,
   previousPeriod,
+  toDateString,
   weekdayInitial,
 } from './attendanceFormat'
 import { useApprovedLeaveDays } from './useApprovedLeaveDays'
+import { gapsOfBranch, oneBranchOf, rederiveBlocked } from './rosterBranch'
 import { RosterApprovalBanner } from './RosterApprovalBanner'
 import type { RosterEditState } from './RosterApprovalBanner'
 import { chevronBack, chevronForward } from '../../i18n/physical'
+import { referenceName } from '../../i18n/referenceName'
+import { AutoRosterDrawer } from './AutoRosterDrawer'
+import { AutoRosterPreviewCard } from './AutoRosterPreviewCard'
+import { useRosterDraft } from './useRosterDraft'
+import type { DraftCell } from './useRosterDraft'
+import { daysMovedUnderDraft } from './rosterDraftCells'
+import {
+  employeeCounts,
+  isMonday,
+  onDutyByDay,
+  onDutyUnderDraft,
+  onShiftUnderDraft,
+  rosterWindow,
+  staffingForDay,
+  stripText,
+  weekStartsBetween,
+  weekStrip,
+} from './rosterCounters'
+import type { CounterCell, EmployeeCounts, ShiftMove, StripWeek } from './rosterCounters'
+import { setupAfterStaffingSave, shiftInText } from './shiftCover'
 
 /**
  * The roster matrix. Employees down the side, days across the top, one month at a time.
@@ -151,6 +185,135 @@ function dayNumber(date: string): string {
 interface SetDayFormState {
   shiftId: number | null
   isRestDay: boolean
+  /** "Keep when regenerating". Only sent when the box was touched — see pinTouched. */
+  isPinned: boolean
+}
+
+/**
+ * A cell as the grid draws it, whichever side it comes from: the draft (a preview is open) or the
+ * saved row. Normalised here so the drawing, the counters and the dialog read one shape.
+ */
+interface ShownCell {
+  state: 'work' | 'rest' | 'none'
+  shiftId: number | null
+  /** The saved row, when the cell is not a draft cell — it carries the shift's name and times. */
+  saved?: ShiftAssignment
+  draft?: DraftCell
+}
+
+function shownFromSaved(saved: ShiftAssignment | undefined): ShownCell | undefined {
+  if (!saved) return undefined
+  return {
+    state: saved.isRestDay ? 'rest' : saved.shiftId != null ? 'work' : 'none',
+    shiftId: saved.isRestDay ? null : saved.shiftId,
+    saved,
+  }
+}
+
+function shownFromDraft(cell: DraftCell): ShownCell {
+  const state = cell.state === 'work' || cell.state === 'rest' ? cell.state : 'none'
+  return { state, shiftId: state === 'work' ? cell.shiftId : null, draft: cell }
+}
+
+/**
+ * A reason code with its figures, in words: 'Rest: owed a weekend day off · owed 0.9'.
+ *
+ * A shift the reason names ('Moved to Evening so that shift is covered') is part of the sentence,
+ * not a figure after it. A saved day carries no figures (only its code is stored), and its own
+ * shift — `shift`, the day's — is the one the planner moved it to.
+ */
+function reasonText(code: string | null, args: string | null, shift = ''): string {
+  if (!code) return ''
+  let figures: Record<string, unknown> = {}
+  if (args) {
+    try {
+      const parsed: unknown = JSON.parse(args)
+      if (parsed != null && typeof parsed === 'object') figures = parsed as Record<string, unknown>
+    } catch {
+      /* not JSON: the code alone still says why */
+    }
+  }
+  const named = typeof figures.shift === 'string' && figures.shift !== '' ? figures.shift : shift
+  let text = t(`attendance.roster.auto.reason.${code}`, { defaultValue: code, shift: shiftInText(named) })
+  const parts = Object.entries(figures)
+    .filter(([key, value]) => value != null && key !== 'holiday' && key !== 'shift')
+    .map(([key, value]) =>
+      t(`attendance.roster.auto.reasonArgs.${key}`, {
+        value: typeof value === 'number' ? Math.round(value * 100) / 100 : String(value),
+        defaultValue: `${key} ${String(value)}`,
+      }),
+    )
+  if (typeof figures.holiday === 'string') text = `${text} — ${figures.holiday}`
+  if (parts.length > 0) text = `${text} · ${parts.join(' · ')}`
+  return text
+}
+
+/** One week of the strip, in words, for its tooltip. */
+function stripWeekTitle(week: StripWeek): string {
+  const parts = [t('attendance.roster.auto.strip.week', { count: week.rests, date: formatDayLabel(week.weekStart) })]
+  if (week.type != null) parts.push(t('attendance.roster.auto.strip.type', { type: week.type }))
+  if (week.ok === false) {
+    parts.push(
+      week.quota != null
+        ? t('attendance.roster.auto.strip.should', { quota: week.quota })
+        : t('attendance.roster.auto.strip.broken'),
+    )
+  }
+  if (week.ok === null) parts.push(t('attendance.roster.auto.strip.unjudged'))
+  return parts.join(' · ')
+}
+
+/** The trailing summary column of one row: Work · Rest · Sat · Sun · the 6·5 strip. */
+function SummaryCells({
+  counts,
+  strip,
+  owed,
+}: {
+  counts: EmployeeCounts
+  strip: StripWeek[]
+  owed: { sat: number; sun: number } | null
+}) {
+  return (
+    <div className="roster-sum-grid">
+      <span title={t('attendance.roster.auto.sum.workTitle')}>{counts.workDays}</span>
+      <span title={t('attendance.roster.auto.sum.restTitle')}>{counts.restDays}</span>
+      <span
+        title={
+          owed
+            ? t('attendance.roster.auto.sum.owed', { sat: owed.sat.toFixed(1), sun: owed.sun.toFixed(1) })
+            : t('attendance.roster.auto.sum.satTitle')
+        }
+      >
+        {counts.saturdaysOff}
+      </span>
+      <span
+        title={
+          owed
+            ? t('attendance.roster.auto.sum.owed', { sat: owed.sat.toFixed(1), sun: owed.sun.toFixed(1) })
+            : t('attendance.roster.auto.sum.sunTitle')
+        }
+      >
+        {counts.sundaysOff}
+      </span>
+      <span className="roster-strip" aria-label={stripText(strip)}>
+        {strip.map((week) => (
+          <span
+            key={week.weekStart}
+            className={
+              week.ok === false
+                ? 'roster-strip-week roster-strip-week--bad'
+                : week.ok === null
+                  ? 'roster-strip-week roster-strip-week--na'
+                  : 'roster-strip-week'
+            }
+            title={stripWeekTitle(week)}
+          >
+            {week.type ?? '–'}
+          </span>
+        ))}
+      </span>
+    </div>
+  )
 }
 
 interface GenerateFormState {
@@ -172,54 +335,6 @@ interface PatternRow {
  * The sentence that has to appear under every "Overwrite existing" tick box. Overwriting is
  * the one action on this page that can silently destroy work HR already did by hand.
  */
-/**
- * What a generation is about to do to people's approved leave, BEFORE it runs.
- *
- * The user is told, and then allowed to proceed — deliberately. Silently skipping the days would
- * be the same screen either way, and somebody who genuinely wants to roster over a cancelled
- * holiday would have no way to tell whether the system had understood them. Naming the days is
- * what makes it a decision rather than a surprise.
- */
-function LeavePreflight({
-  days,
-  employeeName,
-  error,
-}: {
-  days: LeaveDay[]
-  employeeName: (employeeId: number) => string
-  error: string | null
-}) {
-  // Leave could not be read. Say so loudly: proceeding might roster somebody over their holiday,
-  // and pretending the check passed would be the one genuinely dishonest option here.
-  if (error) {
-    return (
-      <div className="alert alert--error" role="alert">
-        Approved leave could not be checked, so this may schedule somebody over their
-        holiday. {error}
-      </div>
-    )
-  }
-
-  if (days.length === 0) return null
-
-  return (
-    <div className="card" style={{ marginBottom: 14, borderInlineStart: '4px solid #2e7d4f' }}>
-      <div className="empty-hint-main">
-        {days.length} of these days fall on approved leave and will be left as leave, not
-        scheduled.
-      </div>
-      <ul className="hint" style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>
-        {days.map((day) => (
-          <li key={`${day.employeeId}|${day.date}`}>
-            {employeeName(day.employeeId)} — {formatDate(day.date)}
-            {day.daysOnLeave !== 1 && ` (${day.daysOnLeave} days booked on this date)`}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
 function OverwriteField({
   value,
   onChange,
@@ -293,20 +408,33 @@ export default function RosterPage() {
   const [allGaps, setGaps] = useState<RosterGap[]>([])
   const [loading, setLoading] = useState(true)
 
+  /** The auto-roster's draft, drawn over the grid while a preview is open. Nothing in it is saved until Save. */
+  const draft = useRosterDraft()
+
   /* WHO IS ON THE GRID under a branch filter: the people in that branch today, plus anybody with a roster row the API
-     attributed to it this month (someone transferred out since still shows on the days that were this branch's).
-     Everything below — the grid, the gaps banner, the pickers in the dialogs — reads these filtered lists. */
+     attributed to it this month (someone transferred out since still shows on the days that were this branch's), plus
+     anybody the open draft plans a day for (someone transferring IN later this month has no row here yet).
+     Everything below — the grid, the gaps banner, the pickers in the dialogs — reads these filtered lists.
+     `assignments` covers the whole Monday–Sunday window; only the month's rows decide who is shown. */
   const employees = useMemo(() => {
     if (branchFilter == null) return allEmployees
     const branchName = branches.find((b) => b.branchId === branchFilter)?.name
-    const rostered = new Set(assignments.map((a) => a.employeeId))
+    const { from, to } = periodRange(period)
+    const rostered = new Set(
+      assignments
+        .filter((a) => a.workDate.slice(0, 10) >= from && a.workDate.slice(0, 10) <= to)
+        .map((a) => a.employeeId),
+    )
+    for (const cell of draft.cells.values()) {
+      if (cell.workDate >= from && cell.workDate <= to) rostered.add(cell.employeeId)
+    }
     return allEmployees.filter((e) => e.branch === branchName || rostered.has(e.employeeId))
-  }, [allEmployees, assignments, branches, branchFilter])
-  const gaps = useMemo(() => {
-    if (branchFilter == null) return allGaps
-    const visible = new Set(employees.map((e) => e.employeeId))
-    return allGaps.filter((g) => visible.has(g.employeeId))
-  }, [allGaps, employees, branchFilter])
+  }, [allEmployees, assignments, branches, branchFilter, period, draft.cells])
+  /* QA3 (ROS-8): the server answers for the branch on screen, by the branch of the DAY; each gap says its branch. */
+  const gaps = useMemo(
+    () => gapsOfBranch(allGaps, branchFilter, new Set(employees.map((e) => e.employeeId))),
+    [allGaps, employees, branchFilter],
+  )
   const [error, setError] = useState<string | null>(null)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -333,7 +461,13 @@ export default function RosterPage() {
   const [setDayForm, setSetDayForm] = useState<SetDayFormState>({
     shiftId: null,
     isRestDay: false,
+    isPinned: false,
   })
+  /* A pin is only sent when the box was touched: a multi-day selection starts unticked, and saving
+     that untouched would silently unpin every pinned day in it. */
+  const [pinTouched, setPinTouched] = useState(false)
+  /** One selected cell's pin as it was when the dialog opened (null = none known). */
+  const [pinInitial, setPinInitial] = useState<boolean | null>(null)
   const [generateVisible, setGenerateVisible] = useState(false)
   const [generateForm, setGenerateForm] = useState<GenerateFormState>({
     employeeIds: [],
@@ -347,6 +481,7 @@ export default function RosterPage() {
   const [copyOverwrite, setCopyOverwrite] = useState(false)
   const [applyVisible, setApplyVisible] = useState(false)
   const [applyOverwrite, setApplyOverwrite] = useState(false)
+  const [rederiveVisible, setRederiveVisible] = useState(false)
   const [patternsVisible, setPatternsVisible] = useState(false)
   const [patternEmployeeId, setPatternEmployeeId] = useState<number | null>(
     null,
@@ -358,25 +493,89 @@ export default function RosterPage() {
   const days = useMemo(() => daysInPeriod(period), [period])
 
   /**
-   * Who is on approved leave this month.
+   * Who is on approved leave this month: the approved leave requests, day by day, of the branch on
+   * screen by the branch of the day (QA3 ROS-4 / LEV-5). The roster asks the QUESTION and lets one
+   * file own the answer. See useApprovedLeaveDays.
    *
-   * Deliberately fetched through a hook rather than inline: leave has no proper home yet
-   * (workflow.LEAVE_REQUEST does not exist), so the roster asks the QUESTION and lets one file own
-   * the answer. See useApprovedLeaveDays.
+   * Read over the WINDOW (whole Monday–Sunday weeks around the month), not the month: the 6·5 strip
+   * judges the first and last weeks too, and a leave day there is what excuses a short week.
+   *
+   * The generators themselves keep a leave day off the rest days (QA3, rule D5: a leave day is never
+   * a rest day; an empty one gets a working shift, a day already planned inside a leave is kept), so
+   * the page no longer rewrites anything after a generation.
    */
   const leaveRange = useMemo(() => periodRange(period), [period])
-  const leave = useApprovedLeaveDays(leaveRange.from, leaveRange.to)
+  const windowRange = useMemo(() => rosterWindow(leaveRange.from, leaveRange.to), [leaveRange])
+  const leave = useApprovedLeaveDays(windowRange.from, windowRange.to, branchFilter)
 
+  /* ── AUTO-ROSTER (docs/AUTO_ROSTER.md §5) ── */
+
+  const [autoOpen, setAutoOpen] = useState(false)
   /**
-   * The same question again, for the Generate dialog's OWN range — which the user can set outside
-   * the month on screen (a new hire starting mid-June, covered into July). Asking the month's hook
-   * would silently under-report leave for exactly the days it was not fetched for, and a pre-flight
-   * that under-reports is worse than none: it tells the user their holiday is safe when it is not.
+   * The saved rows and pins the page held when the draft's preview was asked for. Measured against
+   * the rows read since, they tell a roster that moved under the draft from a re-read that changed
+   * nothing — see daysMovedUnderDraft.
    */
-  const generateLeave = useApprovedLeaveDays(
-    generateForm.fromDate,
-    generateForm.toDate,
-  )
+  const [draftBase, setDraftBase] = useState<{
+    rows: Map<string, ShiftAssignment>
+    pins: Map<string, RosterCellInfo> | null
+  } | null>(null)
+
+  /* THE BRANCH THE AUTO-ROSTER PLANS — and the one "Copy previous month", "Apply weekly patterns" and
+     "Re-derive month" work on (QA3 ROS-3). Each is one branch-month, so "All branches" has none — unless
+     there is only one active branch, when the filter is not even offered and "all" IS that branch. */
+  const autoBranchId = oneBranchOf(branchFilter, branches)
+  const autoBranchName = branches.find((b) => b.branchId === autoBranchId)?.name ?? ''
+
+  /* The branch-month's auto-roster setup: the drawer opens on it, and outside a preview the footer
+     measures the day against its minimums. An API without the endpoint simply has neither. */
+  const [setup, setSetup] = useState<AutoRosterSetup | null>(null)
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [setupVersion, setSetupVersion] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    setSetup(null)
+    setSetupError(null)
+    if (autoBranchId == null) return
+    autoRosterService
+      .setup(autoBranchId, period)
+      .then((result) => {
+        if (!cancelled) setSetup(result)
+      })
+      .catch((err) => {
+        if (!cancelled) setSetupError(getErrorMessage(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [autoBranchId, period, setupVersion])
+
+  /** Public holidays: shaded columns, and a day with no row on one is a day off rather than a hole. */
+  const [holidays, setHolidays] = useState<Holiday[]>([])
+  useEffect(() => {
+    let cancelled = false
+    holidaysService
+      .getAll(Number(period.slice(0, 4)), autoBranchId)
+      .then((list) => {
+        if (!cancelled) setHolidays(list)
+      })
+      .catch(() => {
+        // Without them the grid is the grid it always was; the auto-roster reads holidays server side.
+        if (!cancelled) setHolidays([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [period, autoBranchId])
+  /** Date → holiday. A branch's own holidays only show under that branch; "all branches" shows the company's. */
+  const holidayByDate = useMemo(() => {
+    const map = new Map<string, Holiday>()
+    for (const h of holidays) {
+      if (h.branchId != null && h.branchId !== autoBranchId) continue
+      map.set(h.holidayDate.slice(0, 10), h)
+    }
+    return map
+  }, [holidays, autoBranchId])
 
   /** Employee-day → what they were supposed to work. A missing key is a HOLE, not a rest day. */
   const lookup = useMemo(() => {
@@ -413,22 +612,62 @@ export default function RosterPage() {
     return map
   }, [shifts])
 
-  // The window-level mouseup handler below is registered once, so it cannot see the current
-  // assignments through a closure. It reads them from here instead.
+  /* PINS AND "SET BY THE AUTO-ROSTER" MARKERS of the saved days (ROSTER_CELL), for the branch the
+     auto-roster plans. Re-read with every load. An API without the endpoint leaves the map empty,
+     and the pin box stays hidden outside a preview. */
+  const [cellInfo, setCellInfo] = useState<Map<string, RosterCellInfo> | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    if (autoBranchId == null) {
+      setCellInfo(null)
+      return
+    }
+    const { from, to } = periodRange(period)
+    autoRosterService
+      .cells(autoBranchId, from, to)
+      .then((rows) => {
+        if (!cancelled) setCellInfo(new Map(rows.map((r) => [cellKey(r.employeeId, r.workDate), r])))
+      })
+      .catch(() => {
+        if (!cancelled) setCellInfo(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [autoBranchId, period, rosterVersion])
+
+  /** What a cell shows: the draft's day while a preview is open, else the saved row (draft ?? lookup). */
+  const shownCell = useCallback(
+    (key: string): ShownCell | undefined => {
+      const planned = draft.active ? draft.cells.get(key) : undefined
+      return planned ? shownFromDraft(planned) : shownFromSaved(lookup.get(key))
+    },
+    [draft.active, draft.cells, lookup],
+  )
+  // The window-level mouseup handler below is registered once, so it cannot see the current cells
+  // through a closure. It reads them from here instead.
+  const shownCellRef = useRef(shownCell)
+  const cellInfoRef = useRef(cellInfo)
+  // The preview reads the rows as the page holds them when it is asked for, not as a closure saw them.
   const lookupRef = useRef(lookup)
   useEffect(() => {
+    shownCellRef.current = shownCell
+    cellInfoRef.current = cellInfo
     lookupRef.current = lookup
-  }, [lookup])
+  }, [shownCell, cellInfo, lookup])
 
+  /* The roster rows are read over the WINDOW — the whole Monday–Sunday weeks around the month — so
+     the 6·5 strip can judge the first and last weeks; the grid still draws only the month's days. */
   const load = useCallback(async () => {
     const { from, to } = periodRange(period)
+    const span = rosterWindow(from, to)
     try {
       const [employeeList, shiftList, assignmentList, gapList] =
         await Promise.all([
           employeesService.getAll(),
           shiftsService.getAll(),
-          rosterService.get(from, to, undefined, branchFilter ?? undefined),
-          rosterService.getGaps(from, to),
+          rosterService.get(span.from, span.to, undefined, branchFilter ?? undefined),
+          rosterService.getGaps(from, to, branchFilter),
         ])
       setEmployees(employeeList)
       setShifts(shiftList)
@@ -447,14 +686,15 @@ export default function RosterPage() {
   useEffect(() => {
     let cancelled = false
     const { from, to } = periodRange(period)
+    const span = rosterWindow(from, to)
     async function initialLoad() {
       try {
         const [employeeList, shiftList, assignmentList, gapList] =
           await Promise.all([
             employeesService.getAll(),
             shiftsService.getAll(),
-            rosterService.get(from, to, undefined, branchFilter ?? undefined),
-            rosterService.getGaps(from, to),
+            rosterService.get(span.from, span.to, undefined, branchFilter ?? undefined),
+            rosterService.getGaps(from, to, branchFilter),
           ])
         if (!cancelled) {
           setEmployees(employeeList)
@@ -504,16 +744,25 @@ export default function RosterPage() {
   const openSetDayForSelection = useCallback(() => {
     const keys = [...selectedRef.current]
     if (keys.length === 0) return
-    // One cell selected: show what it is now, so the popup edits rather than blanks it.
+    // One cell selected: show what it is now, so the popup edits rather than blanks it. With a draft
+    // open that is the draft's day, not the saved row underneath it.
     if (keys.length === 1) {
-      const existing = lookupRef.current.get(keys[0])
+      const existing = shownCellRef.current(keys[0])
+      const pinned =
+        existing?.draft != null
+          ? (existing.draft.isPinned ?? existing.draft.origin === 'pinned')
+          : (cellInfoRef.current?.get(keys[0])?.isPinned ?? false)
       setSetDayForm({
         shiftId: existing?.shiftId ?? null,
-        isRestDay: existing?.isRestDay ?? false,
+        isRestDay: existing?.state === 'rest',
+        isPinned: pinned,
       })
+      setPinInitial(existing?.draft != null ? existing.draft.isPinned : pinned)
     } else {
-      setSetDayForm({ shiftId: null, isRestDay: false })
+      setSetDayForm({ shiftId: null, isRestDay: false, isPinned: false })
+      setPinInitial(null)
     }
+    setPinTouched(false)
     setSetDayError(null)
     setSetDayVisible(true)
   }, [])
@@ -533,8 +782,12 @@ export default function RosterPage() {
     }
   }, [openSetDayForSelection])
 
+  /* A Regenerate or Save in flight answers with the cells it started from, so the grid takes no edit
+     until it is back: one made meanwhile would vanish without a word, or be dropped by the save. */
+  const draftBusy = draft.busy != null
+
   function startDrag(row: number, col: number) {
-    if (!editable) return
+    if (!editable || draftBusy) return
     draggingRef.current = true
     anchorRef.current = { row, col }
     applySelection(new Set([cellKey(employees[row].employeeId, days[col])]))
@@ -568,12 +821,31 @@ export default function RosterPage() {
       return
     }
 
+    // WITH A DRAFT OPEN, THE DIALOG EDITS THE DRAFT. No server call: the day is saved with the rest
+    // of the draft, or thrown away with it.
+    if (draft.active) {
+      if (!draftBusy) applyToDraft(keys)
+      return
+    }
+
     setSaving(true)
     setSetDayError(null)
     let written = 0
     try {
       for (const key of keys) {
         const { employeeId, workDate } = parseCellKey(key)
+        // Only pinning a day that already says this: re-writing the identical row would gain nothing
+        // and could mark an approved month as changed.
+        const current = lookup.get(key)
+        const same =
+          current != null &&
+          (setDayForm.isRestDay
+            ? current.isRestDay
+            : !current.isRestDay && current.shiftId === setDayForm.shiftId)
+        if (pinTouched && same) {
+          written++
+          continue
+        }
         await rosterService.setDay({
           employeeId,
           workDate,
@@ -582,6 +854,22 @@ export default function RosterPage() {
           isRestDay: setDayForm.isRestDay,
         })
         written++
+      }
+      // The pin goes on after the day is written: only a saved day can be pinned. It changes no
+      // roster row, so a refusal here leaves the days set and says so.
+      if (pinTouched && cellInfo != null) {
+        try {
+          for (const key of keys) {
+            const { employeeId, workDate } = parseCellKey(key)
+            await autoRosterService.setPin({ employeeId, workDate, isPinned: setDayForm.isPinned })
+          }
+        } catch (err) {
+          notifications.show({
+            message: t('attendance.roster.auto.pin.failed', { error: getErrorMessage(err) }),
+            color: 'red',
+            autoClose: 6000,
+          })
+        }
       }
       notifications.show({
         message: `Set ${keys.length} day(s).`,
@@ -609,70 +897,57 @@ export default function RosterPage() {
     }
   }
 
-  /* ------------------------------------------------------------------------ *
-   * LEAVE-AWARE GENERATION — A CLIENT-SIDE WORKAROUND. REMOVE WHEN SQL CATCHES UP.
-   *
-   * The stored generators (usp_ShiftAssignment_GenerateRange_Bulk / _CopyPeriod /
-   * _ApplyPattern) know nothing about leave: they will happily put a working shift on
-   * somebody's approved holiday. Teaching them is a schema-contract change, so until then
-   * the page does it as a POST-STEP — generate first, then rewrite the leave days to rest.
-   *
-   * WHAT THIS COSTS, said plainly: it is not atomic. Between the generator returning and the
-   * overwrite finishing, those days ARE rostered as working. Nothing reads the roster in that
-   * window except a human refreshing the page, so the risk is cosmetic rather than payroll-
-   * affecting — but it is real, and it is why this belongs in SQL.
-   *
-   * TO REMOVE: delete leaveDaysAffecting() and overwriteLeaveDays(), delete the three
-   * `await overwriteLeaveDays(...)` calls in submitGenerate/submitCopy/submitApply, and drop
-   * the pre-flight <LeavePreflight> from the three dialogs. Nothing else knows about this.
-   * ------------------------------------------------------------------------ */
-
-  /**
-   * The leave days a generation is about to run over — the exact set the post-step will rewrite,
-   * so what the pre-flight promises and what happens cannot drift apart.
-   */
-  function leaveDaysAffecting(
-    source: LeaveDay[],
-    employeeIds: number[] | null,
-    fromDate: string,
-    toDate: string,
-    weekdayMask?: boolean[],
-  ): LeaveDay[] {
-    return source.filter((day) => {
-      const date = day.date.slice(0, 10)
-      if (date < fromDate || date > toDate) return false
-      if (employeeIds !== null && !employeeIds.includes(day.employeeId)) return false
-
-      // A generator only touches the weekdays it was asked for; days outside the mask are written
-      // as rest anyway, so they are not a conflict worth reporting.
-      if (weekdayMask) {
-        // getDay(): 0 = Sunday. The mask is Monday-first, matching the API's '1111100'.
-        const dow = new Date(`${date}T00:00:00`).getDay()
-        const mondayFirst = dow === 0 ? 6 : dow - 1
-        if (!weekdayMask[mondayFirst]) return false
-      }
-
-      return true
+  /** The Set-day dialog during a preview: the selected days change in the draft only. */
+  function applyToDraft(keys: string[]) {
+    // Refused here rather than at Save: a holiday off is a day with NO row (D4), and a rest row on it
+    // would hide the holiday from attendance (REST_ON_HOLIDAY).
+    const onHoliday = keys.some((key) => {
+      const { workDate } = parseCellKey(key)
+      return holidayByDate.has(workDate) || draft.cells.get(key)?.origin === 'holiday'
     })
-  }
-
-  /**
-   * Rewrites each leave day to a rest day, so a generation cannot leave somebody rostered to work
-   * their holiday. Uses the ordinary per-day endpoint — no special path, nothing the roster cannot
-   * already do by hand.
-   */
-  async function overwriteLeaveDays(affected: LeaveDay[]): Promise<number> {
-    for (const day of affected) {
-      await rosterService.setDay({
-        employeeId: day.employeeId,
-        workDate: day.date.slice(0, 10),
-        // A leave day is an assignment with NO shift. It is not an empty day — the roster still
-        // has to state that this person was not expected to work.
-        shiftId: null,
-        isRestDay: true,
-      })
+    if (setDayForm.isRestDay && onHoliday) {
+      setSetDayError(t('attendance.roster.auto.edit.restOnHoliday'))
+      return
     }
-    return affected.length
+
+    /* A RETIRED SHIFT IS NEVER WRITTEN BY THE DRAFT. The dialog only offers one when it is the day's
+       own (so the day still shows what it is), and the save checks every day it sends against the
+       active shifts — an untouched day sent back with it would refuse the whole draft. So the day is
+       left as it stands: nothing to do when only Set was pressed, and no way to pin it here. */
+    const chosen = setDayForm.isRestDay || setDayForm.shiftId == null ? undefined : shiftById.get(setDayForm.shiftId)
+    if (chosen && !chosen.isActive) {
+      const pinChanged = pinTouched && setDayForm.isPinned !== (pinInitial ?? false)
+      if (pinChanged) {
+        setSetDayError(t('attendance.roster.auto.edit.inactivePin', { name: chosen.name }))
+        return
+      }
+      notifications.show({
+        message: t('attendance.roster.auto.edit.inactiveKept', { name: chosen.name }),
+        color: 'gray',
+        autoClose: 4000,
+      })
+      setSetDayVisible(false)
+      clearSelection()
+      return
+    }
+    const { applied, skipped } = draft.applyEdit(keys, {
+      shiftId: setDayForm.isRestDay ? null : setDayForm.shiftId,
+      isRestDay: setDayForm.isRestDay,
+      isPinned: pinTouched ? setDayForm.isPinned : pinInitial,
+    })
+    if (applied === 0) {
+      setSetDayError(t('attendance.roster.auto.edit.nothing'))
+      return
+    }
+    notifications.show({
+      message:
+        t('attendance.roster.auto.edit.applied', { count: applied }) +
+        (skipped > 0 ? ` ${t('attendance.roster.auto.edit.skipped', { count: skipped })}` : ''),
+      color: skipped > 0 ? 'yellow' : 'green',
+      autoClose: skipped > 0 ? 6000 : 2500,
+    })
+    setSetDayVisible(false)
+    clearSelection()
   }
 
   function openGenerate(employeeIds: number[] = []) {
@@ -712,31 +987,24 @@ export default function RosterPage() {
         shiftId: generateForm.shiftId,
         weekdays: generateForm.weekdays.map((on) => (on ? '1' : '0')).join(''),
         overwrite: generateForm.overwrite,
+        // QA3 (ROS-14): under a branch filter, only the days these people belong to the branch on screen
+        branchId: branchFilter,
       })
 
-      // Post-step: the SQL generator does not know about leave, so it has just rostered any
-      // holiday in this range as a working day. Put those back. See the block comment above.
-      const rewritten = await overwriteLeaveDays(
-        leaveDaysAffecting(
-          generateLeave.days,
-          generateForm.employeeIds,
-          generateForm.fromDate,
-          generateForm.toDate,
-          generateForm.weekdays,
-        ),
-      )
-
       notifications.show({
+        // QA3 (ROS-13): the days actually written, when the API says (an older one counted only the people)
         message:
-          `${outcome.employeesProcessed} employee(s) rostered.` +
-          (rewritten > 0
-            ? ` ${rewritten} approved-leave day(s) were left as leave, not scheduled.`
-            : ''),
+          outcome.rowsInserted != null
+            ? t('attendance.roster.generate.bulkDone', {
+                employees: outcome.employeesProcessed,
+                count: outcome.rowsInserted,
+              })
+            : `${outcome.employeesProcessed} employee(s) rostered.`,
         color: 'green',
         autoClose: 3500,
       })
       setGenerateVisible(false)
-      await Promise.all([load(), leave.reload()])
+      await load()
     } catch (err) {
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
     } finally {
@@ -745,6 +1013,8 @@ export default function RosterPage() {
   }
 
   async function submitCopy() {
+    // QA3 (ROS-3): one branch-month — the button is off under "All branches"
+    if (autoBranchId == null) return
     setSaving(true)
     try {
       const outcome = await rosterService.copyPeriod({
@@ -752,24 +1022,16 @@ export default function RosterPage() {
         targetYearMonth: period,
         employeeId: null,
         overwrite: copyOverwrite,
+        branchId: autoBranchId,
       })
 
-      // Post-step: SQL does not know about leave. See the block comment above overwriteLeaveDays.
-      const rewritten = await overwriteLeaveDays(
-        leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to),
-      )
-
       notifications.show({
-        message:
-          `Rostered ${outcome.rowsInserted} day(s).` +
-          (rewritten > 0
-            ? ` ${rewritten} approved-leave day(s) were left as leave, not scheduled.`
-            : ''),
+        message: t('attendance.roster.generate.rowsDone', { count: outcome.rowsInserted }),
         color: 'green',
         autoClose: 3500,
       })
       setCopyVisible(false)
-      await Promise.all([load(), leave.reload()])
+      await load()
     } catch (err) {
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
     } finally {
@@ -778,30 +1040,48 @@ export default function RosterPage() {
   }
 
   async function submitApplyPatterns() {
+    // QA3 (ROS-3): one branch-month — the button is off under "All branches"
+    if (autoBranchId == null) return
     setSaving(true)
     try {
       const outcome = await rosterService.applyPattern({
         yearMonth: period,
         employeeId: null,
         overwrite: applyOverwrite,
+        branchId: autoBranchId,
       })
 
-      // Post-step: SQL does not know about leave. See the block comment above overwriteLeaveDays.
-      const rewritten = await overwriteLeaveDays(
-        leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to),
-      )
-
       notifications.show({
-        message:
-          `Rostered ${outcome.rowsInserted} day(s).` +
-          (rewritten > 0
-            ? ` ${rewritten} approved-leave day(s) were left as leave, not scheduled.`
-            : ''),
+        message: t('attendance.roster.generate.rowsDone', { count: outcome.rowsInserted }),
         color: 'green',
         autoClose: 3500,
       })
       setApplyVisible(false)
-      await Promise.all([load(), leave.reload()])
+      await load()
+    } catch (err) {
+      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
+   * QA3 (REL-16): "Re-derive month" — the branch-month's completed days derived again against the
+   * roster as it stands (after a shift, holiday or setting changed). Approving the month does this by
+   * itself; paid days and days entered by hand are left as they are.
+   */
+  async function submitRederive() {
+    if (autoBranchId == null) return
+    setSaving(true)
+    try {
+      const outcome = await rosterService.rederiveMonth({ branchId: autoBranchId, yearMonth: period })
+      notifications.show({
+        message: t('attendance.roster.rederive.done', { count: outcome.daysRederived }),
+        color: 'green',
+        autoClose: 3500,
+      })
+      setRederiveVisible(false)
+      await load()
     } catch (err) {
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
     } finally {
@@ -863,6 +1143,242 @@ export default function RosterPage() {
     }
   }
 
+  /* ── AUTO-ROSTER: the drawer, the draft, and the grid's counters ── */
+
+  function openAuto() {
+    // The setup was read with the branch-month and is re-read after every save — the only writes that
+    // move the stored rhythms and the last run the drawer starts from.
+    draft.clearError()
+    setAutoOpen(true)
+  }
+
+  /* The rows the page holds are taken BEFORE the request: a re-read landing while it runs (the live
+     signal of the drawer's own staffing save) then reads as nothing moved, while a row that really
+     changed after the preview read it still differs from both. */
+  async function runPreview(request: AutoRosterRequest) {
+    const base = { rows: lookupRef.current, pins: cellInfoRef.current }
+    const ok = await draft.start(request)
+    if (ok) {
+      setDraftBase(base)
+      setAutoOpen(false)
+      clearSelection()
+    }
+  }
+
+  async function regenerateDraft() {
+    const base = { rows: lookupRef.current, pins: cellInfoRef.current }
+    const ok = await draft.regenerate()
+    if (ok) setDraftBase(base)
+  }
+
+  async function saveDraft() {
+    const result = await draft.commit(setup)
+    if (!result) return
+    notifications.show({
+      message: t('attendance.roster.auto.card.saved', {
+        inserted: result.rowsInserted,
+        updated: result.rowsUpdated,
+        deleted: result.rowsDeleted,
+      }),
+      color: 'green',
+      autoClose: 6000,
+    })
+    // The stored rhythms changed with the save; the next drawer starts from them.
+    setSetupVersion((v) => v + 1)
+    await load()
+  }
+
+  /** An issue is about a day: scroll the grid to it and flash it, so "too many days in a row" points at the row. */
+  function focusIssue(issue: AutoRosterIssue) {
+    const date = issue.date ? issue.date.slice(0, 10) : null
+    const inMonth = date != null && date >= leaveRange.from && date <= leaveRange.to
+    const selector =
+      issue.employeeId != null && inMonth
+        ? `[data-cell="${cellKey(issue.employeeId, date)}"]`
+        : issue.employeeId != null
+          ? `[data-emp="${issue.employeeId}"]`
+          : inMonth
+            ? `[data-duty="${date}"]`
+            : null
+    // A shift's issue (D16) points at that shift's footer cell, when the footer shows the shift.
+    const shiftCell =
+      issue.shiftId != null && inMonth
+        ? document.querySelector<HTMLElement>(`[data-shift-duty="${issue.shiftId}|${date}"]`)
+        : null
+    const target = shiftCell ?? (selector ? document.querySelector<HTMLElement>(selector) : null)
+    if (!target) return
+    target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+    // Straight on the element: React leaves a class it did not set alone, and nothing re-renders for it.
+    target.classList.add('roster-flash')
+    window.setTimeout(() => target.classList.remove('roster-flash'), 1800)
+  }
+
+  /* DAYS THE SAVED ROSTER MOVED UNDER THE DRAFT — counted from the rows, not from the number of
+     re-reads. Every 'attendance' signal re-reads the month, the page's own staffing save included,
+     and a re-read that finds the same rows is no reason to Regenerate. */
+  const draftMoved = useMemo(() => {
+    if (!draft.active || !draftBase) return 0
+    return daysMovedUnderDraft(
+      draft.cells.values(),
+      leaveRange.from,
+      leaveRange.to,
+      (key) => lookup.get(key),
+      (key) => draftBase.rows.get(key),
+      (key) => cellInfo?.get(key)?.isPinned === true,
+      (key) => draftBase.pins?.get(key)?.isPinned === true,
+    )
+  }, [draft.active, draft.cells, draftBase, lookup, cellInfo, leaveRange])
+
+  /**
+   * One employee-day as the counters see it. UNDEFINED — not judged — outside their employment (a
+   * hire's first week is not a broken week) and on a day with no row at all: a gap is a decision
+   * nobody has made, and an unrostered month would otherwise read as a wall of broken weeks. A day
+   * with no row on a public holiday is a holiday off, which is a known day.
+   *
+   * LEAVE AS THE PLANNER READS IT (D5): a rest row on ANY leave day, half included, is not a rest
+   * day; only a FULL-day leave takes the person off duty. The approved leave requests say how much of
+   * a day is leave. A draft day of origin 'leave' is a leave not approved yet (Pending,
+   * OnHold) and may be a half day, so it is known as leave but not as a full day — which is why the
+   * footer takes its on-duty count from the preview while a draft is open.
+   */
+  const counterCell = useCallback(
+    (employee: EmployeeListItem, date: string): CounterCell | undefined => {
+      if (employee.hireDate && date < employee.hireDate.slice(0, 10)) return undefined
+      if (employee.terminationDate && date > employee.terminationDate.slice(0, 10)) return undefined
+      const shown = shownCell(cellKey(employee.employeeId, date))
+      const booked = leave.daysOnLeave(employee.employeeId, date)
+      const onLeave = booked > 0 || shown?.draft?.origin === 'leave'
+      if (!shown && !onLeave && !holidayByDate.has(date)) return undefined
+      return { state: shown?.state ?? 'none', onLeave, fullDayLeave: booked >= 1 }
+    },
+    [shownCell, leave, holidayByDate],
+  )
+
+  const monthWeeks = useMemo(() => weekStartsBetween(leaveRange.from, leaveRange.to), [leaveRange])
+  const serverCounters = useMemo(
+    () => new Map((draft.preview?.perEmployee ?? []).map((p) => [p.employeeId, p])),
+    [draft.preview],
+  )
+
+  /** Work · Rest · Sat · Sun · 6·5 for every row, counted from what the grid shows. */
+  const rowCounters = useMemo(() => {
+    const map = new Map<
+      number,
+      { counts: EmployeeCounts; strip: StripWeek[]; owed: { sat: number; sun: number } | null }
+    >()
+    for (const employee of employees) {
+      const cellOf = (date: string) => counterCell(employee, date)
+      const server = serverCounters.get(employee.employeeId)
+      map.set(employee.employeeId, {
+        counts: employeeCounts(days, cellOf),
+        strip: weekStrip(monthWeeks, cellOf, server?.weeks),
+        owed: server ? { sat: server.owedSaturday, sun: server.owedSunday } : null,
+      })
+    }
+    return map
+  }, [employees, days, monthWeeks, counterCell, serverCounters])
+
+  /* The minimum a day is measured against: the preview's (which knows each holiday's cover), else the
+     branch's staffing rows — except on a holiday, whose cover only a preview knows. */
+  const previewDays = useMemo(
+    () => new Map((draft.preview?.perDay ?? []).map((d) => [d.date.slice(0, 10), d])),
+    [draft.preview],
+  )
+
+  /* THE FOOTER: on duty per day. On a saved month, counted from the grid. Under a draft, the
+     preview's own count moved by the days edited since: the planner knows which leave is a half day
+     (a half day is on duty) and the page does not for a leave still waiting for approval. An edited
+     day is never a leave day (those are frozen), so its move is plain work or not. */
+  const dutyByDay = useMemo(() => {
+    const byId = new Map(employees.map((e) => [e.employeeId, e]))
+    const counted = onDutyByDay(days, [...byId.keys()], (employeeId, date) => {
+      const employee = byId.get(employeeId)
+      return employee ? counterCell(employee, date) : undefined
+    })
+    if (!draft.active) return counted
+    const moves: { date: string; was: boolean; now: boolean }[] = []
+    for (const cell of draft.cells.values()) {
+      if (!cell.edited) continue
+      const away = leave.daysOnLeave(cell.employeeId, cell.workDate) >= 1
+      moves.push({
+        date: cell.workDate,
+        was: cell.previewState === 'work' && !away,
+        now: cell.state === 'work' && !away,
+      })
+    }
+    const fromPreview = new Map([...previewDays].map(([date, d]) => [date, d.onDuty]))
+    return onDutyUnderDraft(counted, fromPreview, moves)
+  }, [employees, days, counterCell, draft.active, draft.cells, previewDays, leave])
+  function dayMinimum(date: string): number | null {
+    if (draft.active) return previewDays.get(date)?.min ?? null
+    if (!setup || holidayByDate.has(date)) return null
+    return staffingForDay(setup.staffing ?? [], date).min
+  }
+
+  /* UNDER A DRAFT, ONE FOOTER ROW PER SHIFT THE DAYS MUST COVER (D16) — every shift the preview lists
+     on any day, in the order they start. Outside a draft there are none: what each shift has to cover
+     is the planner's reading (detected, or stored), and only a preview carries it. */
+  const footShifts = useMemo(() => {
+    if (!draft.active) return []
+    const ids = new Set<number>()
+    for (const day of draft.preview?.perDay ?? []) {
+      for (const counter of day.shifts ?? []) ids.add(counter.shiftId)
+    }
+    const start = (shiftId: number) => shiftById.get(shiftId)?.startTime ?? '~'
+    return [...ids].sort((a, b) => start(a).localeCompare(start(b)) || a - b)
+  }, [draft.active, draft.preview, shiftById])
+
+  /* On duty per shift and day under the draft: the preview's counts, moved by the days edited since —
+     the rule of the row above, shift by shift. A day on full-day leave is on no shift. */
+  const shiftDuty = useMemo(() => {
+    if (!draft.active) return new Map<string, Map<number, number>>()
+    const moves: ShiftMove[] = []
+    for (const cell of draft.cells.values()) {
+      if (!cell.edited) continue
+      const away = leave.daysOnLeave(cell.employeeId, cell.workDate) >= 1
+      moves.push({
+        date: cell.workDate,
+        was: cell.previewState === 'work' && !away ? cell.previewShiftId : null,
+        now: cell.state === 'work' && !away ? cell.shiftId : null,
+      })
+    }
+    return onShiftUnderDraft(draft.preview?.perDay ?? [], moves)
+  }, [draft.active, draft.cells, draft.preview, leave])
+
+  /**
+   * THE FOOTER'S ROWS STACK at the bottom of the scroll: every footer cell is sticky, and a row sits
+   * on the rows under it, at their height — measured, since a row holds one line or two. The tfoot is
+   * keyed on its rows, so a row added, removed or moved mounts it afresh; a height that changes after
+   * that (a font arriving) is caught by the observer.
+   */
+  const stackFoot = useCallback((foot: HTMLTableSectionElement | null) => {
+    if (!foot) return
+    const place = () => {
+      let below = 0
+      for (let i = foot.rows.length - 1; i >= 0; i--) {
+        const row = foot.rows[i]
+        row.style.setProperty('--roster-foot-below', `${below}px`)
+        below += row.getBoundingClientRect().height
+      }
+    }
+    place()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(place)
+    Array.from(foot.rows).forEach((row) => observer.observe(row))
+    return () => observer.disconnect()
+  }, [])
+
+  /** QA3 (REL-16): why "Re-derive month" is off — no branch chosen, or no completed day in the month yet. */
+  const rederiveReason = rederiveBlocked(autoBranchId, period, toDateString(new Date()))
+
+  /** Why the auto-roster button is off, when it is. Read-only means a request is open on the month. */
+  const autoBlockedReason =
+    autoBranchId == null
+      ? t('attendance.roster.auto.disabled.allBranches')
+      : editState.readOnly
+        ? t('attendance.roster.auto.disabled.readOnly', { id: editState.openRequestId ?? '' })
+        : null
+
   const selectedCount = selected.size
 
   /** The shift dropdown's rows, shared by the Set-day and Generate dialogs (same displayExpr). */
@@ -870,6 +1386,32 @@ export default function RosterPage() {
     value: String(shift.shiftId),
     label: `${shift.name} (${clockTime(shift.startTime)}–${clockTime(shift.endTime)})`,
   }))
+  /* With a draft open the Set-day dialog offers ACTIVE shifts only — the save refuses an inactive one
+     ("Shift … is not active.") — plus the day's own shift, so a single cell still shows what it is. */
+  const setDayShiftOptions = draft.active
+    ? shifts
+        .filter((shift) => shift.isActive || shift.shiftId === setDayForm.shiftId)
+        .map((shift) => ({
+          value: String(shift.shiftId),
+          label: shift.isActive
+            ? `${shift.name} (${clockTime(shift.startTime)}–${clockTime(shift.endTime)})`
+            : t('common.inactiveOption', { name: shift.name }),
+        }))
+    : shiftOptions
+  /** The pin box: always with a draft open; outside one, only where saved days can be pinned. */
+  const pinAvailable = draft.active || cellInfo != null
+
+  /** A day column's classes, shared by the header, the cells and the footer: weekend, holiday, week start. */
+  function dayColumnClass(date: string, extra?: string): string | undefined {
+    const classes = [
+      isWeekend(date) ? 'roster-weekend' : '',
+      holidayByDate.has(date) ? 'roster-holiday' : '',
+      // A rule before every Monday, so the 6- and 5-day weeks read as weeks.
+      isMonday(date) ? 'roster-week-start' : '',
+      extra ?? '',
+    ].filter(Boolean)
+    return classes.length > 0 ? classes.join(' ') : undefined
+  }
 
   return (
     <div>
@@ -907,14 +1449,21 @@ export default function RosterPage() {
           {error}
         </div>
       )}
+      {leave.error && (
+        <div className="alert alert--warning" role="status">
+          {t('attendance.roster.leaveUnread', { error: leave.error })}
+        </div>
+      )}
 
       <div className="filter-bar">
         <ActionIcon
           variant="default"
           size="lg"
-          title="Previous month"
+          title={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : 'Previous month'}
           aria-label="Previous month"
           onClick={() => goToPeriod(previousPeriod(period))}
+          // The draft is one branch-month: moving away would leave it drawn over the wrong grid.
+          disabled={draft.active}
         >
           <BackChevron />
         </ActionIcon>
@@ -925,9 +1474,10 @@ export default function RosterPage() {
         <ActionIcon
           variant="default"
           size="lg"
-          title="Next month"
+          title={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : 'Next month'}
           aria-label="Next month"
           onClick={() => goToPeriod(nextPeriod(period))}
+          disabled={draft.active}
         >
           <ForwardChevron />
         </ActionIcon>
@@ -947,6 +1497,7 @@ export default function RosterPage() {
               value={branchFilter != null ? String(branchFilter) : 'all'}
               allowDeselect={false}
               onChange={(v) => chooseBranch(v == null || v === 'all' ? null : Number(v))}
+              disabled={draft.active}
             />
           </div>
         )}
@@ -956,20 +1507,60 @@ export default function RosterPage() {
             {/* PRIMARY. A weekly pattern is the stable, recurring truth — "Rami works Mon–Fri
                 Morning" — so expanding it produces a clean month. It is the accent-coloured,
                 first-listed default because it is the right answer nearly every time. */}
-            <Button
-              leftSection={<IconCalendarEvent size={16} />}
-              onClick={() => {
-                setApplyOverwrite(false)
-                setApplyVisible(true)
-              }}
+            {/* QA3 (ROS-3): one branch-month at a time — off under "All branches", with the reason. */}
+            <Tooltip
+              label={
+                draft.active
+                  ? t('attendance.roster.auto.disabled.draftOpen')
+                  : t('attendance.roster.branch.applyNeedsOne')
+              }
+              disabled={!draft.active && autoBranchId != null}
+              withArrow
+              multiline
+              w={280}
             >
-              Apply weekly patterns
-            </Button>
+              <span>
+                <Button
+                  leftSection={<IconCalendarEvent size={16} />}
+                  onClick={() => {
+                    setApplyOverwrite(false)
+                    setApplyVisible(true)
+                  }}
+                  // The generators below write rows straight away; under an open draft they would move the
+                  // rows the draft was planned against, and its save would be refused.
+                  disabled={draft.active || autoBranchId == null}
+                >
+                  Apply weekly patterns
+                </Button>
+              </span>
+            </Tooltip>
+            {/* The 6/5 rotation for one branch-month: previewed on the grid, saved in one call. A
+                secondary button — expanding the weekly patterns stays the default. */}
+            <Tooltip
+              label={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : autoBlockedReason}
+              disabled={autoBlockedReason == null && !draft.active}
+              withArrow
+              multiline
+              w={280}
+            >
+              {/* A span so the tooltip still fires over a disabled button. */}
+              <span>
+                <Button
+                  variant="default"
+                  leftSection={<IconCalendarRepeat size={16} />}
+                  onClick={openAuto}
+                  disabled={autoBlockedReason != null || draft.active}
+                >
+                  {t('attendance.roster.auto.button')}
+                </Button>
+              </span>
+            </Tooltip>
             {/* Secondary: ad-hoc fills — a new hire mid-month, temporary cover. */}
             <Button
               variant="default"
               leftSection={<IconPlus size={16} />}
               onClick={() => openGenerate()}
+              disabled={draft.active}
             >
               Generate roster…
             </Button>
@@ -977,16 +1568,31 @@ export default function RosterPage() {
                 DEMOTED from the default because copying a month copies that month's NOISE too:
                 the swaps, the corrections, the one-off days off that applied to June and have no
                 business in July. A pattern carries the schedule; a copy carries the history. */}
-            <Button
-              variant="default"
-              leftSection={<IconCopy size={16} />}
-              onClick={() => {
-                setCopyOverwrite(false)
-                setCopyVisible(true)
-              }}
+            <Tooltip
+              label={
+                draft.active
+                  ? t('attendance.roster.auto.disabled.draftOpen')
+                  : t('attendance.roster.branch.copyNeedsOne')
+              }
+              disabled={!draft.active && autoBranchId != null}
+              withArrow
+              multiline
+              w={280}
             >
-              Copy previous month
-            </Button>
+              <span>
+                <Button
+                  variant="default"
+                  leftSection={<IconCopy size={16} />}
+                  onClick={() => {
+                    setCopyOverwrite(false)
+                    setCopyVisible(true)
+                  }}
+                  disabled={draft.active || autoBranchId == null}
+                >
+                  Copy previous month
+                </Button>
+              </span>
+            </Tooltip>
             {/* The editor for the thing the primary action expands. */}
             <Button
               variant="default"
@@ -995,6 +1601,32 @@ export default function RosterPage() {
             >
               Weekly patterns…
             </Button>
+            {/* QA3 (REL-16): the month's completed days derived again against the roster as it stands. */}
+            <Tooltip
+              label={
+                draft.active
+                  ? t('attendance.roster.auto.disabled.draftOpen')
+                  : rederiveReason === 'branch'
+                    ? t('attendance.roster.branch.rederiveNeedsOne')
+                    : rederiveReason === 'notStarted'
+                      ? t('attendance.roster.rederive.notStarted')
+                      : t('attendance.roster.rederive.hint')
+              }
+              withArrow
+              multiline
+              w={300}
+            >
+              <span>
+                <Button
+                  variant="subtle"
+                  leftSection={<IconRefreshDot size={16} />}
+                  onClick={() => setRederiveVisible(true)}
+                  disabled={draft.active || rederiveReason != null}
+                >
+                  {t('attendance.roster.rederive.button')}
+                </Button>
+              </span>
+            </Tooltip>
           </div>
         )}
       </div>
@@ -1009,9 +1641,33 @@ export default function RosterPage() {
         onApproved={() => void load()}
         onEditState={setEditState}
         refreshToken={rosterVersion}
+        // Clearing or submitting the month would move or freeze the rows the draft was planned on,
+        // exactly like the generators that are held off above; its save would then be refused.
+        heldReason={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : null}
       />
 
-      {!loading && gaps.length > 0 && (
+      {/* The draft's panel, above the grid it is drawn on. Sticky, so Save and the issues stay in
+          reach while the person scrolls the month. */}
+      {draft.active && autoBranchId != null && (
+        <AutoRosterPreviewCard
+          draft={draft}
+          monthLabel={periodLabel(period)}
+          branchName={autoBranchName}
+          employeeName={employeeName}
+          shiftName={(shiftId) => shiftById.get(shiftId)?.name ?? `#${shiftId}`}
+          stale={draftMoved}
+          onSave={() => void saveDraft()}
+          onRegenerate={() => void regenerateDraft()}
+          onOptions={() => {
+            draft.clearError()
+            setAutoOpen(true)
+          }}
+          onIssue={focusIssue}
+        />
+      )}
+
+      {/* Hidden under a draft: the draft fills those days, and "Fix these" would write rows under it. */}
+      {!loading && !draft.active && gaps.length > 0 && (
         // Amber, not red: a gap is not a failure, it is a decision nobody has made yet.
         <div
           className="card"
@@ -1076,28 +1732,51 @@ export default function RosterPage() {
       ) : (
         <>
           <div className="roster-scroll">
-            <table className="roster-table">
+            <table className="roster-table" aria-busy={draftBusy || undefined}>
               <thead>
                 <tr>
                   <th className="roster-emp">Employee</th>
-                  {days.map((date) => (
-                    <th
-                      key={date}
-                      className={isWeekend(date) ? 'roster-weekend' : undefined}
-                    >
-                      {dayNumber(date)}
-                      <div className="roster-dow">{weekdayInitial(date)}</div>
-                    </th>
-                  ))}
+                  {days.map((date) => {
+                    const holiday = holidayByDate.get(date)
+                    return (
+                      <th
+                        key={date}
+                        className={dayColumnClass(date)}
+                        title={
+                          holiday
+                            ? t('attendance.roster.auto.holidayHeader', { name: referenceName(holiday) })
+                            : undefined
+                        }
+                      >
+                        {dayNumber(date)}
+                        <div className="roster-dow">{weekdayInitial(date)}</div>
+                      </th>
+                    )
+                  })}
+                  <th className="roster-sum">
+                    <div className="roster-sum-grid">
+                      <span title={t('attendance.roster.auto.sum.workTitle')}>{t('attendance.roster.auto.sum.work')}</span>
+                      <span title={t('attendance.roster.auto.sum.restTitle')}>{t('attendance.roster.auto.sum.rest')}</span>
+                      <span title={t('attendance.roster.auto.sum.satTitle')}>{t('attendance.roster.auto.sum.sat')}</span>
+                      <span title={t('attendance.roster.auto.sum.sunTitle')}>{t('attendance.roster.auto.sum.sun')}</span>
+                      <span title={t('attendance.roster.auto.sum.weeksTitle')}>{t('attendance.roster.auto.sum.weeks')}</span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {employees.map((employee, row) => (
+                {employees.map((employee, row) => {
+                  const counters = rowCounters.get(employee.employeeId)
+                  return (
                   <tr key={employee.employeeId}>
-                    <td className="roster-emp">{employee.fullName}</td>
+                    <td className="roster-emp" data-emp={employee.employeeId}>{employee.fullName}</td>
                     {days.map((date, col) => {
                       const key = cellKey(employee.employeeId, date)
-                      const assignment = lookup.get(key)
+                      // draft.get(key) ?? lookup.get(key): the draft's day while a preview is open.
+                      const shown = shownCell(key)
+                      const planned = shown?.draft
+                      const info = cellInfo?.get(key)
+                      const holiday = holidayByDate.get(date)
                       const isSelected = selected.has(key)
 
                       let cellClass = 'roster-cell'
@@ -1105,57 +1784,101 @@ export default function RosterPage() {
                       let title: string
                       let background: string | undefined
 
-                      // LEAVE IS CHECKED FIRST, and that ordering is the feature.
-                      // A leave day outranks whatever the roster says, so a shift mistakenly
-                      // assigned over somebody's holiday shows as Leave rather than hiding behind
-                      // a innocent-looking shift chip. The conflict is surfaced in the tooltip
-                      // instead of being silently resolved — the roster row is still there, and
-                      // somebody has to decide what to do about it.
-                      const onLeave = leave.isOnLeave(employee.employeeId, date)
+                      const shift = shown?.shiftId != null ? shiftById.get(shown.shiftId) : undefined
+                      const shiftName = shift?.name ?? shown?.saved?.shiftName ?? ''
+
+                      // LEAVE IS CHECKED FIRST, and that ordering is the feature: a leave day reads as
+                      // leave whatever the roster holds under it. A WORKING ROW UNDER LEAVE IS THE
+                      // NORMAL STATE now, not a conflict — a leave is priced on the rostered working
+                      // days (rest days cost nothing), so the auto-roster keeps the day's shift under
+                      // it and the payroll's unpaid-leave deduction does not move. The tooltip names
+                      // the shift instead of asking anyone to undo it.
+                      const onLeave =
+                        leave.isOnLeave(employee.employeeId, date) || planned?.origin === 'leave'
 
                       if (onLeave) {
                         const amount = leave.daysOnLeave(employee.employeeId, date)
-                        const conflict =
-                          assignment?.shiftId != null
-                            ? ` A shift is also assigned — it should not be. Set the day to rest, or cancel the leave.`
-                            : ''
-
                         cellClass += ' roster-cell--leave'
                         label = 'Lve'
                         title = `${employee.fullName} — ${date}: approved leave${
                           amount && amount !== 1 ? ` (${amount} days booked on this date)` : ''
-                        }.${conflict}`
-
-                        if (assignment?.shiftId != null) {
-                          cellClass += ' roster-cell--conflict'
-                        }
-                      } else if (assignment?.isRestDay) {
+                        }.${
+                          shown?.state === 'work' && shiftName
+                            ? ` ${t('attendance.roster.auto.cell.leaveWork', { shift: shiftName })}`
+                            : ''
+                        }`
+                      } else if (shown?.state === 'rest') {
                         cellClass += ' roster-cell--rest'
                         label = 'Rest'
                         title = `${employee.fullName} — ${date}: rest day.`
-                      } else if (assignment?.shiftId != null) {
-                        const shift = shiftById.get(assignment.shiftId)
-                        const name = shift?.name ?? assignment.shiftName ?? ''
-                        label = name.slice(0, 3)
-                        background = shiftColor.get(assignment.shiftId)
-                        title = `${employee.fullName} — ${date}: ${name} ${clockTime(
-                          shift?.startTime ?? assignment.startTime,
-                        )}–${clockTime(shift?.endTime ?? assignment.endTime)}`
+                      } else if (shown?.state === 'work' && shown.shiftId != null) {
+                        label = shiftName.slice(0, 3)
+                        background = shiftColor.get(shown.shiftId)
+                        title = `${employee.fullName} — ${date}: ${shiftName} ${clockTime(
+                          shift?.startTime ?? shown.saved?.startTime ?? null,
+                        )}–${clockTime(shift?.endTime ?? shown.saved?.endTime ?? null)}`
+                      } else if (holiday || planned?.origin === 'holiday') {
+                        // A holiday off is a day with NO row (D4) — the right state, not a hole.
+                        cellClass += ' roster-cell--holiday'
+                        label = t('attendance.roster.auto.cell.holidayOff')
+                        title = t('attendance.roster.auto.cell.holidayOffTitle', {
+                          name: holiday ? referenceName(holiday) : '',
+                          date: formatDayLabel(date),
+                        })
                       } else {
                         cellClass += ' roster-cell--empty'
                         title =
                           'No shift assigned. Attendance cannot judge late or absent without one.'
                       }
 
+                      /* THE DRAFT'S MARKS: dashed = planned by the generator, accent = your edit, a
+                         lock where the server will not let the day change. The tooltip says where the
+                         day came from and why. */
+                      const pinned = planned
+                        ? (planned.isPinned ?? planned.origin === 'pinned')
+                        : info?.isPinned === true
+                      if (planned) {
+                        // Dashed: what the generator decided — every planned day, and a holiday or leave
+                        // day the save will actually write (a cover shift, a working row under leave).
+                        const writes = ['insert', 'update', 'delete'].includes(planned.change)
+                        if (planned.edited || planned.origin === 'draft') cellClass += ' roster-cell--edited'
+                        else if (planned.origin === 'planned' || writes) cellClass += ' roster-cell--draft'
+                        if (planned.origin === 'locked') cellClass += ' roster-cell--locked'
+                        const why = [
+                          t(`attendance.roster.auto.origin.${planned.origin}`, { defaultValue: planned.origin }),
+                          planned.change !== 'kept'
+                            ? t(`attendance.roster.auto.change.${planned.change}`, { defaultValue: planned.change })
+                            : '',
+                          reasonText(planned.reasonCode, planned.reasonArgs, shiftName),
+                        ].filter(Boolean)
+                        title += ` — ${why.join(' · ')}`
+                      } else if (info && shown) {
+                        title += ` — ${
+                          info.isAuto
+                            ? [t('attendance.roster.auto.cell.auto'), reasonText(info.reasonCode ?? null, null, shiftName)]
+                                .filter(Boolean)
+                                .join(': ')
+                            : t('attendance.roster.auto.cell.setByHand')
+                        }`
+                      }
+                      if (pinned) {
+                        cellClass += ' roster-cell--pinned'
+                        if (planned?.origin !== 'pinned') title += ` · ${t('attendance.roster.auto.origin.pinned')}`
+                      }
+
                       if (isSelected) cellClass += ' roster-cell--selected'
 
+                      const glyphs = (
+                        <>
+                          {pinned && <IconPinFilled size={9} className="roster-glyph roster-glyph--pin" aria-hidden />}
+                          {planned?.origin === 'locked' && (
+                            <IconLock size={9} className="roster-glyph roster-glyph--lock" aria-hidden />
+                          )}
+                        </>
+                      )
+
                       return (
-                        <td
-                          key={key}
-                          className={
-                            isWeekend(date) ? 'roster-weekend' : undefined
-                          }
-                        >
+                        <td key={key} className={dayColumnClass(date)} data-cell={key}>
                           {editable ? (
                             <button
                               type="button"
@@ -1169,8 +1892,16 @@ export default function RosterPage() {
                                 startDrag(row, col)
                               }}
                               onMouseEnter={() => extendDrag(row, col)}
+                              onClick={(e) => {
+                                // Enter or Space on a focused cell arrives as a click with no mouse
+                                // behind it (detail 0): the keyboard's way to set one day.
+                                if (e.detail !== 0 || draftBusy) return
+                                applySelection(new Set([key]))
+                                openSetDayForSelection()
+                              }}
                             >
                               {label}
+                              {glyphs}
                             </button>
                           ) : (
                             <span
@@ -1179,14 +1910,118 @@ export default function RosterPage() {
                               title={title}
                             >
                               {label}
+                              {glyphs}
                             </span>
                           )}
                         </td>
                       )
                     })}
+                    <td className="roster-sum">
+                      {counters && (
+                        <SummaryCells counts={counters.counts} strip={counters.strip} owed={counters.owed} />
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
+              {/* ON DUTY PER DAY, against the minimum: red under it. Rest days beat staffing, so a
+                  short day is reported, not fixed by taking someone's rest day away. Under a draft,
+                  a row per shift to cover follows (D16). */}
+              <tfoot key={footShifts.join(',')} ref={stackFoot}>
+                <tr>
+                  <th className="roster-emp" scope="row">
+                    {t('attendance.roster.auto.foot.onDuty')}
+                  </th>
+                  {days.map((date) => {
+                    const count = dutyByDay.get(date) ?? 0
+                    const min = dayMinimum(date)
+                    const short = min != null && count < min
+                    return (
+                      <td
+                        key={date}
+                        data-duty={date}
+                        className={dayColumnClass(date, short ? 'roster-duty roster-duty--short' : 'roster-duty')}
+                        title={
+                          min == null
+                            ? t('attendance.roster.auto.foot.title', { count })
+                            : short
+                              ? t('attendance.roster.auto.foot.short', { count, min })
+                              : t('attendance.roster.auto.foot.min', { count, min })
+                        }
+                      >
+                        {count}
+                        {min != null && <div className="roster-duty-min">{min}</div>}
+                      </td>
+                    )
+                  })}
+                  <td className="roster-sum" />
+                </tr>
+                {/* Each shift the days must cover: who is on it, against its minimum — red under it,
+                    and nobody at all stands out. A day that need not cover the shift is left blank. */}
+                {footShifts.map((shiftId) => {
+                  const name = shiftById.get(shiftId)?.name ?? `#${shiftId}`
+                  const shift = shiftInText(name)
+                  return (
+                    <tr key={shiftId}>
+                      <th
+                        className="roster-emp roster-foot-shift"
+                        scope="row"
+                        title={t('attendance.roster.auto.foot.shift.label', { shift })}
+                      >
+                        {name}
+                      </th>
+                      {days.map((date) => {
+                        const counter = previewDays.get(date)?.shifts?.find((s) => s.shiftId === shiftId)
+                        if (!counter) {
+                          return (
+                            <td
+                              key={date}
+                              data-shift-duty={`${shiftId}|${date}`}
+                              className={dayColumnClass(date, 'roster-duty')}
+                              title={t('attendance.roster.auto.foot.shift.off', { shift })}
+                            />
+                          )
+                        }
+                        const count = shiftDuty.get(date)?.get(shiftId) ?? counter.onDuty
+                        const none = count === 0 && counter.min > 0
+                        const short = count < counter.min
+                        const said = t(
+                          none
+                            ? 'attendance.roster.auto.foot.shift.none'
+                            : short
+                              ? 'attendance.roster.auto.foot.shift.short'
+                              : 'attendance.roster.auto.foot.shift.min',
+                          { shift, count, min: counter.min },
+                        )
+                        return (
+                          <td
+                            key={date}
+                            data-shift-duty={`${shiftId}|${date}`}
+                            className={dayColumnClass(
+                              date,
+                              none
+                                ? 'roster-duty roster-duty--short roster-duty--none'
+                                : short
+                                  ? 'roster-duty roster-duty--short'
+                                  : 'roster-duty',
+                            )}
+                            title={
+                              counter.target != null
+                                ? `${said} · ${t('attendance.roster.auto.foot.shift.target', { target: counter.target })}`
+                                : said
+                            }
+                          >
+                            {count}
+                            <div className="roster-duty-min">{counter.min}</div>
+                          </td>
+                        )
+                      })}
+                      <td className="roster-sum" />
+                    </tr>
+                  )
+                })}
+              </tfoot>
             </table>
           </div>
 
@@ -1226,6 +2061,38 @@ export default function RosterPage() {
               />
               Nothing assigned (the system cannot judge this day)
             </span>
+            {holidayByDate.size > 0 && (
+              <span className="roster-legend-item">
+                <span className="roster-swatch roster-swatch--holiday" />
+                {t('attendance.roster.auto.legend.holiday')}
+              </span>
+            )}
+            {draft.active && (
+              <>
+                <span className="roster-legend-item">
+                  <span className="roster-swatch roster-swatch--draft" />
+                  {t('attendance.roster.auto.legend.draft')}
+                </span>
+                <span className="roster-legend-item">
+                  <span className="roster-swatch roster-swatch--edited" />
+                  {t('attendance.roster.auto.legend.edited')}
+                </span>
+                <span className="roster-legend-item">
+                  <IconLock size={12} />
+                  {t('attendance.roster.auto.legend.locked')}
+                </span>
+              </>
+            )}
+            {pinAvailable && (
+              <span className="roster-legend-item">
+                <IconPinFilled size={12} />
+                {t('attendance.roster.auto.legend.pinned')}
+              </span>
+            )}
+            <span className="roster-legend-item">
+              <span className="roster-swatch roster-swatch--week" />
+              {t('attendance.roster.auto.legend.weekStart')}
+            </span>
             {editable && (
               <span className="roster-legend-item">
                 Click a cell to set it. Drag across cells to set many at once.
@@ -1262,7 +2129,7 @@ export default function RosterPage() {
           </label>
           <Select
             id="roster-day-shift"
-            data={shiftOptions}
+            data={setDayShiftOptions}
             value={setDayForm.shiftId != null ? String(setDayForm.shiftId) : null}
             onChange={(v) =>
               setSetDayForm((f) => ({
@@ -1300,6 +2167,24 @@ export default function RosterPage() {
           </div>
         </div>
 
+        {pinAvailable && (
+          <div className="form-field">
+            <Checkbox
+              label={t('attendance.roster.auto.pin.label')}
+              checked={setDayForm.isPinned}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked
+                setSetDayForm((f) => ({ ...f, isPinned: checked }))
+                setPinTouched(true)
+              }}
+              disabled={saving}
+            />
+            <div className="hint">
+              {draft.active ? t('attendance.roster.auto.pin.hintDraft') : t('attendance.roster.auto.pin.hintSaved')}
+            </div>
+          </div>
+        )}
+
         <div className="form-actions">
           <Button
             variant="default"
@@ -1311,7 +2196,7 @@ export default function RosterPage() {
           >
             Cancel
           </Button>
-          <Button onClick={() => void submitSetDay()} disabled={saving}>
+          <Button onClick={() => void submitSetDay()} disabled={saving || (draft.active && draftBusy)}>
             {saving ? 'Saving…' : `Set ${selectedCount} day(s)`}
           </Button>
         </div>
@@ -1433,17 +2318,11 @@ export default function RosterPage() {
           </div>
         </div>
 
-        <LeavePreflight
-          days={leaveDaysAffecting(
-            generateLeave.days,
-            generateForm.employeeIds,
-            generateForm.fromDate,
-            generateForm.toDate,
-            generateForm.weekdays,
-          )}
-          employeeName={employeeName}
-          error={generateLeave.error}
-        />
+        <p className="hint">
+          {branchFilter != null &&
+            `${t('attendance.roster.branch.generateOnly', { branch: autoBranchName })} `}
+          {t('attendance.roster.generate.leaveRule')}
+        </p>
 
         <OverwriteField
           value={generateForm.overwrite}
@@ -1489,11 +2368,10 @@ export default function RosterPage() {
           </p>
         </div>
 
-        <LeavePreflight
-          days={leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to)}
-          employeeName={employeeName}
-          error={leave.error}
-        />
+        <p className="hint">
+          <strong>{t('attendance.roster.branch.copyOnly', { branch: autoBranchName })}</strong>{' '}
+          {t('attendance.roster.generate.leaveRule')}
+        </p>
 
         <OverwriteField
           value={copyOverwrite}
@@ -1534,11 +2412,10 @@ export default function RosterPage() {
           </p>
         </div>
 
-        <LeavePreflight
-          days={leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to)}
-          employeeName={employeeName}
-          error={leave.error}
-        />
+        <p className="hint">
+          <strong>{t('attendance.roster.branch.applyOnly', { branch: autoBranchName })}</strong>{' '}
+          {t('attendance.roster.generate.leaveRule')}
+        </p>
 
         <OverwriteField
           value={applyOverwrite}
@@ -1556,6 +2433,36 @@ export default function RosterPage() {
           </Button>
           <Button onClick={() => void submitApplyPatterns()} disabled={saving}>
             {saving ? 'Applying…' : 'Apply patterns'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        opened={rederiveVisible}
+        onClose={() => setRederiveVisible(false)}
+        title={t('attendance.roster.rederive.title', { month: periodLabel(period) })}
+        size={480}
+        centered
+      >
+        <div className="form-field">
+          <p style={{ margin: 0 }}>
+            {t('attendance.roster.rederive.body', { branch: autoBranchName, month: periodLabel(period) })}
+          </p>
+          <p className="hint" style={{ marginBottom: 0 }}>
+            {t('attendance.roster.rederive.note')}
+          </p>
+        </div>
+
+        <div className="form-actions">
+          <Button
+            variant="default"
+            onClick={() => setRederiveVisible(false)}
+            disabled={saving}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submitRederive()} disabled={saving}>
+            {saving ? t('attendance.roster.rederive.running') : t('attendance.roster.rederive.confirm')}
           </Button>
         </div>
       </Modal>
@@ -1671,6 +2578,23 @@ export default function RosterPage() {
           </Button>
         </div>
       </Modal>
+
+      {canManage && autoBranchId != null && (
+        <AutoRosterDrawer
+          opened={autoOpen}
+          onClose={() => setAutoOpen(false)}
+          branchId={autoBranchId}
+          branchName={autoBranchName}
+          period={period}
+          setup={setup}
+          setupError={setupError}
+          current={draft.request}
+          busy={draft.busy === 'preview'}
+          error={autoOpen ? draft.error : null}
+          onPreview={(request) => void runPreview(request)}
+          onStaffingSaved={(rows) => setSetup((current) => (current ? setupAfterStaffingSave(current, rows) : current))}
+        />
+      )}
     </div>
   )
 }

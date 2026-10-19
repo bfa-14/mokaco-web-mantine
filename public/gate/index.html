@@ -1,0 +1,87 @@
+<!doctype html>
+<!--
+  The Google sign-in gate page. nginx serves this file IN PLACE of the page that was asked for
+  while the gate is on (docs/GOOGLE_SIGNIN_GATE.md, MokaCo.HRMS), so every URL here is absolute.
+  Copied as-is by Vite: no build step touches it. gate.js fills in the words in English or Arabic.
+-->
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#2e2e2a" />
+    <title>Sign in — Moka &amp; Co HRMS</title>
+    <link rel="icon" type="image/png" href="/gate/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/gate/gate.css?v=1" />
+    <script type="module" src="/gate/gate.js?v=1"></script>
+  </head>
+  <body>
+    <main class="gate">
+      <section class="gate-card" aria-labelledby="gate-title">
+        <header class="gate-head">
+          <img
+            class="gate-logo"
+            src="/gate/moka-wordmark.png"
+            width="158"
+            height="28"
+            alt="Moka &amp; Co"
+          />
+          <button type="button" class="gate-lang" id="gate-lang" hidden></button>
+        </header>
+
+        <div class="gate-body">
+          <p class="gate-tags">
+            <span class="gate-tag">HRMS</span>
+            <span class="gate-tag gate-tag--test" id="gate-test" data-text="testTag" hidden>Test</span>
+          </p>
+          <h1 class="gate-title" id="gate-title" data-text="title">Sign in to continue</h1>
+          <p class="gate-lead" data-text="lead">
+            This is the Moka &amp; Co HRMS. Sign in with the Google account (Gmail) on your employee
+            record.
+          </p>
+
+          <p class="gate-status" id="gate-status" role="status" aria-live="polite">Loading…</p>
+          <div class="gate-alert" id="gate-alert" role="alert" hidden></div>
+
+          <!-- Before the button: inside WhatsApp's browser this is the thing to read first. -->
+          <p class="gate-warn" id="gate-inapp" hidden></p>
+
+          <!-- Google draws its button in here. -->
+          <div class="gate-google" id="gate-google" hidden></div>
+
+          <div class="gate-actions">
+            <button type="button" class="gate-btn" id="gate-retry" data-text="retry" hidden>
+              Try again
+            </button>
+            <button
+              type="button"
+              class="gate-btn gate-btn--primary"
+              id="gate-continue"
+              data-text="continue"
+              hidden
+            >
+              Continue
+            </button>
+          </div>
+
+          <p class="gate-help" id="gate-help"></p>
+        </div>
+      </section>
+
+      <p class="gate-foot" data-text="foot">Moka &amp; Co — HRMS</p>
+    </main>
+
+    <noscript>
+      <p class="gate-noscript">
+        Turn on JavaScript to sign in.<br />
+        <span lang="ar" dir="rtl">فعّل JavaScript لتسجيل الدخول.</span>
+      </p>
+    </noscript>
+  </body>
+</html>

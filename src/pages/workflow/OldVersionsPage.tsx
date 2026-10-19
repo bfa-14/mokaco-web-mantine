@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
@@ -10,6 +11,8 @@ import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/
 import { PageHelp } from '../../components/PageHelp'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { getErrorMessage } from '../../api/errorMessage'
+import { ApiError } from '../../api/client'
+import { moveNeedsConfirmation } from './reversalRules'
 import { requestsService, chainsService } from '../../services/workflowService'
 import type { OldVersionRequest } from '../../types/workflow'
 
@@ -31,6 +34,7 @@ const PAGE_SIZES = ['15', '30', '50']
  * reason. If that feels slow, that is the intent.
  */
 export default function OldVersionsPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [rows, setRows] = useState<OldVersionRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +43,17 @@ export default function OldVersionsPage() {
   const [target, setTarget] = useState<OldVersionRequest | null>(null)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
+  /**
+   * The server's warning that this move would APPROVE the request — nothing left to sign on the new
+   * chain (QA3 WF-10). Set from the 409; the next press sends the move again, confirmed.
+   */
+  const [closeWarning, setCloseWarning] = useState<string | null>(null)
+
+  function closeDialog() {
+    setTarget(null)
+    setReason('')
+    setCloseWarning(null)
+  }
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -68,20 +83,28 @@ export default function OldVersionsPage() {
     }
     setBusy(true)
     try {
-      await requestsService.moveVersion(
+      const result = await requestsService.moveVersion(
         target.requestInstanceId,
         reason.trim(),
         target.activeWorkflowDefinitionId,
+        closeWarning != null,
       )
       notify(
-        `Moved to v${target.activeVersion}. Signatures already given were kept.`,
+        result?.status === 'Approved'
+          ? t('workflow.moveVersion.movedAndApproved', { version: target.activeVersion })
+          : `Moved to v${target.activeVersion}. Signatures already given were kept.`,
         'success',
         3500,
       )
-      setTarget(null)
-      setReason('')
+      closeDialog()
       await load()
     } catch (err) {
+      // NOTHING LEFT TO SIGN on the new chain: the move would approve the request, so the server
+      // asks first. Its sentence stays in the dialog and the button becomes the confirmation.
+      if (err instanceof ApiError && moveNeedsConfirmation(err.status, err.message)) {
+        setCloseWarning(err.message)
+        return
+      }
       notify(getErrorMessage(err), 'error', 4500)
     } finally {
       setBusy(false)
@@ -128,7 +151,14 @@ export default function OldVersionsPage() {
               >
                 Open
               </Button>
-              <Button variant="subtle" size="xs" onClick={() => setTarget(r)}>
+              <Button
+                variant="subtle"
+                size="xs"
+                onClick={() => {
+                  setCloseWarning(null)
+                  setTarget(r)
+                }}
+              >
                 Move to v{r.activeVersion}
               </Button>
             </div>
@@ -275,10 +305,7 @@ export default function OldVersionsPage() {
       {target && (
         <Modal
           opened
-          onClose={() => {
-            setTarget(null)
-            setReason('')
-          }}
+          onClose={closeDialog}
           title={`Move to v${target.activeVersion}`}
           size={520}
           centered
@@ -306,19 +333,21 @@ export default function OldVersionsPage() {
               disabled={busy}
             />
           </div>
+          {closeWarning && (
+            <div className="wf-balance-warn" role="status">
+              {closeWarning}
+            </div>
+          )}
           <div className="form-actions">
-            <Button
-              variant="default"
-              onClick={() => {
-                setTarget(null)
-                setReason('')
-              }}
-              disabled={busy}
-            >
+            <Button variant="default" onClick={closeDialog} disabled={busy}>
               Back
             </Button>
-            <Button onClick={() => void move()} disabled={busy}>
-              {busy ? 'Moving…' : `Move to v${target.activeVersion}`}
+            <Button onClick={() => void move()} disabled={busy} color={closeWarning ? 'orange' : undefined}>
+              {busy
+                ? 'Moving…'
+                : closeWarning
+                  ? t('workflow.moveVersion.confirmApprove', { version: target.activeVersion })
+                  : `Move to v${target.activeVersion}`}
             </Button>
           </div>
         </Modal>

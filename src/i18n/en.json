@@ -17,7 +17,10 @@
     "signingIn": "Signing in…",
     "brandFooter": "Moka & Co · HRMS",
     "errorGeneric": "Unable to sign in. Please try again.",
-    "errorUnknown": "Something went wrong. Please try again."
+    "errorUnknown": "Something went wrong. Please try again.",
+    "refreshWaiting": "Too many sign-ins from this network right now. You are still signed in; the page carries on within a minute.",
+    "refreshLimited": "Too many sign-ins from this network right now. You are still signed in; try again in a minute.",
+    "tooManyAttempts": "Too many sign-in attempts. Wait a minute and try again."
   },
   "environment": {
     "badge": "TEST",
@@ -97,6 +100,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "myProfile": "My profile",
+    "myPayslips": "My payslips",
     "settings": "Settings",
     "requests": {
       "group": "Requests",
@@ -229,7 +233,25 @@
     "clear": "Clear.",
     "inactiveOption": "{{name}} (inactive)",
     "required": "(required)",
-    "period": "Period"
+    "period": "Period",
+    "ok": "OK",
+    "pageInfo": "{{from}}–{{to}} of {{total}}",
+    "report": {
+      "employee": "Employee",
+      "print": "Print",
+      "printHint": "Print just the report — no menus, no buttons.",
+      "generateFirst": "Generate the report first.",
+      "generate": "Generate",
+      "chooseTitle": "Choose your options and press Generate.",
+      "chooseHint": "The report will appear here, ready to print.",
+      "noDataTitle": "No data for this selection.",
+      "noDataHint": "Nothing was recorded for these options. Try a different period or branch.",
+      "generatedOn": "Generated on",
+      "noAccess": "You do not have access to reports.",
+      "noAccessHint": "Reports need the ‘View reports’ permission. Ask whoever administers the system.",
+      "allBranches": "All branches",
+      "allEmployees": "All employees"
+    }
   },
   "workflow": {
     "leaveNotice": {
@@ -298,6 +320,16 @@
       "Money": "Money",
       "People": "People",
       "Other": "Other"
+    },
+    "delegate": {
+      "toLabel": "Hand to",
+      "toPlaceholder": "Choose a person…",
+      "chooseSomeone": "Choose who to hand this step to.",
+      "reasonRequired": "Say why you are handing this over — the person receiving it needs the context."
+    },
+    "moveVersion": {
+      "confirmApprove": "Move to v{{version}} and approve",
+      "movedAndApproved": "Moved to v{{version}}. Nothing was left to sign, so the request is approved."
     }
   },
   "requests": {
@@ -473,7 +505,10 @@
       "password": "Your password",
       "confirm": "Retract my decision",
       "busy": "Retracting…",
-      "done": "Decision withdrawn. Step {{step}} is waiting for a fresh decision."
+      "done": "Decision withdrawn. Step {{step}} is waiting for a fresh decision.",
+      "passwordRequired": "Your password is required to sign this.",
+      "retracted": "Decision retracted. Step {{step}} is waiting for a fresh decision.",
+      "undoesApproval": "This request is approved: retracting the decision also undoes what the approval did — leave days come back, an advance or adjustment is removed, the attendance day is worked out again."
     },
     "email": {
       "action": "Email the employee",
@@ -483,6 +518,11 @@
       "pending": "{{channel}} queued — attempt {{attempt}}/3",
       "channelEmail": "Email",
       "channelWhatsApp": "WhatsApp"
+    },
+    "reopen": {
+      "signExplain": "Reopening a closed request is signed: the General Manager and the Owner each sign with their own password.",
+      "password": "Your password",
+      "passwordRequired": "Your password is required to sign the reopen."
     }
   },
   "body": {
@@ -534,7 +574,8 @@
       "workingDays_one": "{{value}} of the balance",
       "workingDays_other": "{{value}} of the balance",
       "costNothing": "— working days only: of the {{calendar}} calendar day(s), {{rest}} rest day(s) and {{holidays}} public holiday(s) cost nothing.",
-      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays."
+      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays.",
+      "overBalancePending": "That is more than the {{days}} left of the {{type}} balance once the {{pending}} already asked for in requests still waiting are counted. The request will be refused unless the company allows a negative balance."
     },
     "tip": {
       "branchPlaceholder": "Which branch?",
@@ -576,7 +617,7 @@
       "sameRole": "Same role: {{role}}",
       "chooseEmployeeFirst": "Choose the employee first",
       "counterpartRequired": "Choose who you are swapping with",
-      "noCounterpart": "Nobody else holds this role ({{role}}). Swaps are between employees in the same role — pick a different employee above, or check Positions in HR.",
+      "noCounterpart": "Nobody else at this branch holds this role ({{role}}). Swaps are between employees of the same branch in the same role — pick a different employee above, or check Positions in HR.",
       "yourDate": "Your shift date",
       "yourDateRequired": "Which of your days?",
       "theirDate": "Counterpart’s shift date",
@@ -750,7 +791,8 @@
       "Present": "Present",
       "Absent": "Absent",
       "RestDay": "Rest day",
-      "Leave": "Leave"
+      "Leave": "Leave",
+      "Holiday": "Holiday"
     },
     "weekdayInitial": {
       "0": "S",
@@ -926,7 +968,7 @@
         "overtimeDetected": "Overtime detected",
         "overtimeDetectedTitle": "Detected from the punches. Attendance never pays this on its own.",
         "unpaidAbsenceDays": "Unpaid absence days",
-        "unpaidAbsenceDaysTitle": "Absences not covered by approved leave. This is the deduction.",
+        "unpaidAbsenceDaysTitle": "Absences and short days on rostered shifts that no approved leave covers, for the days already over: what the payslip deducts as short days.",
         "exitLeaveDays": "Exit leave days",
         "exitLeaveDaysTitle": "Time out during the day, converted to days off the leave balance."
       }
@@ -951,7 +993,8 @@
       "noPunchesHint": "If somebody did punch, the machine has not been read yet — pull it from Attendance → Devices, or check that machine's last pull.",
       "goToToday": "Go to today",
       "print": "Print sheet for {{date}}",
-      "printTitle": "Open the printable daily sheet for {{date}} and this branch."
+      "printTitle": "Open the printable daily sheet for {{date}} and this branch.",
+      "fractionInvalid": "A day fraction is a number from 0 to 1 — 0.5 is half a day."
     },
     "pairs": {
       "expand": "Show the punch pairs behind this day",
@@ -998,7 +1041,343 @@
       "pickEmployee": "Choose the employee this PIN belongs to.",
       "mapped": "{{count}} punch(es) given to {{employee}}.",
       "result": "PIN {{pin}} is now {{employee}}: {{punches}} punch(es) resolved, {{days}} day(s) derived again.",
-      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them."
+      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them.",
+      "aside": "Set aside",
+      "asideTitle": "Set aside the punches of PIN {{pin}}?",
+      "asideBody": "{{count}} punch(es) from {{device}} wait under this PIN. If it belongs to nobody (a visitor, a test enrolment), set them aside: they are kept with your reason and no longer wait here. Mapping the PIN later takes them back.",
+      "asideNote": "Why (whose PIN it is, or why it belongs to nobody)",
+      "asideNoteRequired": "Say why these punches are set aside.",
+      "asideDone": "{{count}} punch(es) of PIN {{pin}} set aside."
+    },
+    "roster": {
+      "auto": {
+        "button": "Auto-roster (6/5)…",
+        "disabled": {
+          "allBranches": "Choose one branch first — the auto-roster plans one branch and month at a time.",
+          "readOnly": "Read-only while request #{{id}} waits for approval.",
+          "draftOpen": "Save or discard the draft first."
+        },
+        "drawer": {
+          "title": "Auto-roster (6/5)",
+          "intro": "Every employee alternates a 6-day week (1 rest day) and a 5-day week (2 rest days), and Saturdays and Sundays off are shared fairly. Leave, public holidays, locked days and your own edits are respected. A preview writes nothing.",
+          "month": "Month",
+          "branch": "Branch",
+          "loading": "Reading the branch's staff and settings…",
+          "loadFailed": "The auto-roster could not be opened. {{error}}",
+          "waiting": "Request #{{id}} is waiting for approval on this month. Nothing can be planned until it is decided.",
+          "preview": "Preview",
+          "previewing": "Planning…"
+        },
+        "mode": {
+          "label": "What to plan",
+          "FillEmpty": "Fill empty days",
+          "FillEmptyHint": "Only days with nothing on them. Every saved day stays as it is.",
+          "ReplanAuto": "Re-plan generated days",
+          "ReplanAutoHint": "Empty days, and days still as the auto-roster wrote them. Days changed by hand stay.",
+          "ReplanAll": "Re-plan everything",
+          "ReplanAllHint": "Every day except pinned, locked and leave days — days set by hand included.",
+          "confirmAll": "Yes, re-plan the days set by hand too."
+        },
+        "rhythm": {
+          "label": "Rhythm start",
+          "Aligned": "Aligned",
+          "AlignedHint": "Everyone's first planned week is a 6-day week, then 5, 6, 5…",
+          "Staggered": "Staggered",
+          "StaggeredHint": "Half the team starts on a 5-day week, so the number on duty stays even from week to week.",
+          "storedNote": "Only for people whose rhythm is not stored yet; a stored rhythm carries on across months."
+        },
+        "defaultShift": {
+          "label": "Default shift",
+          "hint": "For a working day with no weekly-pattern shift and no usual shift in the last 4 weeks.",
+          "placeholder": "The first active shift"
+        },
+        "staff": {
+          "title": "Staff",
+          "name": "Employee",
+          "onRotation": "On rotation",
+          "firstWeek": "First week",
+          "firstWeekHint": "The week of {{date}}: 6 working days (1 rest) or 5 (2 rests). Change it to flip that person's rhythm from this week on.",
+          "flipped": "Flipped",
+          "firstWeekAuto": "set at preview",
+          "firstWeekAutoHint": "A week left blank is set by the planner at preview (rhythm start: {{start}}); pick 6 or 5 to hold it.",
+          "none": "Nobody belongs to this branch in {{month}}.",
+          "offHint": "Off rotation: shown on the grid, never planned.",
+          "count_one": "{{count}} on rotation",
+          "count_other": "{{count}} on rotation"
+        },
+        "holidays": {
+          "title": "Public holidays",
+          "none": "No public holidays in {{month}}.",
+          "cover": "Working",
+          "coverHint": "0 = closed. Cover goes to whoever worked the fewest holidays in the last 12 months. A holiday off is a day with no row; it does not use up the week's rest days.",
+          "paid": "Paid",
+          "unpaid": "Unpaid",
+          "unpaidWarn": "Unpaid holiday: a rostered shift that is not worked costs that person a day, whether or not the month is approved."
+        },
+        "shiftCover": {
+          "title": "Shifts to cover every day",
+          "shift": "Shift",
+          "cover": "Cover every day",
+          "detected": "Found from this branch's roster of the last 8 weeks. Saving keeps them; change them if they are wrong.",
+          "detectedNone": "No regular shift was found in the last 8 weeks. Tick the shifts that every day must cover.",
+          "hint": "Each ticked shift gets at least its minimum every day. The planner spreads the rest days so each day has enough people, then moves people between shifts to cover each one. A day it cannot cover is flagged.",
+          "weekdayRules_one": "{{count}} rule for a single weekday is kept as it is; on its day it replaces the figure above.",
+          "weekdayRules_other": "{{count}} rules for a single weekday are kept as they are; on their day they replace the figures above.",
+          "minRequired": "{{shift}}: enter a minimum of 1 or more, or untick it.",
+          "targetBelowMin": "{{shift}}: the target cannot be below the minimum.",
+          "noShifts": "There is no active shift. Add one under Attendance → Shifts first."
+        },
+        "staffing": {
+          "title": "Minimum on duty",
+          "hint": "Per weekday, for this branch; saved with the branch. Rest days come first: a day below the minimum is flagged, nobody loses a rest day to cover it.",
+          "day": "Day",
+          "min": "Minimum",
+          "target": "Target",
+          "save": "Save staffing",
+          "saved": "Staffing saved.",
+          "unsaved": "Not saved yet — saved when you preview.",
+          "targetBelowMin": "A target cannot be below the minimum ({{day}}).",
+          "targetWithoutMin": "{{day}}: a target needs a minimum — enter one (0 for none)."
+        },
+        "card": {
+          "title": "Draft roster — not saved",
+          "subtitle": "{{month}} · {{branch}} · {{mode}}",
+          "inserts_one": "{{count}} new day",
+          "inserts_other": "{{count}} new days",
+          "updates_one": "{{count}} day changes",
+          "updates_other": "{{count}} days change",
+          "deletes_one": "{{count}} day removed",
+          "deletes_other": "{{count}} days removed",
+          "unchanged_one": "{{count}} unchanged",
+          "unchanged_other": "{{count}} unchanged",
+          "kept_one": "{{count}} kept as saved",
+          "kept_other": "{{count}} kept as saved",
+          "edits_one": "{{count}} day edited by hand — Regenerate plans around it.",
+          "edits_other": "{{count}} days edited by hand — Regenerate plans around them.",
+          "edited": "Edited since the preview: the issues and the 6·5 strip are re-checked when you Regenerate.",
+          "stale_one": "{{count}} day of the saved roster changed since this preview. Regenerate to plan with it — a save over a changed day is refused.",
+          "stale_other": "{{count}} days of the saved roster changed since this preview. Regenerate to plan with them — a save over a changed day is refused.",
+          "payroll": "Payroll still assumes 26 working days a month; the Work column shows what this roster gives (6/5 is about 24).",
+          "save": "Save roster",
+          "saving": "Saving…",
+          "regenerate": "Regenerate",
+          "options": "Options…",
+          "discard": "Discard",
+          "discardConfirm_one": "Discard the draft and the day you edited?",
+          "discardConfirm_other": "Discard the draft and the {{count}} days you edited?",
+          "keepEditing": "Keep editing",
+          "saveBlocked": "Fix the errors first: edit the days, then Regenerate.",
+          "saved": "Roster saved: {{inserted}} added, {{updated}} changed, {{deleted}} removed. Submit the month for approval when it is ready.",
+          "discarded": "Draft discarded. Nothing was saved."
+        },
+        "issues": {
+          "title": "Issues",
+          "none": "No issues: every rule holds.",
+          "refused": "The save was refused for these:",
+          "errors_one": "{{count}} error",
+          "errors_other": "{{count}} errors",
+          "warnings_one": "{{count}} warning",
+          "warnings_other": "{{count}} warnings",
+          "infos_one": "{{count}} note",
+          "infos_other": "{{count}} notes",
+          "jump": "Show on the grid"
+        },
+        "severity": {
+          "error": "Error",
+          "warning": "Warning",
+          "info": "Note"
+        },
+        "issue": {
+          "MONTH_LOCKED": "The month is waiting for approval",
+          "WORK_WITHOUT_SHIFT": "A working day without an active shift",
+          "REST_ON_HOLIDAY": "A rest day on a public holiday",
+          "CONSECUTIVE_CAP": "Too many working days in a row",
+          "HOLIDAY_HIDDEN_BY_REST": "A rest day hides a public holiday",
+          "RHYTHM_SHORT": "Fewer rest days than the week's rhythm",
+          "RHYTHM_OVER": "More rest days than the week's rhythm",
+          "REST_ABSORBED_BY_LEAVE": "The week's rest falls inside a leave",
+          "SHORT_STAFFED": "Below the minimum on duty",
+          "SHIFT_UNCOVERED": "Nobody on a shift that must be covered",
+          "TURNAROUND": "Too little time between two shifts",
+          "WEEKLY_REST_HOURS": "The weekly rest is shorter than the legal minimum",
+          "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
+          "LONG_RUN": "A long run of working days"
+        },
+        "issueShift": {
+          "SHORT_STAFFED": "Below the minimum on {{shift}}",
+          "SHIFT_UNCOVERED": "Nobody on {{shift}}"
+        },
+        "reason": {
+          "REST_WEEKEND_OWED": "Rest: owed a weekend day off",
+          "REST_LEVEL": "Rest: the day with the most people on duty",
+          "REST_PAIR": "Rest: next to the other rest day of a 5-day week",
+          "REST_PATTERN": "Rest: the weekly pattern's rest day",
+          "REST_CONSECUTIVE": "Rest: breaks a long run of working days",
+          "WORK_HOLIDAY_COVER": "Working the public holiday (cover)",
+          "WORK_SHIFT_COVER": "Moved to {{shift}} so that shift is covered",
+          "HOLIDAY_OFF": "Public holiday: a day off, no row"
+        },
+        "reasonArgs": {
+          "owed": "owed {{value}}",
+          "worked": "{{value}} holidays worked in 12 months"
+        },
+        "origin": {
+          "planned": "Planned",
+          "fact": "Kept as saved",
+          "locked": "Locked: paid, in the past, or attendance recorded",
+          "pinned": "Pinned: kept when regenerating",
+          "leave": "Inside a leave: kept",
+          "holiday": "Public holiday",
+          "draft": "Your edit",
+          "ghost": "Next month's plan (not saved)",
+          "outside": "Another month"
+        },
+        "change": {
+          "insert": "new",
+          "update": "changes",
+          "delete": "removed",
+          "unchanged": "unchanged",
+          "kept": "kept"
+        },
+        "cell": {
+          "holidayOff": "Hol",
+          "holidayOffTitle": "{{name}} — {{date}}: public holiday, a day off (no row needed).",
+          "leaveWork": "Rostered {{shift}} under the leave — normal: the leave is priced on this working day.",
+          "setByHand": "Set by hand",
+          "auto": "Set by the auto-roster"
+        },
+        "pin": {
+          "label": "Keep when regenerating",
+          "hintDraft": "The auto-roster never re-plans a pinned day. Saved with the roster.",
+          "hintSaved": "Pins the saved day. It does not change the roster, so it needs no new approval.",
+          "failed": "The day was set, but the pin was not saved: {{error}}"
+        },
+        "edit": {
+          "skipped_one": "{{count}} day could not be changed: locked, pinned, inside a leave, or not part of this branch's plan.",
+          "skipped_other": "{{count}} days could not be changed: locked, pinned, inside a leave, or not part of this branch's plan.",
+          "nothing": "None of these days can be changed in the draft: they are locked, pinned, inside a leave, or not part of this branch's plan.",
+          "restOnHoliday": "A public holiday is not a rest day. Leave it as a holiday, or set a working shift to cover it.",
+          "inactiveKept": "{{name}} is no longer active: the draft leaves this day as it is. Choose an active shift to change it.",
+          "inactivePin": "{{name}} is no longer active, so the draft cannot save this day — not even its pin. Choose an active shift, or pin the day once the draft is saved or discarded.",
+          "applied_one": "{{count}} day changed in the draft.",
+          "applied_other": "{{count}} days changed in the draft."
+        },
+        "legend": {
+          "draft": "Draft day (not saved yet)",
+          "edited": "Your edit",
+          "pinned": "Pinned (kept when regenerating)",
+          "locked": "Locked",
+          "holiday": "Public holiday",
+          "weekStart": "A thicker line starts each week (Monday)"
+        },
+        "sum": {
+          "work": "Work",
+          "workTitle": "Working days this month (payroll assumes 26)",
+          "rest": "Rest",
+          "restTitle": "Rest days this month",
+          "sat": "Sat",
+          "satTitle": "Saturdays off",
+          "sun": "Sun",
+          "sunTitle": "Sundays off",
+          "weeks": "6·5",
+          "weeksTitle": "The 6·5 rhythm, one figure per week (Monday first). Red: the week does not hold its rest days.",
+          "owed": "Weekend balance: Saturday {{sat}}, Sunday {{sun}} (positive = owed a day off)"
+        },
+        "strip": {
+          "week_one": "Week of {{date}}: {{count}} rest day",
+          "week_other": "Week of {{date}}: {{count}} rest days",
+          "type": "a {{type}}-day week",
+          "should": "should be {{quota}}",
+          "broken": "the 6/5 alternation is broken",
+          "unjudged": "not judged: part of the week is unknown, or on leave"
+        },
+        "foot": {
+          "onDuty": "On duty",
+          "title": "On duty: {{count}}",
+          "min": "On duty: {{count}} — minimum {{min}}",
+          "short": "On duty: {{count}} — below the minimum of {{min}}",
+          "shift": {
+            "label": "On duty on {{shift}}",
+            "min": "{{shift}}: {{count}} on duty — minimum {{min}}",
+            "short": "{{shift}}: {{count}} on duty — below the minimum of {{min}}",
+            "none": "{{shift}}: nobody on duty — it needs {{min}}",
+            "target": "target {{target}}",
+            "off": "{{shift}}: need not be covered this day"
+          }
+        },
+        "holidayHeader": "Public holiday: {{name}}"
+      },
+      "branch": {
+        "copyNeedsOne": "Choose a branch first — copying a month works on one branch at a time.",
+        "applyNeedsOne": "Choose a branch first — weekly patterns are applied to one branch at a time.",
+        "rederiveNeedsOne": "Choose a branch first — a month is derived again one branch at a time.",
+        "copyOnly": "Only {{branch}}: the days each person belonged to it last month are copied onto the days they belong to it this month.",
+        "applyOnly": "Only {{branch}}: the days each person belongs to it this month.",
+        "generateOnly": "Only the days these people belong to {{branch}}."
+      },
+      "generate": {
+        "leaveRule": "Approved leave is respected: a leave day is never made a rest day (an empty one gets the working shift, so the leave is counted against it) and a day already planned inside a leave is left as it is. Public holidays, retired shifts and days outside a person's employment are skipped.",
+        "bulkDone_one": "{{employees}} employee(s) rostered: {{count}} day written.",
+        "bulkDone_other": "{{employees}} employee(s) rostered: {{count}} days written.",
+        "rowsDone_one": "Rostered {{count}} day.",
+        "rowsDone_other": "Rostered {{count}} days."
+      },
+      "rederive": {
+        "button": "Re-derive month",
+        "hint": "Judge the month's completed days again against the roster as it stands — after a shift, a holiday or a setting changed. Approving the month does this by itself.",
+        "notStarted": "This month has no completed day yet — there is nothing to derive.",
+        "title": "Re-derive {{month}}",
+        "body": "The attendance of {{branch}} for {{month}} — every day from the 1st to yesterday that has a roster row or a record — is worked out again from the punches and the roster as it stands now.",
+        "note": "Days already paid and days entered by hand are left as they are. The leave taken in the month is priced again on the roster.",
+        "confirm": "Re-derive",
+        "running": "Re-deriving…",
+        "done_one": "{{count}} attendance day derived again.",
+        "done_other": "{{count}} attendance days derived again."
+      },
+      "leaveUnread": "Approved leave could not be read, so the grid does not show who is on leave. {{error}}"
+    },
+    "reports": {
+      "col": {
+        "shift": "Shift",
+        "firstIn": "First in",
+        "lastOut": "Last out",
+        "late": "Late",
+        "workedHours": "Worked hrs",
+        "overtime": "Overtime",
+        "exit": "Exit",
+        "dayFraction": "Day fraction",
+        "status": "Status",
+        "source": "Source",
+        "daysWorked": "Days worked",
+        "fullDays": "Full days",
+        "present": "Present",
+        "absent": "Absent",
+        "leave": "Leave",
+        "rest": "Rest",
+        "exitLeaveDays": "Exit-leave days",
+        "approvedLeaveDays": "Appr. leave days",
+        "unpaidAbsence": "Unpaid absence"
+      },
+      "source": {
+        "Device": "Device",
+        "Excel": "Excel",
+        "Manual": "Manual"
+      },
+      "daily": {
+        "title": "Daily Attendance Sheet",
+        "subtitle": "Who was in, late, absent or off on a day.",
+        "help": "One row per employee for a single day, grouped by branch. Use it as the morning sheet: who clocked in, who was late, who never showed. A warning icon marks a day whose punches did not add up — its hours are not yet trustworthy.",
+        "anomaly": "The punches on this day did not add up — the hours are not yet trustworthy.",
+        "tally_one": "{{count}} employee · Present {{present}} · Late {{late}} · Absent {{absent}} · On leave {{leave}}",
+        "tally_other": "{{count}} employees · Present {{present}} · Late {{late}} · Absent {{absent}} · On leave {{leave}}"
+      },
+      "monthly": {
+        "title": "Monthly Attendance Summary",
+        "subtitle": "The sheet to review before running payroll.",
+        "help": "One row per employee for the month, with every figure payroll turns into a pay line. Review it before running a payroll period; the number to watch is unpaid absence days. Overtime here is detected, not automatically paid.",
+        "totals_one": "Totals — {{count}} employee",
+        "totals_other": "Totals — {{count}} employees"
+      }
     }
   },
   "payroll": {
@@ -1060,8 +1439,8 @@
       "editScheme": "Edit scheme",
       "newVersion": "New version",
       "newVersionOf": "New version of {{scheme}}",
-      "newVersionTitle": "Create a new dated version of this scheme, prefilled from it. The existing row is left untouched.",
-      "newVersionHint": "This creates a NEW row. Set the date it takes effect from — the existing version stays exactly as it is, so months already paid still explain themselves.",
+      "newVersionTitle": "Create a new dated version of this scheme, prefilled from it. The current version ends the day before the new one starts.",
+      "newVersionHint": "This creates a NEW row. Set the date it takes effect from — the current version is closed the day before, automatically, and otherwise stays as it is, so months already paid still explain themselves. A date on or before the latest version is refused.",
       "noTiers": "No income tax brackets yet.",
       "noSchemes": "No NSSF schemes yet.",
       "saved": "Saved.",
@@ -1089,7 +1468,60 @@
       "bandHint": "What a basic salary may be at each rank. Enforced on every salary-component write, so a basic outside its tier band is refused when it is saved.",
       "bandTitle": "Basic salary band — {{tier}}",
       "bandBlankHint": "Leave a box blank for no bound on that side. Blank on both sides removes the band entirely.",
-      "bandSaved": "Salary band saved."
+      "bandSaved": "Salary band saved.",
+      "taxVersionHint": "Brackets that share a start date are one version of the table. A bracket dated after the current table starts a new version: the current one ends the day before, automatically. Payroll uses the version in force on the last day of the month."
+    },
+    "run": {
+      "staleTitle": "This run is out of date",
+      "staleBody_one": "What one payslip was computed from changed after the run was generated. Approving it is refused until the run is regenerated.",
+      "staleBody_other": "What {{count}} payslips were computed from changed after the run was generated. Approving it is refused until the run is regenerated.",
+      "staleRunWideOnly": "A run-wide input changed after the run was generated. Approving it is refused until the run is regenerated.",
+      "staleRunWide": "Run-wide inputs changed too: settings, NSSF or tax tables, component or leave types, holidays, roster approvals or rates.",
+      "staleMore": "and {{count}} more",
+      "staleRegenerate": "Regenerate the run",
+      "staleReaderHint": "Whoever prepares payroll can regenerate it.",
+      "source": {
+        "Employee": "employment or branch",
+        "Salary": "salary",
+        "Attendance": "attendance",
+        "Roster": "roster",
+        "Leave": "leave",
+        "Overtime": "overtime",
+        "Tips": "tips",
+        "Expenses": "expenses",
+        "Adjustments": "adjustments",
+        "Advances": "advances",
+        "Separation": "separation settlement",
+        "Payout": "leave paid on leaving",
+        "Missing": "not in the run yet",
+        "NotInRun": "no longer belongs in the run",
+        "Settings": "run-wide settings"
+      },
+      "awaitingOwner": "Approving and locking the run is the Owner’s act.",
+      "earlyTitle": "This is an early lock",
+      "earlyBody": "{{period}} runs until {{end}} and can be locked from {{next}}. Locking it now is the Owner’s choice: the days after {{cutoff}} are paid as scheduled, and absences, overtime, holiday work and tips dated after that day — or anything entered for the month later — will not be paid by this run.",
+      "earlyConfirm": "I am locking {{period}} early, knowing what it leaves out",
+      "approveEarly": "Lock early",
+      "ratesDraft": "Read again at every Generate, as of the period end, until the run is sent to review.",
+      "ratesFrozen": "Frozen since the run was sent to review."
+    },
+    "mine": {
+      "title": "My payslips",
+      "subtitle": "Your payslips of approved months. A month appears here once its payroll is approved and locked.",
+      "empty": "No approved payslip yet.",
+      "period": "Month",
+      "run": "Run",
+      "net": "Net pay",
+      "payment": "Payment",
+      "notPaid": "Not paid yet",
+      "paidBy": "Paid by {{method}} on {{date}}",
+      "primary": "Monthly",
+      "supplemental": "Off-cycle",
+      "nothing": "Nothing to pay",
+      "method": {
+        "Bank": "bank transfer",
+        "Cash": "cash"
+      }
     }
   },
   "access": {
@@ -1105,11 +1537,96 @@
       "COMPONENT_MANAGE": "Manage salary component types",
       "CORE_MANAGE": "Manage currencies & exchange rates",
       "PAYROLL_VIEW": "View payroll runs & payslips",
-      "REPORT_VIEW": "View reports"
+      "REPORT_VIEW": "View reports",
+      "ACCESS_MANAGE": "Turn Google sign-in on or off and manage who can open the HRMS"
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",
-      "rejectionEndsHint": "Off = the rejection is recorded as advice and the request continues"
+      "rejectionEndsHint": "Off = the rejection is recorded as advice and the request continues",
+      "title": "Roles",
+      "subtitle": "Roles group permissions. Assign them on the Role Permissions page.",
+      "new": "New Role",
+      "create": "Create Role",
+      "editTitle": "Edit Role",
+      "edit": "Edit role",
+      "name": "Role name",
+      "nameRequired": "Role name is required",
+      "created": "Role \"{{name}}\" created.",
+      "updated": "Role \"{{name}}\" updated.",
+      "expand": "Expand role",
+      "collapse": "Collapse role",
+      "systemLocked": "System roles cannot be renamed",
+      "noWorkflowSettings": "Workflow settings are unavailable for this role.",
+      "empty": "No roles found.",
+      "cols": {
+        "id": "ID",
+        "name": "Name",
+        "system": "System",
+        "created": "Created",
+        "modified": "Modified",
+        "actions": "Actions"
+      }
+    },
+    "profile": {
+      "title": "My profile",
+      "subtitle": "Settings that are yours alone.",
+      "help": "Your signature image appears beside decisions you sign. It is a convention, not a credential — what actually signs a decision is your password.",
+      "signatureTitle": "Your signature",
+      "signature": "Signature",
+      "image": "Signature image",
+      "none": "No signature image on file. You can still sign decisions with your password — the record will show your name and the time instead of an image.",
+      "updated": "updated {{when}}",
+      "choose": "Choose an image…",
+      "working": "Working…",
+      "remove": "Remove",
+      "formats": "PNG or JPEG, up to 1 MB.",
+      "tooBig": "That file is {{size}}. The limit is 1 MB.",
+      "saved": "Signature saved.",
+      "removed": "Signature removed. You can still sign with your password."
+    },
+    "password": {
+      "title": "Change password",
+      "hint": "Changing your password signs you out everywhere, this device included. You then sign in again with the new password.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "showHide": "Show or hide: {{field}}",
+      "tooShort_one": "Use at least {{count}} character.",
+      "tooShort_other": "Use at least {{count}} characters.",
+      "mismatch": "These two do not match.",
+      "changing": "Changing…",
+      "changedSignedOut": "Password changed. You are signed out everywhere; sign in again with the new password."
+    },
+    "users": {
+      "title": "Users",
+      "subtitle": "Manage HRMS user accounts.",
+      "new": "New User",
+      "create": "Create User",
+      "empty": "No users found.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "none": "None",
+      "activated": "{{name}} activated.",
+      "deactivated": "{{name}} deactivated.",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "created": "User \"{{name}}\" created.",
+      "rolesSaved": "Roles for \"{{name}}\" saved.",
+      "rolesHint": "Change which roles this user holds.",
+      "signatureHint": "Upload or change this user's signature image.",
+      "rolesPlaceholder": "Select roles…",
+      "rolesTitle": "Roles — {{name}}",
+      "rolesNotCarried": "The list did not carry this user's current roles, so the picker starts empty; what you save here becomes the full set.",
+      "saveRoles": "Save roles",
+      "cols": {
+        "id": "ID",
+        "employee": "Employee",
+        "roles": "Roles",
+        "active": "Active",
+        "lastLogin": "Last Login",
+        "signature": "Signature",
+        "actions": "Actions"
+      }
     }
   },
   "core": {
@@ -1128,14 +1645,37 @@
         "Official": "Official",
         "Market": "Market",
         "NonOfficial": "Non official"
-      }
+      },
+      "precisionHint": "Up to 12 decimals, kept as typed — a rate below 1 is ordinary: LBP → USD at 89,500 is 0.000011173184.",
+      "inverse": "1 {{to}} = {{value}} {{from}}"
+    },
+    "currencies": {
+      "title": "Currencies",
+      "subtitle": "Currencies the system understands (money is always amount + currency).",
+      "new": "New",
+      "newTitle": "New Currency",
+      "editTitle": "Edit Currency",
+      "create": "Create",
+      "code": "Code",
+      "codeLabel": "Code (3 letters)",
+      "name": "Name",
+      "decimals": "Decimals",
+      "decimalPlaces": "Decimal places",
+      "empty": "No currencies found.",
+      "deleteConfirm": "Delete currency {{code}} ({{name}})? Its exchange rates are deleted with it.",
+      "deleted": "Deleted.",
+      "saved": "Saved.",
+      "created": "Created.",
+      "codeRequired": "Code is required",
+      "codeLength": "Code must be 3 letters",
+      "nameRequired": "Name is required"
     }
   },
   "hr": {
     "employee": {
       "email": "Email",
       "emailPlaceholder": "name@company.com",
-      "emailHint": "Where the system sends the notice when one of their requests is approved or rejected. Leave empty and none is sent.",
+      "emailHint": "Where the system sends the notice when one of their requests is approved or rejected. Leave empty and none is sent. If Google sign-in is on, this must be the Gmail they sign in with.",
       "emailInvalid": "That does not look like an email address.",
       "phoneNumber": "Phone number",
       "preferredLanguage": "Preferred language",
@@ -1153,7 +1693,10 @@
       "tierFirst": "Select the tier first",
       "managerOption": "{{name}} — {{tier}}",
       "managerCleared": "That manager is more junior than the new tier, so the choice was cleared. Pick someone at this tier or above.",
-      "noCandidates": "Nobody holds a tier senior enough to manage this person."
+      "noCandidates": "Nobody holds a tier senior enough to manage this person.",
+      "tierLabel": "Approval tier",
+      "tierHint": "Tier 1 is the head of the company; a higher number is more junior. A new employee starts on the lowest tier unless you choose another.",
+      "tierRequired": "Choose the employee's tier."
     },
     "tiers": {
       "title": "Approval tiers",
@@ -1194,11 +1737,19 @@
       "colExpired": "Expired",
       "nothingToDo": "Nothing to do — every employee was already opened for {{year}}.",
       "prorated_one": "{{count}} employee was hired part way through the year, so their grant is proportional.",
-      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional."
+      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional.",
+      "undo": "Undo this year's opening",
+      "undoExplain": "Takes back what opening {{year}} wrote for every employee — the entitlement, the carry-over, the close of last year and any expiry that followed — so the year can be opened again after the grid or a hire date was corrected. Refused once leave of {{year}} was used in a period already paid.",
+      "undoConfirm": "Undo the opening",
+      "undoing": "Undoing…",
+      "undoDone_one": "The opening of {{year}} was taken back for {{count}} employee ({{movements}} ledger movements). Open the year again when the grid is right.",
+      "undoDone_other": "The opening of {{year}} was taken back for {{count}} employees ({{movements}} ledger movements). Open the year again when the grid is right.",
+      "undoNothing": "Nothing to undo — {{year}} was not opened for anybody yet."
     },
     "leavePolicy": {
       "fixedFromTiers": "Days come from this type's tiers — fixed entitlement does not apply.",
       "fixedUnpaid": "Unpaid leave has no entitlement.",
+      "fixedInvalid": "Fixed entitlement: enter a number of days from 0 to 366, or leave it empty for none.",
       "nameRequired": "Give the leave type a name."
     },
     "leaveBalance": {
@@ -1213,7 +1764,17 @@
       "noneForYear": "No leave types have a balance for {{year}}.",
       "yearNotOpened": "No leave year opened for {{year}} — open it from Leave policy.",
       "openFromPolicy": "Leave policy",
-      "unavailable": "The yearly balance could not be read."
+      "unavailable": "The yearly balance could not be read.",
+      "report": {
+        "title": "Leave Balance Report",
+        "subtitle": "Accrued, used and remaining leave per employee.",
+        "help": "One row per employee per leave type, as of the end of the chosen period. Remaining is accrued plus carried over, minus used, plus adjusted (corrections, the year-end close, expired carry-over) — the column to read. A negative remaining means somebody has taken more than they had.",
+        "asOf": "As of",
+        "leaveType": "Leave type",
+        "accrued": "Accrued",
+        "unpaidTag": "(unpaid)",
+        "unpaidTitle": "Time taken in this type is unpaid."
+      }
     },
     "leaveAdjust": {
       "action": "Adjust balance",
@@ -1236,7 +1797,26 @@
     },
     "salaryComponents": {
       "tierBand": "Tier {{tier}}: basic salary must be between {{min}} and {{max}} {{currency}}",
-      "noBound": "no bound"
+      "noBound": "no bound",
+      "intro": "A salary changes FROM a date: the value standing until then ends the day before, and the new one starts — so months already paid keep what they paid. A date inside a locked month is refused, with the earliest date that works. Ended rows are history and stay as they are.",
+      "add": "Add component",
+      "addTitle": "Add a salary component",
+      "change": "Change from a date",
+      "changeTitle": "Change {{name}} from a date",
+      "end": "End",
+      "endTitle": "End {{name}}",
+      "endHint": "The component stops after this day. It stays on file for the months it was paid.",
+      "lastDay": "Last day",
+      "startsOn": "Starts on",
+      "status": "Status",
+      "state": {
+        "current": "Current",
+        "scheduled": "Scheduled",
+        "ended": "Ended"
+      },
+      "saved": "Salary saved.",
+      "ended": "Component ended.",
+      "empty": "No salary components yet."
     },
     "reference": {
       "active": "Active",
@@ -1269,6 +1849,104 @@
       "cancelled": "Planned transfer cancelled.",
       "cancelFailed": "Could not cancel the transfer.",
       "loadFailed": "Could not load the branch history."
+    },
+    "employees": {
+      "title": "Employees",
+      "subtitle": "The people records for Moka & Co.",
+      "onlyMissing": "Show only employees without a login",
+      "new": "New Employee",
+      "cols": {
+        "id": "ID",
+        "fullName": "Full Name",
+        "hired": "Hired",
+        "tier": "Tier",
+        "status": "Status",
+        "login": "Login",
+        "actions": "Actions"
+      },
+      "active": "Active",
+      "terminated": "Terminated",
+      "noLogin": "no login",
+      "accountDisabled": "account disabled",
+      "openProfile": "Open profile",
+      "remove": "Remove",
+      "removeTitle": "Confirm removal",
+      "removeBody": "Remove <name>{{name}}</name>? They leave the lists — and payroll — for good, so only somebody who has left and has been paid for every month can be removed. If anything is still open, you are told what.",
+      "removed": "{{name}} removed.",
+      "allHaveLogin": "Every employee has a login.",
+      "empty": "No employees found."
+    },
+    "documents": {
+      "hint": "Files are stored on the server; type and size are detected automatically.",
+      "upload": "Upload Document",
+      "uploading": "Uploading…",
+      "uploaded": "\"{{name}}\" uploaded.",
+      "download": "Download",
+      "deleteTitle": "Confirm delete",
+      "deleteBody": "Delete <name>{{name}}</name>?",
+      "deleted": "Deleted.",
+      "empty": "No documents yet.",
+      "cols": {
+        "file": "File",
+        "type": "Type",
+        "size": "Size",
+        "uploaded": "Uploaded",
+        "actions": "Actions"
+      }
+    },
+    "accounts": {
+      "title": "Employee accounts",
+      "subtitle": "Which login each employee signs in with.",
+      "help": "The workflow resolves approvers by their login. An employee with no account cannot raise a request, and a branch manager with no active account cannot approve — so every branch-manager step for their branch is skipped. Linking an existing account fixes that. To CREATE an account, use the Users page; this screen only connects existing ones to people.",
+      "brokenManagers_one": "{{count}} branch manager has no usable login. Approvals needing a branch manager will be skipped for their branch until you link an active account or set a different manager.",
+      "brokenManagers_other": "{{count}} branch managers have no usable login. Approvals needing a branch manager will be skipped for their branches until you link an active account or set a different manager.",
+      "missingLogin_one": "{{count}} employee still has no login and cannot raise requests.",
+      "missingLogin_other": "{{count}} employees still have no login and cannot raise requests.",
+      "waiting_one": "{{count}} request was waiting on this person and can no longer be signed by them.",
+      "waiting_other": "{{count}} requests were waiting on this person and can no longer be signed by them.",
+      "linked": "{{name}} now signs in as {{username}}.",
+      "unlinked": "{{name}} is no longer linked to a login.",
+      "viewOnly": "View only",
+      "changeAccount": "Change account",
+      "linkAccount": "Link account",
+      "unlink": "Unlink",
+      "empty": "No active employees.",
+      "changeTitle": "Change account · {{name}}",
+      "linkTitle": "Link account · {{name}}",
+      "unlinkTitle": "Unlink account · {{name}}",
+      "changeHint": "This changes which login {{name}} signs in with. Requests they raised in the past are not affected.",
+      "noUnlinked": "No unlinked accounts.",
+      "noUnlinkedHint": "Every account is already linked to someone. Create one first.",
+      "goToUsers": "Go to Users",
+      "account": "Account",
+      "disabledOption": "{{name}} — disabled",
+      "searchAccounts": "Search accounts…",
+      "onlyUnlinked": "Only accounts not yet linked to anyone are listed, so you cannot pick one that is already taken.",
+      "unlinkBody": "<name>{{name}}</name> will no longer be able to sign in or raise requests. Requests they already raised are not affected.",
+      "managesBranch": "They manage {{branch}}. Branch-manager approvals for that branch will be skipped until you link them again or set a different manager.",
+      "unlinking": "Unlinking…",
+      "unlinkAccount": "Unlink account",
+      "notLinked": "Not linked",
+      "accountDisabled": "{{username}} — account disabled"
+    },
+    "orgChart": {
+      "title": "Org chart",
+      "subtitle": "Who reports to whom, across the company.",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "help": "Each person sits under their manager. A line-manager approval step climbs this tree from the requester. Click anyone to open their record; to change a reporting line, edit them and set their “Reports to”.",
+      "open": "Open {{name}}",
+      "showReports": "Show who reports to {{name}}",
+      "hideReports": "Hide who reports to {{name}}",
+      "empty": "No employees to chart yet.",
+      "emptyHint": "Add employees and set who they report to, and the tree will build itself.",
+      "unplacedTitle": "Not placed in the hierarchy",
+      "unplaced_one": "This person has no “Reports to” set, so they do not appear in the tree above. Open them and set a manager on their employee form.",
+      "unplaced_other": "These people have no “Reports to” set, so they do not appear in the tree above. Open each of them and set a manager on their employee form."
+    },
+    "componentTypes": {
+      "systemBadge": "System",
+      "systemHint": "Payroll writes this type on every payslip: it cannot be renamed, deactivated or deleted."
     }
   },
   "settings": {
@@ -1280,7 +1958,8 @@
       "danger": "Danger zone",
       "notifications": "Notifications",
       "leave": "Leave",
-      "payroll": "Payroll"
+      "payroll": "Payroll",
+      "google": "Google sign-in"
     },
     "punchDirection": {
       "title": "Punch direction",
@@ -1311,7 +1990,68 @@
         "Approved": "Approved"
       }
     },
-    "systemDenied": "You don't have permission to view or change the system settings — the values that decide what a working day is, and therefore what people are paid. Ask an administrator if one of them needs to change. Your own preferences above are still yours."
+    "systemDenied": "You don't have permission to view or change the system settings — the values that decide what a working day is, and therefore what people are paid. Ask an administrator if one of them needs to change. Your own preferences above are still yours.",
+    "danger": {
+      "title": "Danger zone",
+      "doneLead": "<strong>All data has been deleted.</strong> This is what was kept:",
+      "kept": "Kept",
+      "rows": "Rows",
+      "sessionsCleared": "Every session was cleared, including yours. Sign in again to continue.",
+      "goToSignIn": "Go to sign in",
+      "intro": "Deletes every request, attendance record and employee. Users, roles, chains, branches and leave policy remain.",
+      "arm": "Arm system reset",
+      "armHint": "Disarms itself after every reset.",
+      "armUnreadable": "The arming setting could not be read, so the reset cannot be armed from here.",
+      "open": "Delete all data…",
+      "dialogTitle": "Delete all data?",
+      "dialogDeletes": "This deletes every request, attendance record and employee.",
+      "dialogRemains": "Users, roles, chains, branches and leave policy remain.",
+      "typePhrase": "Type <strong>{{phrase}}</strong> to continue.",
+      "typeAria": "Type {{phrase}} to confirm",
+      "notArmedHelp": "Close this and switch on <strong>{{arm}}</strong> above, then try again.",
+      "deleting": "Deleting…",
+      "confirm": "Delete everything"
+    },
+    "rows": {
+      "on": "On",
+      "off": "Off",
+      "lastChanged": "Last changed {{date}}",
+      "saved": "{{title}} saved.",
+      "explain": {
+        "standardDay": "A {{label}} day. A 2-hour exit permission costs {{cost}} of a leave day.",
+        "toleranceZero": "Zero: every minute past the shift start or before its end becomes an anomaly for HR to decide.",
+        "tolerance": "On a 07:00–15:00 shift: punching in at {{lateIn}} or later, or out at {{earlyOut}} or earlier, becomes an anomaly for HR to decide. A shift with its own Grace uses that instead.",
+        "fraction": "This is a fraction of the day, not a percentage: {{value}} means {{percent}}%.",
+        "fractionWhole": "The whole {{hours}}h day must be worked before it counts as full.",
+        "fractionPart": "With a {{hours}}h standard day, working {{label}} is enough to count as a full day."
+      }
+    },
+    "rowTitles": {
+      "StandardWorkDayHours": "Standard work day",
+      "ExitLeaveBasis": "Exit leave basis",
+      "AttendanceToleranceMinutes": "Attendance tolerance (minutes)",
+      "FullDayThreshold": "Full day threshold",
+      "TaxFamilyDeductionAnnualUsd": "Family tax deduction (annual, USD)",
+      "HolidayWorkRate": "Holiday work rate (× the day rate)",
+      "LeavePayoutOnTermination": "Pay the leave balance on termination",
+      "LeaveCountsRestDays": "Leave counts rest days and holidays",
+      "LeaveAllowNegativeBalance": "Allow a negative leave balance",
+      "LeaveCarryOverMaxDays": "Carry-over cap (days; blank = no cap)",
+      "LeaveCarryOverExpiresOn": "Carried-over days expire on (MM-DD; blank = never)",
+      "ShowPageHelp": "Show page help",
+      "SmtpHost": "Mail server",
+      "SmtpPort": "Port",
+      "SmtpUser": "User name",
+      "SmtpPassword": "Password",
+      "SmtpFromEmail": "From address",
+      "SmtpFromName": "From name",
+      "NotifyOnRequestClosed": "Email on a closed request",
+      "WhatsAppEnabled": "WhatsApp messages",
+      "WhatsAppApiUrl": "Cloud API URL",
+      "WhatsAppPhoneNumberId": "Sending number id",
+      "WhatsAppAccessToken": "Access token",
+      "WhatsAppTemplateName": "Template name"
+    }
   },
   "booking": {
     "noAccess": "You do not have access to bookings.",
@@ -1389,7 +2129,8 @@
       "openList": "Open All bookings",
       "seats_one": "{{count}} seat",
       "seats_other": "{{count}} seats",
-      "slotHint": "Book {{room}} at {{time}} — drag for a longer slot"
+      "slotHint": "Book {{room}} at {{time}} — drag for a longer slot",
+      "retired": "{{room}} (inactive)"
     },
     "drawer": {
       "title": "Booking #{{id}}",
@@ -1435,12 +2176,18 @@
       "personsHint": "This room takes {{min}} to {{max}} people.",
       "hoursHint": "{{day}}: open {{open}}–{{close}}.",
       "closedDay": "This room is closed on {{day}}.",
-      "endAfterStart": "The end time must be after the start time.",
+      "endAfterStart": "The end time must be after the start time (an end up to 06:00 is the next morning).",
       "emailHint": "Optional — with an address, the guest is emailed their confirmation.",
       "addonPerHour": "{{name}} — {{price}} per hour",
       "addonFixed": "{{name}} — {{price}}",
-      "previewHint": "An estimate. The price that is stored is the one the server works out when the booking is taken.",
-      "emailInvalid": "Enter a valid e-mail address."
+      "emailInvalid": "Enter a valid e-mail address.",
+      "hoursHintNextMorning": "{{day}}: open {{open}}–{{close}} the next morning. A start after midnight belongs to the next date.",
+      "nextMorning": "Ends at {{end}} the next morning — {{hours}} h.",
+      "discount": "Discount for {{hours}} h ({{percent}} %)",
+      "depositPercent": "Deposit ({{percent}} %)",
+      "quoteHint": "The server's price: the hour discount and the deposit for this notice, as the booking will store them.",
+      "quoteRefused": "Cannot price this yet: {{reason}}",
+      "quoting": "Working out the price…"
     },
     "block": {
       "title": "Block room",
@@ -1567,7 +2314,10 @@
       "paidInFull": "PAID",
       "balanceDue": "BALANCE DUE",
       "print": "Print",
-      "notFound": "That booking could not be found."
+      "notFound": "That booking could not be found.",
+      "roomChargePlain": "Room — {{hours}} h",
+      "discount": "Discount ({{percent}} %)",
+      "nothingDue": "NOTHING DUE"
     },
     "cancelledBy": {
       "Staff": "Staff",
@@ -1640,5 +2390,147 @@
     "custom": "Custom",
     "reset": "Back to the default period",
     "clear": "Clear the period"
+  },
+  "googleGate": {
+    "title": "Google sign-in",
+    "description": "An extra front door for the HRMS. When it is on, people first sign in with Google, and only the Gmail addresses below get through. The normal HRMS login follows.",
+    "requiredLabel": "Require Google sign-in to open the HRMS",
+    "requiredOn": "On. Everyone signs in with Google before the HRMS login.",
+    "requiredOff": "Off. The HRMS opens as usual.",
+    "lastChanged": "Last changed {{when}}",
+    "clientIdLabel": "Google client ID",
+    "clientIdHint": "Ends with .apps.googleusercontent.com. See How to set it up below.",
+    "clientIdPlaceholder": "1234567890-abc.apps.googleusercontent.com",
+    "daysLabel": "Days a Google sign-in lasts",
+    "daysHint": "After this, the browser asks for Google again. 1 to 365.",
+    "saved": "Google sign-in settings saved.",
+    "turnedOn": "Google sign-in is on.",
+    "turnedOff": "Google sign-in is off. The HRMS opens as usual.",
+    "confirmOn": {
+      "title": "Turn on Google sign-in?",
+      "body": "From now on, anyone who opens the HRMS must first sign in with a Google account on the list. People without a Gmail on their employee record will be kept out.",
+      "button": "Turn on"
+    },
+    "browser": {
+      "label": "This browser",
+      "verified": "Verified",
+      "notVerified": "Not verified",
+      "verifiedAs": "Verified in this browser as {{who}}.",
+      "notVerifiedHint": "Not verified in this browser. Test Google sign-in first: Google sign-in can only be turned on from a verified browser, so you can't lock yourself out.",
+      "test": "Test Google sign-in",
+      "signOut": "Sign this browser out of Google",
+      "signedOut": "This browser is signed out of Google.",
+      "signOutTitle": "Sign this browser out of Google?",
+      "signOutBody": "Google sign-in is on, so the HRMS will ask you to sign in with Google again."
+    },
+    "test": {
+      "title": "Test Google sign-in",
+      "intro": "Sign in with the Google account you use for the HRMS. This only checks the setup. It changes nothing for anyone else.",
+      "noClientId": "Save the Google client ID first.",
+      "loading": "Loading Google…",
+      "loadFailed": "Google's sign-in could not load. Check the connection and try again.",
+      "checking": "Checking…",
+      "success": "Verified as {{who}}.",
+      "tooMany": "Too many tries. Wait a minute and try again.",
+      "retry": "Try again",
+      "help": "If the button does nothing, allow pop-ups for this site."
+    },
+    "howTo": {
+      "title": "How to set it up",
+      "step1": "In Google Cloud, open Google Auth Platform, press Get started and choose External as the audience. The full steps are in {{doc}}.",
+      "step2": "Under Audience, press Publish app so it says In production. In Testing, only the test users listed there can sign in.",
+      "step3": "Under Clients, create a client of type Web application, with {{origin}} under Authorized JavaScript origins.",
+      "step4": "Paste the client ID above and press Save.",
+      "step5": "Press Test Google sign-in and sign in with your own Gmail.",
+      "step6": "Turn the switch on."
+    },
+    "people": {
+      "title": "Who can open the HRMS",
+      "description": "Employees pass with the Gmail on their employee record, if they have an active HRMS login and have not left. To change a Gmail, edit the employee.",
+      "summary": "{{allowed}} of {{total}} employees can open the HRMS.",
+      "search": "Search name, Gmail or branch",
+      "statusFilter": "Status",
+      "allStatuses": "All statuses",
+      "cols": {
+        "name": "Employee",
+        "email": "Gmail",
+        "status": "Status",
+        "lastSignIn": "Last Google sign-in",
+        "allowed": "Allowed"
+      },
+      "allowAria": "Allow {{name}} to open the HRMS",
+      "never": "Never",
+      "empty": "No employees match.",
+      "blocked": "Google sign-in is off for {{name}}.",
+      "unblocked": "{{name}} can open the HRMS again.",
+      "status": {
+        "Allowed": "Allowed",
+        "Blocked": "Blocked",
+        "NoEmail": "No Gmail",
+        "NoUser": "No HRMS login",
+        "UserDisabled": "Login disabled",
+        "Left": "Left"
+      }
+    },
+    "extras": {
+      "title": "Extra Google accounts",
+      "description": "People who are not employees, such as the owner or the accountant.",
+      "add": "Add account",
+      "cols": {
+        "email": "Gmail",
+        "note": "Note",
+        "active": "Active",
+        "lastSignIn": "Last Google sign-in",
+        "actions": "Actions"
+      },
+      "empty": "No extra accounts.",
+      "addTitle": "Add a Google account",
+      "editTitle": "Edit Google account",
+      "emailLabel": "Gmail",
+      "emailPlaceholder": "name@gmail.com",
+      "noteLabel": "Note",
+      "notePlaceholder": "Who this is, for example Owner",
+      "activeLabel": "Can open the HRMS",
+      "emailRequired": "Enter a full Google email address.",
+      "added": "{{email}} added.",
+      "saved": "{{email}} saved.",
+      "removed": "{{email}} removed.",
+      "activeAria": "{{email}} can open the HRMS",
+      "editAria": "Edit {{email}}",
+      "removeAria": "Remove {{email}}",
+      "removeTitle": "Remove this account?",
+      "removeBody": "{{email}} will no longer be able to open the HRMS.",
+      "remove": "Remove"
+    },
+    "recent": {
+      "title": "Recent sign-ins",
+      "description": "The last 100 Google sign-ins, allowed and refused.",
+      "cols": {
+        "when": "When",
+        "email": "Gmail",
+        "result": "Result",
+        "person": "Employee",
+        "ip": "IP address"
+      },
+      "empty": "No sign-ins yet.",
+      "showAll": "Show all {{count}}",
+      "showLess": "Show fewer",
+      "outcome": {
+        "Allowed": "Allowed",
+        "NotFound": "Not on the list",
+        "Blocked": "Blocked",
+        "NoUser": "No HRMS login",
+        "Left": "Left"
+      }
+    },
+    "signOutAll": {
+      "title": "Sign everyone out",
+      "description": "Ends every Google sign-in on every browser. Everyone signs in with Google again the next time they open the HRMS. You stay signed in on this browser.",
+      "button": "Sign everyone out…",
+      "confirmTitle": "Sign everyone out of Google?",
+      "confirmBody": "Everyone will need to sign in with Google again. You stay signed in on this browser.",
+      "confirmButton": "Sign everyone out",
+      "done": "Everyone was signed out of Google."
+    }
   }
 }

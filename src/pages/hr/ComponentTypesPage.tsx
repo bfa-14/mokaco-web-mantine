@@ -15,6 +15,7 @@ import { PERMISSION } from '../../auth/routeAccess'
 import { componentTypesService } from '../../services/hrService'
 import { isActiveRow } from '../../types/hr'
 import type { ComponentType } from '../../types/hr'
+import { isSystemType } from './salaryRows'
 
 const CATEGORIES = ['Earning', 'Deduction']
 
@@ -80,7 +81,24 @@ function ComponentTypesGrid({
   const columns = useMemo(
     () => [
       columnHelper.accessor('componentTypeId', { header: 'ID' }),
-      columnHelper.accessor('name', { header: 'Name' }),
+      // A SYSTEM type (QA3 PAY-10) is one payroll writes itself — found by its code, so renaming it
+      // used to drop its line from every payslip without a word. Marked here for every reader.
+      columnHelper.accessor('name', {
+        header: 'Name',
+        cell: (info) => (
+          <>
+            {info.getValue()}
+            {isSystemType(info.row.original) && (
+              <>
+                {' '}
+                <span className="badge badge--muted" title={t('hr.componentTypes.systemHint')}>
+                  {t('hr.componentTypes.systemBadge')}
+                </span>
+              </>
+            )}
+          </>
+        ),
+      }),
       columnHelper.accessor('category', {
         header: 'Category',
         meta: { filterOptions: optionsFrom(rows, (r) => r.category) },
@@ -110,7 +128,11 @@ function ComponentTypesGrid({
             columnHelper.display({
               id: 'actions',
               header: 'Actions',
-              cell: (info) => (
+              cell: (info) => isSystemType(info.row.original) ? (
+                /* No rename, no deactivation, no delete: the procedures refuse all three for a system
+                   type, so the page offers none of them and says why. */
+                <span className="hint" style={{ margin: 0 }}>{t('hr.componentTypes.systemHint')}</span>
+              ) : (
                 <div className="grid-actions">
                   <Button
                     variant="subtle"

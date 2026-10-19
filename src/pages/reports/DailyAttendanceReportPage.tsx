@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button, Select } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { IconCalendar, IconSearch } from '@tabler/icons-react'
@@ -12,8 +13,8 @@ import type {
   DailyAttendanceHeader,
   DailyAttendanceRow,
 } from '../../types/reports'
-import { ReportShell, ReportDocHead } from './ReportShell'
-import { REPORT_VIEW, today, reportDate, reportMinutes } from './reportShared'
+import { ReportShell, ReportDocHead, ReportNoAccess } from './ReportShell'
+import { REPORT_VIEW, today, reportBranchName, reportDate, reportMinutes } from './reportShared'
 
 /** '2026-06-10T08:05:00' → '08:05'. Blank punches read as a dash, not an empty cell. */
 function clock(value: string | null): string {
@@ -39,6 +40,7 @@ function tallyOf(rows: DailyAttendanceRow[]) {
  * is inserted whenever the branch changes rather than re-sorting on the client.
  */
 export default function DailyAttendanceReportPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canView = hasPermission(REPORT_VIEW)
 
@@ -107,23 +109,7 @@ export default function DailyAttendanceReportPage() {
   }, [])
 
   if (!canView) {
-    return (
-      <div>
-        <div className="page-head">
-          <div>
-            <h1 className="page-title">Daily Attendance Sheet</h1>
-          </div>
-        </div>
-        <div className="card">
-          <div className="empty-hint">
-            <div className="empty-hint-main">
-              You do not have access to attendance reports.
-            </div>
-            Reports need the &lsquo;view attendance&rsquo; permission.
-          </div>
-        </div>
-      </div>
-    )
+    return <ReportNoAccess title={t('attendance.reports.daily.title')} />
   }
 
   const tally = tallyOf(rows)
@@ -139,13 +125,13 @@ export default function DailyAttendanceReportPage() {
     <div>
       <div className="page-head report-no-print">
         <div>
-          <h1 className="page-title">Daily Attendance Sheet</h1>
-          <p className="page-subtitle">Who was in, late, absent or off on a day.</p>
+          <h1 className="page-title">{t('attendance.reports.daily.title')}</h1>
+          <p className="page-subtitle">{t('attendance.reports.daily.subtitle')}</p>
         </div>
       </div>
 
       <ReportShell
-        help="One row per employee for a single day, grouped by branch. Use it as the morning sheet: who clocked in, who was late, who never showed. A warning icon marks a day whose punches did not add up — its hours are not yet trustworthy."
+        help={t('attendance.reports.daily.help')}
         canPrint={header !== null}
         loading={loading}
         error={error}
@@ -154,7 +140,7 @@ export default function DailyAttendanceReportPage() {
         filters={
           <>
             <div className="report-filter">
-              <span className="report-filter-label">Date</span>
+              <span className="report-filter-label">{t('common.date')}</span>
               {/* A daily sheet is always FOR a day, so clearing keeps the day already chosen —
                   the same `|| workDate` guard the native input carried. */}
               <DatePickerInput
@@ -166,11 +152,11 @@ export default function DailyAttendanceReportPage() {
               />
             </div>
             <div className="report-filter">
-              <span className="report-filter-label">Branch</span>
+              <span className="report-filter-label">{t('common.branch')}</span>
               <Select
                 data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
                 value={branchId != null ? String(branchId) : null}
-                placeholder="All branches"
+                placeholder={t('common.report.allBranches')}
                 clearable
                 w={200}
                 onChange={(v) => setBranchId(v != null ? Number(v) : null)}
@@ -181,7 +167,7 @@ export default function DailyAttendanceReportPage() {
               leftSection={<IconSearch size={16} />}
               onClick={() => void generate()}
             >
-              Generate
+              {t('common.report.generate')}
             </Button>
           </>
         }
@@ -189,27 +175,27 @@ export default function DailyAttendanceReportPage() {
         {header && (
           <>
             <ReportDocHead
-              title={header.reportTitle}
+              title={t('attendance.reports.daily.title')}
               generatedUtc={header.generatedUtc}
               meta={[
-                { label: 'Date', value: reportDate(header.workDate) },
-                { label: 'Branch', value: header.branchName },
+                { label: t('common.date'), value: reportDate(header.workDate) },
+                { label: t('common.branch'), value: reportBranchName(header.branchName) },
               ]}
             />
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>Employee</th>
-                  <th>Shift</th>
-                  <th className="num">First in</th>
-                  <th className="num">Last out</th>
-                  <th className="num">Late</th>
-                  <th className="num">Worked hrs</th>
-                  <th className="num">Overtime</th>
-                  <th className="num">Exit</th>
-                  <th className="num">Day fraction</th>
-                  <th>Status</th>
-                  <th>Source</th>
+                  <th>{t('common.report.employee')}</th>
+                  <th>{t('attendance.reports.col.shift')}</th>
+                  <th className="num">{t('attendance.reports.col.firstIn')}</th>
+                  <th className="num">{t('attendance.reports.col.lastOut')}</th>
+                  <th className="num">{t('attendance.reports.col.late')}</th>
+                  <th className="num">{t('attendance.reports.col.workedHours')}</th>
+                  <th className="num">{t('attendance.reports.col.overtime')}</th>
+                  <th className="num">{t('attendance.reports.col.exit')}</th>
+                  <th className="num">{t('attendance.reports.col.dayFraction')}</th>
+                  <th>{t('attendance.reports.col.status')}</th>
+                  <th>{t('attendance.reports.col.source')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -225,7 +211,7 @@ export default function DailyAttendanceReportPage() {
                           {r.hasAnomaly && (
                             <span
                               className="report-anomaly"
-                              title="The punches on this day did not add up — the hours are not yet trustworthy."
+                              title={t('attendance.reports.daily.anomaly')}
                             >
                               ⚠{' '}
                             </span>
@@ -240,8 +226,8 @@ export default function DailyAttendanceReportPage() {
                         <td className="num">{reportMinutes(r.overtimeMinutes)}</td>
                         <td className="num">{reportMinutes(r.exitActualMinutes)}</td>
                         <td className="num">{r.dayFraction == null ? '—' : r.dayFraction.toFixed(2)}</td>
-                        <td>{r.status === 'RestDay' ? 'Rest day' : r.status}</td>
-                        <td>{r.source}</td>
+                        <td>{t(`attendance.status.${r.status}`, { defaultValue: r.status })}</td>
+                        <td>{t(`attendance.reports.source.${r.source}`, { defaultValue: r.source })}</td>
                       </tr>
                     </Fragment>
                 ))}
@@ -249,9 +235,7 @@ export default function DailyAttendanceReportPage() {
               <tfoot>
                 <tr>
                   <td colSpan={11}>
-                    {rows.length} employees &nbsp;·&nbsp; Present {tally.present}
-                    &nbsp;·&nbsp; Late {tally.late} &nbsp;·&nbsp; Absent{' '}
-                    {tally.absent} &nbsp;·&nbsp; On leave {tally.leave}
+                    {t('attendance.reports.daily.tally', { count: rows.length, ...tally })}
                   </td>
                 </tr>
               </tfoot>

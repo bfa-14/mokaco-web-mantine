@@ -1,26 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { leaveLedgerService } from '../../services/hrService'
-import type { LeaveDay } from '../../types/hr'
+import { rosterService } from '../../services/attendanceService'
+import type { RosterLeaveDay } from '../../types/attendance'
 
 /**
  * THE SEAM between the roster and whatever the system believes "approved leave" is.
  *
  * WHY IT IS A HOOK AND NOT A CALL
- *   Leave has no proper home yet. workflow.LEAVE_REQUEST — a request with a real FromDate..ToDate
- *   to expand into days — belongs to the workflow stage and has NOT been built. Today the only
- *   source is hr.LEAVE_LEDGER: movement rows matched on a single EffectiveDate.
+ *   The roster is written against this question — "which employee-days are on approved leave between
+ *   these two dates?" — and this file owns the answer. When the answer's source changed, only this
+ *   file changed.
  *
- *   So the roster is deliberately NOT written against the ledger. It is written against this
- *   question — "which employee-days are on leave between these two dates?" — which stays true no
- *   matter what answers it. When LEAVE_REQUEST arrives, THIS FILE changes (and the stored
- *   procedure behind it). The roster page does not.
- *
- * KNOWN LIMITATION, INHERITED FROM THE LEDGER
- *   The ledger books leave as a movement on ONE date, with a number of days. A five-day holiday
- *   entered as a single row therefore reports as ONE leave day of 5.00 — not five days. This hook
- *   cannot fix that: the other four dates simply are not recorded anywhere. It is the single
- *   strongest argument for building LEAVE_REQUEST, and it is why `daysOnLeave` is surfaced rather
- *   than hidden — a caller can at least SEE that a day claims to be worth more than one.
+ * WHERE THE ANSWER COMES FROM (QA3 ROS-4 / LEV-5)
+ *   GET /api/roster/leave-days: the APPROVED leave requests, day by day — FromDate up to the day the
+ *   approval covers (a partial approval keeps its first days), a half-day leave as 0.5 — for the
+ *   branch each employee belonged to ON the day, and only the branches the caller may see. It used to
+ *   be the leave LEDGER, which books a month of leave as one movement on one date ("one day worth
+ *   5.00") and also holds the exit-permission minutes converted to leave, which are not days off.
  */
 export interface ApprovedLeave {
   /** True when this employee is on approved leave that day. `date` may be 'yyyy-MM-dd' or a full timestamp. */
@@ -28,7 +23,7 @@ export interface ApprovedLeave {
   /** How much of the day is leave (1.00 whole, 0.50 half), or 0 when they are not on leave. */
   daysOnLeave: (employeeId: number, date: string) => number
   /** The raw rows, for a caller that wants to list them. */
-  days: LeaveDay[]
+  days: RosterLeaveDay[]
   loading: boolean
   /** Why leave could not be read, if it could not. NEVER swallowed — see below. */
   error: string | null
@@ -41,28 +36,30 @@ function key(employeeId: number, date: string): string {
 }
 
 /**
- * Which employee-days are on approved leave between two dates.
+ * Which employee-days are on approved leave between two dates — of one branch (`branchId`, by the
+ * branch of the day) or of every branch the caller may see (null).
  *
  * On failure this reports `error` and answers "nobody is on leave" — and that combination is
  * deliberate. Answering "everybody might be" would block the roster entirely; answering "nobody is"
- * silently would let somebody be scheduled over their holiday. So it fails OPEN but LOUDLY: the
- * caller is expected to show the error and let the user decide, not pretend leave was checked.
+ * silently would hide that the overlay is missing. So it fails OPEN but LOUDLY: the caller is
+ * expected to show the error, not pretend leave was read.
  */
 export function useApprovedLeaveDays(
   fromDate: string,
   toDate: string,
+  branchId: number | null = null,
 ): ApprovedLeave {
-  const [days, setDays] = useState<LeaveDay[]>([])
+  const [days, setDays] = useState<RosterLeaveDay[]>([])
   const [byKey, setByKey] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const fetchDays = useCallback(async (): Promise<{
-    rows: LeaveDay[]
+    rows: RosterLeaveDay[]
     failure: string | null
   }> => {
     try {
-      return { rows: await leaveLedgerService.getLeaveDays(fromDate, toDate), failure: null }
+      return { rows: await rosterService.leaveDays(fromDate, toDate, branchId), failure: null }
     } catch (err) {
       return {
         rows: [],
@@ -72,7 +69,7 @@ export function useApprovedLeaveDays(
             : 'Approved leave could not be read.',
       }
     }
-  }, [fromDate, toDate])
+  }, [fromDate, toDate, branchId])
 
   useEffect(() => {
     let cancelled = false

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Badge, Button, Group, Loader, MultiSelect, Pagination, PasswordInput, Select, Switch, Table, TextInput } from '@mantine/core'
@@ -17,6 +18,8 @@ import type {
   UserSignatureInfo,
 } from '../../types/security'
 import { SignatureThumb } from './SignatureThumb'
+import { dateTime } from '../workflow/workflowFormat'
+import { t as translate } from '../../i18n/t'
 import { SignatureDialog } from './SignatureDialog'
 
 interface CreateFormState {
@@ -33,9 +36,11 @@ const EMPTY_FORM: CreateFormState = {
   roleIds: [],
 }
 
-/** The two words the Active cell prints — also the closed set its filter dropdown offers. */
-const ACTIVE_LABELS = ['Active', 'Inactive']
-const activeText = (isActive: boolean) => (isActive ? 'Active' : 'Inactive')
+/** The two words the Active cell prints — also the closed set its filter dropdown offers. Read at
+    render, so they follow the language (the routed tree remounts on a switch). */
+const activeLabels = () => [translate('security.users.active'), translate('security.users.inactive')]
+const activeText = (isActive: boolean) =>
+  translate(isActive ? 'security.users.active' : 'security.users.inactive')
 
 /** The Roles cell's text — what the filter row and the funnel match against. */
 const rolesText = (user: UserListItem) => roleNamesOf(user).join(', ')
@@ -50,7 +55,7 @@ const employeeText = (user: UserListItem) => user.employeeName ?? ''
 function RolesCell({ user }: { user: UserListItem }) {
   const names = roleNamesOf(user)
   if (user.roles == null) return <span className="hint" style={{ margin: 0 }}>—</span>
-  if (names.length === 0) return <span className="badge badge--muted">None</span>
+  if (names.length === 0) return <span className="badge badge--muted">{translate('security.users.none')}</span>
   return (
     <Group gap={4} wrap="wrap">
       {names.map((name) => (
@@ -78,9 +83,10 @@ function notify(message: string, type: 'success' | 'error', ms: number) {
   notifications.show({ message, color: type === 'success' ? 'green' : 'red', autoClose: ms })
 }
 
-/** DevExtreme's dataType="datetime" rendering, by hand: locale string, blank for null. */
+/** DevExtreme's dataType="datetime" rendering, by hand: locale string, blank for null. The value is
+    UTC with no zone on the wire, which dateTime() reads as UTC (QA3 WEB-11). */
 function dateTimeCell(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : ''
+  return value ? dateTime(value) : ''
 }
 
 /* PORT NOTE: the grid's SearchPanel, FilterRow and HeaderFilter are all present — search box,
@@ -93,6 +99,7 @@ const columnHelper = createColumnHelper<UserListItem>()
 const PAGE_SIZES = ['10', '25', '50']
 
 export default function UsersPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   // A signature is stamped onto an audit trail, so only Admin/Owner may upload one. The whole
   // signature UI is hidden — not disabled — for anyone else.
@@ -195,7 +202,7 @@ export default function UsersPage() {
       try {
         await usersService.setActive(user.userId, !user.isActive)
         notify(
-          `${user.username} ${user.isActive ? 'deactivated' : 'activated'}.`,
+          t(user.isActive ? 'security.users.deactivated' : 'security.users.activated', { name: user.username }),
           'success',
           2000,
         )
@@ -204,18 +211,18 @@ export default function UsersPage() {
         notify(getErrorMessage(err), 'error', 3500)
       }
     },
-    [loadUsers],
+    [loadUsers, t],
   )
 
   async function submitCreate() {
     // The RequiredRules' work, done by hand now the Validators are gone: name the first
     // missing field with the same message the rule showed.
     if (!form.username.trim()) {
-      setFormError('Username is required')
+      setFormError(t('auth.usernameRequired'))
       return
     }
     if (!form.password.trim()) {
-      setFormError('Password is required')
+      setFormError(t('auth.passwordRequired'))
       return
     }
     setFormError(null)
@@ -227,7 +234,7 @@ export default function UsersPage() {
         isActive: form.isActive,
         roleIds: form.roleIds,
       })
-      notify(`User "${form.username.trim()}" created.`, 'success', 2500)
+      notify(t('security.users.created', { name: form.username.trim() }), 'success', 2500)
       setPopupVisible(false)
       await loadUsers()
     } catch (err) {
@@ -249,7 +256,7 @@ export default function UsersPage() {
     setRolesError(null)
     try {
       await usersService.setRoles(rolesTarget.userId, rolesDraft)
-      notify(`Roles for "${rolesTarget.username}" saved.`, 'success', 2500)
+      notify(t('security.users.rolesSaved', { name: rolesTarget.username }), 'success', 2500)
       setRolesTarget(null)
       await loadUsers()
     } catch (err) {
@@ -262,34 +269,34 @@ export default function UsersPage() {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('userId', { header: 'ID' }),
-      columnHelper.accessor('username', { header: 'Username' }),
+      columnHelper.accessor('userId', { header: t('security.users.cols.id') }),
+      columnHelper.accessor('username', { header: t('auth.username') }),
       // The linked employee and the roles: both read through helpers that tolerate an API that
       // does not send them yet (see UserListItem), so the grid degrades to blank cells, not a crash.
       columnHelper.accessor((u) => employeeText(u), {
         id: 'employee',
-        header: 'Employee',
+        header: t('security.users.cols.employee'),
         cell: (info) => info.getValue() || <span className="hint" style={{ margin: 0 }}>—</span>,
       }),
       columnHelper.accessor((u) => rolesText(u), {
         id: 'roles',
-        header: 'Roles',
+        header: t('security.users.cols.roles'),
         cell: (info) => <RolesCell user={info.row.original} />,
       }),
       columnHelper.accessor('isActive', {
-        header: 'Active',
+        header: t('security.users.cols.active'),
         cell: (info) => <StatusCell isActive={info.row.original.isActive} />,
-        meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
+        meta: { filterText: activeText, filterOptions: activeLabels() },
       }),
       // A never-signed-in account prints an empty cell; sorting stays on the raw timestamp.
       columnHelper.accessor('lastLoginAt', {
-        header: 'Last Login',
+        header: t('security.users.cols.lastLogin'),
         cell: (info) => dateTimeCell(info.getValue()),
         meta: { filterText: dateTimeCell },
       }),
       columnHelper.display({
         id: 'signature',
-        header: 'Signature',
+        header: t('security.users.cols.signature'),
         cell: (info) => {
           const user = info.row.original
           const sig = signatures.get(user.userId)
@@ -298,13 +305,13 @@ export default function UsersPage() {
           return sig?.hasSignature ? (
             <SignatureThumb userId={user.userId} version={sig.updatedAt} />
           ) : (
-            <span className="badge badge--muted">None</span>
+            <span className="badge badge--muted">{t('security.users.none')}</span>
           )
         },
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: t('security.users.cols.actions'),
         cell: (info) => {
           const user = info.row.original
           return (
@@ -315,16 +322,16 @@ export default function UsersPage() {
                 color={user.isActive ? 'red' : 'green'}
                 onClick={() => void toggleActive(user)}
               >
-                {user.isActive ? 'Deactivate' : 'Activate'}
+                {user.isActive ? t('security.users.deactivate') : t('security.users.activate')}
               </Button>
               <Button
                 variant="subtle"
                 size="compact-sm"
                 leftSection={<IconShield size={14} />}
-                title="Change which roles this user holds."
+                title={t('security.users.rolesHint')}
                 onClick={() => openRoles(user)}
               >
-                Roles
+                {t('security.users.cols.roles')}
               </Button>
               {/* SIGNATURE_MANAGE only — hidden, never disabled. */}
               {canManageSignatures && (
@@ -332,10 +339,10 @@ export default function UsersPage() {
                   variant="subtle"
                   size="compact-sm"
                   leftSection={<IconPencil size={14} />}
-                  title="Upload or change this user's signature image."
+                  title={t('security.users.signatureHint')}
                   onClick={() => setSigTarget(user)}
                 >
-                  Signature
+                  {t('security.users.cols.signature')}
                 </Button>
               )}
             </div>
@@ -344,7 +351,8 @@ export default function UsersPage() {
       }),
     ],
     // `roles` prefills the roles editor from a row's names.
-    [signatures, canManageSignatures, toggleActive, roles],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openRoles reads `roles`, which is listed
+    [signatures, canManageSignatures, toggleActive, roles, t],
   )
 
   /** The pixel widths the original grid pinned; unlisted columns auto-size, as columnAutoWidth did. */
@@ -385,21 +393,21 @@ export default function UsersPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Users</h1>
-          <p className="page-subtitle">Manage HRMS user accounts.</p>
+          <h1 className="page-title">{t('security.users.title')}</h1>
+          <p className="page-subtitle">{t('security.users.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={18} />
           </ActionIcon>
           <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            New User
+            {t('security.users.new')}
           </Button>
         </div>
       </div>
@@ -420,7 +428,7 @@ export default function UsersPage() {
             <TextInput
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search"
+              placeholder={t('common.search')}
               leftSection={<IconSearch size={14} />}
               w={240}
               size="xs"
@@ -454,7 +462,7 @@ export default function UsersPage() {
                 <Table.Tr>
                   <Table.Td colSpan={columns.length}>
                     <div className="empty-hint" style={{ padding: 16 }}>
-                      No users found.
+                      {t('security.users.empty')}
                     </div>
                   </Table.Td>
                 </Table.Tr>
@@ -474,8 +482,11 @@ export default function UsersPage() {
 
           <Group justify="space-between" mt="xs">
             <span className="hint" style={{ margin: 0 }}>
-              {total === 0 ? 0 : pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, total)} of {total}
+              {t('common.pageInfo', {
+                from: total === 0 ? 0 : pageIndex * pageSize + 1,
+                to: Math.min((pageIndex + 1) * pageSize, total),
+                total,
+              })}
             </span>
             <Group gap="xs">
               <Select
@@ -499,13 +510,13 @@ export default function UsersPage() {
       <Modal
         opened={popupVisible}
         onClose={() => setPopupVisible(false)}
-        title="New User"
+        title={t('security.users.new')}
         size={440}
         centered
       >
         <div className="form-field">
           <label className="form-label" htmlFor="new-user-username">
-            Username
+            {t('auth.username')}
           </label>
           <TextInput
             id="new-user-username"
@@ -520,7 +531,7 @@ export default function UsersPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="new-user-password">
-            Password
+            {t('auth.password')}
           </label>
           <PasswordInput
             id="new-user-password"
@@ -535,7 +546,7 @@ export default function UsersPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="new-user-roles">
-            Roles
+            {t('security.users.cols.roles')}
           </label>
           <MultiSelect
             id="new-user-roles"
@@ -544,14 +555,14 @@ export default function UsersPage() {
             onChange={(values) =>
               setForm((f) => ({ ...f, roleIds: values.map(Number) }))
             }
-            placeholder="Select roles…"
+            placeholder={t('security.users.rolesPlaceholder')}
             disabled={saving}
           />
         </div>
 
         <div className="form-field form-field--row">
           <label className="form-label" htmlFor="new-user-active">
-            Active
+            {t('security.users.cols.active')}
           </label>
           <Switch
             id="new-user-active"
@@ -576,10 +587,10 @@ export default function UsersPage() {
             onClick={() => setPopupVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitCreate()} disabled={saving}>
-            {saving ? 'Saving…' : 'Create User'}
+            {saving ? t('common.saving') : t('security.users.create')}
           </Button>
         </div>
       </Modal>
@@ -589,27 +600,26 @@ export default function UsersPage() {
       <Modal
         opened={rolesTarget !== null}
         onClose={() => setRolesTarget(null)}
-        title={rolesTarget ? `Roles — ${rolesTarget.username}` : 'Roles'}
+        title={rolesTarget ? t('security.users.rolesTitle', { name: rolesTarget.username }) : t('security.users.cols.roles')}
         size={440}
         centered
       >
         <div className="form-field">
           <label className="form-label" htmlFor="edit-user-roles">
-            Roles
+            {t('security.users.cols.roles')}
           </label>
           <MultiSelect
             id="edit-user-roles"
             data={roles.map((r) => ({ value: String(r.roleId), label: r.name }))}
             value={rolesDraft.map(String)}
             onChange={(values) => setRolesDraft(values.map(Number))}
-            placeholder="Select roles…"
+            placeholder={t('security.users.rolesPlaceholder')}
             searchable
             disabled={rolesSaving}
           />
           {rolesTarget && rolesTarget.roles == null && (
             <p className="hint" style={{ marginTop: 6 }}>
-              The list did not carry this user's current roles, so the picker starts empty; what
-              you save here becomes the full set.
+              {t('security.users.rolesNotCarried')}
             </p>
           )}
         </div>
@@ -622,10 +632,10 @@ export default function UsersPage() {
 
         <div className="form-actions">
           <Button variant="default" onClick={() => setRolesTarget(null)} disabled={rolesSaving}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitRoles()} disabled={rolesSaving}>
-            {rolesSaving ? 'Saving…' : 'Save roles'}
+            {rolesSaving ? t('common.saving') : t('security.users.saveRoles')}
           </Button>
         </div>
       </Modal>

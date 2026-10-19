@@ -1,0 +1,63 @@
+/* ── Settings → Google sign-in ──────────────────────────────────────────────────────────────────
+   Only what the shared card/row anatomy (settings.css) does not already give: the people and log
+   tables' small print, the set-up steps and the place Google draws its button.
+   Logical properties only, like settings.css, so the tab mirrors in Arabic by construction. */
+
+/* The client ID box is 420 px wide, which is wider than a phone. A flex item will not shrink below
+   its content unless told to, so the row's control is allowed to — and the box's max-width:100%
+   then has something to be 100% of. */
+.gate-tab .set-row-control {
+  min-width: 0;
+}
+
+.gate-summary {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.gate-person {
+  font-weight: 500;
+}
+
+.gate-sub {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+/* An address is read left to right in both languages; <bdi> keeps it whole inside an RTL row. */
+.gate-email {
+  font-family: inherit;
+  word-break: break-all;
+}
+
+.gate-steps {
+  margin: 8px 0 0;
+  padding-inline-start: 20px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 84ch;
+}
+
+.gate-dialog-body {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.gsi-holder {
+  min-height: 44px;
+}
+
+.gsi-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+/* Google's iframe sets its own size; this only keeps it from sitting flush against the text. */
+.gsi-button {
+  padding-block: 4px;
+}

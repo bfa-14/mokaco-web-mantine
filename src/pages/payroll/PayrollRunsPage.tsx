@@ -18,6 +18,7 @@ import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { payrollRunsService } from '../../services/payrollService'
 import { exitPermissionsService } from '../../services/workflowService'
+import { dateTime } from '../workflow/workflowFormat'
 import { leaveTypesService } from '../../services/hrService'
 import type { AttendanceReadiness, PayrollRunListItem, PayrollRunType } from '../../types/payroll'
 import type { LeaveType } from '../../types/hr'
@@ -91,6 +92,10 @@ export default function PayrollRunsPage() {
      below stays fully readable without the write trust — only the acts disappear. */
   const { hasPermission } = useAuth()
   const canRun = hasPermission(PERMISSION.PAYROLL_RUN)
+  /* Posting converted exit-permission time as leave is POST /api/exit-permissions/post-leave, which is
+     ATTENDANCE_MANAGE — not a payroll code (QA3 WEB-14). Offered on the code that endpoint checks, so the
+     button appears exactly where pressing it works. */
+  const canPostExitLeave = hasPermission(PERMISSION.ATTENDANCE_MANAGE)
   const [runs, setRuns] = useState<PayrollRunListItem[]>(EMPTY_RUNS)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -292,12 +297,13 @@ export default function PayrollRunsPage() {
       columnHelper.accessor('lockedAt', {
         header: 'Locked',
         size: 150,
+        // UTC on the wire with no zone: dateTime() reads it as UTC (QA3 WEB-11).
         cell: (info) => {
           const v = info.getValue()
-          return v ? new Date(v).toLocaleString() : ''
+          return v ? dateTime(v) : ''
         },
         meta: { filterText: (v) =>
-          v ? new Date(v).toLocaleString() : '' },
+          v ? dateTime(v) : '' },
       }),
     ],
     // `grid` only feeds the Status dropdown's option list.
@@ -339,8 +345,8 @@ export default function PayrollRunsPage() {
           </ActionIcon>
           {/* A period-close chore rather than a run: nothing schedules it, and skipping it leaves
               converted exit time never deducted from anybody's leave balance. It writes the leave
-              ledger for a payroll period, so it belongs to whoever runs payroll. */}
-          {canRun && (
+              ledger for a payroll period; the endpoint asks for ATTENDANCE_MANAGE, so does the button. */}
+          {canPostExitLeave && (
             <Button
               variant="default"
               leftSection={<IconClock size={16} />}
@@ -357,7 +363,7 @@ export default function PayrollRunsPage() {
         </div>
       </div>
 
-      {closeOpen && (
+      {closeOpen && canPostExitLeave && (
         <div className="card" style={{ marginTop: 12 }}>
           <div className="card-title">Post exit-permission leave</div>
           <p className="hint" style={{ marginTop: 0 }}>

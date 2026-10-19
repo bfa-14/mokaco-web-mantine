@@ -58,7 +58,6 @@ import {
   isStruck,
   laneLayout,
   MAX_GRID_DAYS,
-  minutesOf,
   nowMinutes,
   PERMISSIONS,
   PIXELS_PER_HOUR,
@@ -70,11 +69,21 @@ import {
   STATUS_CLASS,
   statusLabel,
   today,
-  visibleWindow,
   weekdayName,
 } from './bookingShared'
+import {
+  calendarWindow,
+  clockMinutes,
+  closeMinOf,
+  NEXT_MORNING_LIMIT,
+  nowInColumn,
+  placeInColumns,
+  slotToForm,
+  spanOf,
+} from './bookingTimes'
 import { BookingDrawer } from './BookingDrawer'
-import { useBookingChanged } from '../../live/bookingLive'
+import { latestOnly } from './latestOnly'
+import { useBookingChanged, useCalendarChanged } from '../../live/bookingLive'
 import { NewBookingModal } from './NewBookingModal'
 import { BlockRoomModal } from './BlockRoomModal'
 import './bookings.css'
@@ -110,6 +119,15 @@ import './bookings.css'
  * in the list-page sense: every other status stays, because a calendar exists to show what the room
  * is doing and hiding a completed booking would leave time looking free that somebody stood in. A
  * cancellation, though, freed the room — drawing it keeps a slot looking taken that is now for sale.
+ *
+ * THE NIGHT RUNS PAST MIDNIGHT (QA3 BKG-2). The rooms close at 01:00, so a column is its date's
+ * MINUTES, up to 1500 and beyond (bookingTimes): a 22:00–01:00 booking is one card down to 01:00,
+ * the website's 00:00–01:00 start (stored on the next date) is drawn under the previous night at
+ * 24:00–25:00, and a slot clicked after midnight opens the forms on the next date. The range is
+ * fetched with ONE DAY MORE for the last night's after-midnight bookings.
+ *
+ * A RETIRED ROOM WITH BOOKINGS STILL SHOWS (QA3 BKG-11): deactivating a room stops new bookings, it
+ * does not cancel the ones it has, and those used to vanish from the calendar with its column.
  */
 export default function BookingCalendarPage() {
   const { t } = useTranslation()
@@ -215,22 +233,24 @@ export default function BookingCalendarPage() {
     end: string | null
   }>({ roomId: null, date: null, start: null, end: null })
 
-  /* The catalogue: rooms, their weekly hours, their add-ons. Loaded once — a room's opening hours
-     do not change while somebody is paging through a month. */
-  useEffect(() => {
-    let cancelled = false
-    roomsService
-      .getCatalog(true)
-      .then((result) => {
-        if (!cancelled) setCatalog(result)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err))
-      })
-    return () => {
-      cancelled = true
+  /* The catalogue: rooms, their weekly hours, their add-ons. Loaded once, and again when a room, its
+     hours or its add-ons are edited at another till (CalendarChanged 'room', below). An answer a
+     later load has superseded is dropped (latestOnly). */
+  const [catalogLatest] = useState(latestOnly)
+  const loadCatalog = useCallback(async () => {
+    const isLatest = catalogLatest.begin()
+    try {
+      const result = await roomsService.getCatalog(true)
+      if (isLatest()) setCatalog(result)
+    } catch (err) {
+      if (isLatest()) setError(getErrorMessage(err))
     }
-  }, [])
+  }, [catalogLatest])
+
+  useEffect(() => {
+    void loadCatalog()
+    return () => catalogLatest.cancel()
+  }, [loadCatalog, catalogLatest])
 
   /* The two grid settings, and ONLY for somebody who may read them.
      /api/settings is SETTING_MANAGE, which most of the people who live on this page do not have —
@@ -264,7 +284,19 @@ export default function BookingCalendarPage() {
     }
   }, [canReadSettings])
 
+  /**
+   * The range's bookings and blocks.
+   *
+   * ONLY THE LATEST ANSWER IS DRAWN (WEB-17). Paging through weeks, a live message and a filter change
+   * each start a fetch, and an older answer arriving last used to overwrite the newer range: the
+   * sequence guard (latestOnly, RequestsHubPage's reqSeq) marks the latest call and drops the rest.
+   *
+   * ONE DAY MORE THAN THE RANGE (QA3 BKG-2): the last night runs past midnight, and a booking that
+   * starts after midnight is stored on the next date — it is drawn under the last day, so it is fetched.
+   */
+  const [rangeLatest] = useState(latestOnly)
   const load = useCallback(async () => {
+    const isLatest = rangeLatest.begin()
     if (tooLong) {
       // A range past the cap is not drawn, so it is not fetched either — the point of the cap is
       // that a quarter of bookings is a report, not a screenful.
@@ -275,19 +307,26 @@ export default function BookingCalendarPage() {
 
     setLoading(true)
     try {
-      const result = await bookingsService.getRange(rangeFrom, rangeTo, roomFilter)
+      const result = await bookingsService.getRange(rangeFrom, addDays(rangeTo, 1), roomFilter)
+      if (!isLatest()) return // a newer fetch superseded this one
       setBookings(result.bookings)
       setBlocks(result.blocks)
       setError(null)
     } catch (err) {
+      if (!isLatest()) return
       setError(getErrorMessage(err))
       setBookings([])
       setBlocks([])
     } finally {
-      setLoading(false)
-      setFirstLoad(false)
+      if (isLatest()) {
+        setLoading(false)
+        setFirstLoad(false)
+      }
     }
-  }, [rangeFrom, rangeTo, roomFilter, tooLong])
+  }, [rangeFrom, rangeTo, roomFilter, tooLong, rangeLatest])
+
+  // Leaving the page makes whatever is still in flight stale.
+  useEffect(() => () => rangeLatest.cancel(), [rangeLatest])
 
   useEffect(() => {
     if (!canView) return
@@ -298,10 +337,16 @@ export default function BookingCalendarPage() {
      grid without a reload. The message is only the trigger; the blocks still come from the same GET. */
   useBookingChanged(() => void load(), canView)
 
+  /* LIVE, WITHOUT A BOOKING (QA3 BKG-14): a block laid or lifted at another till redraws the range; a
+     room, its hours or its add-ons edited redraws the rooms too. */
+  useCalendarChanged((message) => {
+    void load()
+    if (message.kind === 'room') void loadCatalog()
+  }, canView)
+
   /* ── which rooms, which days ───────────────────────────────────────────────────────────────── */
 
-  /** Every active room, in SortOrder — the order the colours follow. Retired rooms never get a
-   *  column, because nothing can be booked in one. */
+  /** Every active room, in SortOrder — the order the colours follow. */
   const activeRooms: Room[] = useMemo(
     () =>
       catalog.rooms
@@ -312,23 +357,53 @@ export default function BookingCalendarPage() {
   )
 
   /**
+   * The rooms the calendar draws: every active room, then any RETIRED room that still has something
+   * on the calendar in the fetched range (QA3 BKG-11). Deactivating a room stops new bookings — it does
+   * not cancel the ones it has, and those used to vanish with the room's column. A retired room's
+   * column is shut (nothing can be booked in it) but its bookings are drawn and can be opened.
+   */
+  const calendarRooms: Room[] = useMemo(() => {
+    // The extra day fetched counts only for its after-midnight part (the last night's).
+    const inRange = (day: string, item: Parameters<typeof spanOf>[0]) =>
+      day.slice(0, 10) <= rangeTo || spanOf(item).start < NEXT_MORNING_LIMIT
+    const inUse = new Set([
+      ...bookings
+        .filter((b) => (showCancelled || b.status !== 'Cancelled') && inRange(b.bookDate, b))
+        .map((b) => b.roomId),
+      ...blocks.filter((b) => inRange(b.blockDate, b)).map((b) => b.roomId),
+    ])
+    const retired = catalog.rooms
+      .filter((room) => !room.isActive && inUse.has(room.roomId))
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.roomId - b.roomId)
+    return [...activeRooms, ...retired]
+  }, [activeRooms, catalog.rooms, bookings, blocks, showCancelled, rangeTo])
+
+  /**
    * The colour a room wears, fixed by its place in SortOrder and read from the theme.
    *
    * Computed over ALL active rooms, not the filtered ones, so narrowing to a single room does not
    * repaint it — the chip in the legend and the stripe on a card mean the same thing in every view.
+   * A retired room still in view takes the colours after the active ones, so it repaints nobody.
    */
   const roomColor = useMemo(() => {
     const map = new Map<number, string>()
-    activeRooms.forEach((room, index) => {
+    calendarRooms.forEach((room, index) => {
       const palette = theme.colors[roomPalette(index)]
       map.set(room.roomId, palette?.[6] ?? theme.colors.gray[6])
     })
     return map
-  }, [activeRooms, theme.colors])
+  }, [calendarRooms, theme.colors])
+
+  /** A room's name, marked when it is retired. */
+  const roomLabel = useCallback(
+    (room: Room) => (room.isActive ? room.name : t('booking.calendar.retired', { room: room.name })),
+    [t],
+  )
 
   const filteredRooms = useMemo(
-    () => activeRooms.filter((room) => roomFilter == null || room.roomId === roomFilter),
-    [activeRooms, roomFilter],
+    () => calendarRooms.filter((room) => roomFilter == null || room.roomId === roomFilter),
+    [calendarRooms, roomFilter],
   )
 
   /** What the grid actually draws: the filtered rooms minus the ones switched off in the legend. */
@@ -375,14 +450,42 @@ export default function BookingCalendarPage() {
     [roomColumns, focusDay, rangeDays],
   )
 
-  /** Hours for the rooms and weekdays actually on screen — the time axis is computed from these. */
+  /** Hours for the (active) rooms and weekdays actually on screen — the time axis is computed from these. */
   const relevantHours: RoomHours[] = useMemo(() => {
-    const roomIds = new Set(visibleRooms.map((r) => r.roomId))
+    const roomIds = new Set(visibleRooms.filter((r) => r.isActive).map((r) => r.roomId))
     const dows = new Set(days.map(dayOfWeek))
     return catalog.hours.filter((h) => roomIds.has(h.roomId) && dows.has(h.dayOfWeek))
   }, [catalog.hours, visibleRooms, days])
 
-  const viewWindow = useMemo(() => visibleWindow(relevantHours), [relevantHours])
+  /** The window of the HOURS on screen — what decides which night an early booking belongs to. */
+  const hoursWindow = useMemo(() => calendarWindow(relevantHours), [relevantHours])
+
+  /**
+   * Every booking and block that is drawn, placed in its column's DAY and in that day's minutes
+   * (QA3 BKG-2): its own date, or — a start after midnight inside the previous night's window — the
+   * previous day at 1440+ (bookingTimes.placeInColumns).
+   */
+  const placed = useMemo(() => {
+    const roomIds = new Set(visibleRooms.map((r) => r.roomId))
+    const items: { day: string; event: CalEvent }[] = [
+      ...blocks
+        .filter((b) => roomIds.has(b.roomId))
+        .map((b) => ({
+          day: b.blockDate.slice(0, 10),
+          event: { kind: 'block' as const, key: `block-${b.blockId}`, roomId: b.roomId, ...spanOf(b), block: b },
+        })),
+      ...bookings
+        .filter((b) => roomIds.has(b.roomId) && (showCancelled || b.status !== 'Cancelled'))
+        .map((b) => ({
+          day: b.bookDate.slice(0, 10),
+          event: { kind: 'booking' as const, key: `bk-${b.bookingId}`, roomId: b.roomId, ...spanOf(b), booking: b },
+        })),
+    ]
+    return placeInColumns(items, (i) => i.day, (i) => i.event, days, hoursWindow)
+  }, [blocks, bookings, visibleRooms, showCancelled, days, hoursWindow])
+
+  /** The window drawn: the hours on screen, widened to whatever is placed outside them. */
+  const viewWindow = useMemo(() => calendarWindow(relevantHours, placed), [relevantHours, placed])
   const totalMinutes = viewWindow.end - viewWindow.start
   const bodyHeight = (totalMinutes / 60) * PIXELS_PER_HOUR
 
@@ -416,16 +519,19 @@ export default function BookingCalendarPage() {
    * opening window it is drawn against, which is the union of its rooms' hours for that weekday.
    */
   const columns: CalColumn[] = useMemo(() => {
+    /* The union of the rooms' hours that weekday, a 01:00 close as 1500 (QA3 BKG-2). A retired room
+       takes no bookings, so its hours open nothing. */
     function windowFor(day: string, rooms: Room[]) {
       const dow = dayOfWeek(day)
       const open = rooms
+        .filter((room) => room.isActive)
         .map((room) => catalog.hours.find((h) => h.roomId === room.roomId && h.dayOfWeek === dow))
         .filter((h): h is RoomHours => !!h && !h.isClosed)
 
       if (open.length === 0) return { openMin: 0, closeMin: 0, closedAllDay: true }
       return {
-        openMin: Math.min(...open.map((h) => minutesOf(h.openTime))),
-        closeMin: Math.max(...open.map((h) => minutesOf(h.closeTime))),
+        openMin: Math.min(...open.map((h) => clockMinutes(h.openTime))),
+        closeMin: Math.max(...open.map((h) => closeMinOf(h.closeTime))),
         closedAllDay: false,
       }
     }
@@ -436,10 +542,10 @@ export default function BookingCalendarPage() {
         key: `room-${room.roomId}`,
         day,
         rooms: [room],
-        title: room.name,
+        title: roomLabel(room),
         sub: t('booking.calendar.seats', { count: room.seats }),
         accent: roomColor.get(room.roomId),
-        defaultRoomId: room.roomId,
+        defaultRoomId: room.isActive ? room.roomId : null,
         ...windowFor(day, [room]),
       }))
     }
@@ -453,10 +559,10 @@ export default function BookingCalendarPage() {
       // of the date that every column on screen already agrees on.
       sub: dayLabel(day).slice(0, 5),
       accent: undefined,
-      defaultRoomId: visibleRooms[0]?.roomId ?? null,
+      defaultRoomId: visibleRooms.find((room) => room.isActive)?.roomId ?? null,
       ...windowFor(day, visibleRooms),
     }))
-  }, [roomColumns, days, visibleRooms, catalog.hours, roomColor, t])
+  }, [roomColumns, days, visibleRooms, catalog.hours, roomColor, roomLabel, t])
 
   /* ── the events in each column ─────────────────────────────────────────────────────────────── */
 
@@ -466,33 +572,11 @@ export default function BookingCalendarPage() {
     for (const column of columns) {
       const roomIds = new Set(column.rooms.map((r) => r.roomId))
 
-      const raw: CalEvent[] = [
-        ...blocks
-          .filter((b) => roomIds.has(b.roomId) && b.blockDate.slice(0, 10) === column.day)
-          .map((b) => ({
-            kind: 'block' as const,
-            key: `block-${b.blockId}`,
-            roomId: b.roomId,
-            start: minutesOf(b.startTime),
-            end: minutesOf(b.endTime),
-            block: b,
-          })),
-        ...bookings
-          .filter(
-            (b) =>
-              roomIds.has(b.roomId) &&
-              b.bookDate.slice(0, 10) === column.day &&
-              (showCancelled || b.status !== 'Cancelled'),
-          )
-          .map((b) => ({
-            kind: 'booking' as const,
-            key: `bk-${b.bookingId}`,
-            roomId: b.roomId,
-            start: minutesOf(b.startTime),
-            end: minutesOf(b.endTime),
-            booking: b,
-          })),
-      ].sort((a, b) => a.start - b.start || a.end - b.end)
+      // Already in this column's minutes: a booking after midnight of the next date is 1440+ here.
+      const raw: CalEvent[] = placed
+        .filter((p) => p.day === column.day && roomIds.has(p.item.event.roomId))
+        .map((p) => ({ ...p.item.event, start: p.start, end: p.end }))
+        .sort((a, b) => a.start - b.start || a.end - b.end)
 
       const lanes = laneLayout(raw)
       map.set(
@@ -502,7 +586,7 @@ export default function BookingCalendarPage() {
     }
 
     return map
-  }, [columns, bookings, blocks, showCancelled])
+  }, [columns, placed])
 
   /* ── the grid's own height and its scroll position ─────────────────────────────────────────── */
 
@@ -563,8 +647,15 @@ export default function BookingCalendarPage() {
     if (!element || firstLoad || tooLong) return
 
     const now = today()
+    const clock = nowMinutes()
+    // After midnight the night still running is the previous column's, at 1440+ (QA3 BKG-2).
+    const lateNight = clock < viewWindow.start && clock + 1440 <= viewWindow.end
     const target =
-      now >= rangeFrom && now <= rangeTo ? nowMinutes() : viewWindow.start
+      now >= rangeFrom && now <= rangeTo
+        ? lateNight && now > rangeFrom ? clock + 1440 : clock
+        : now === addDays(rangeTo, 1) && lateNight
+          ? clock + 1440
+          : viewWindow.start
     const clamped = Math.min(Math.max(target, viewWindow.start), viewWindow.end)
     element.scrollTop = Math.max(0, toTop(clamped) - PIXELS_PER_HOUR)
   }, [rangeFrom, rangeTo, viewWindow.start, viewWindow.end, firstLoad, tooLong, toTop])
@@ -594,11 +685,13 @@ export default function BookingCalendarPage() {
 
   const openNewAt = useCallback(
     (column: CalColumn, startMin: number, endMin: number) => {
+      // A start at or after midnight (1440+) is the NEXT date's clock time, as the API stores it.
+      const slot = slotToForm(column.day, startMin, endMin)
       setPrefill({
         roomId: column.defaultRoomId,
-        date: column.day,
-        start: fromMinutes(startMin),
-        end: fromMinutes(endMin),
+        date: slot.date,
+        start: slot.start,
+        end: slot.end,
       })
       setNewOpen(true)
     },
@@ -752,7 +845,7 @@ export default function BookingCalendarPage() {
               className="bk-room-dot"
               style={{ background: roomColor.get(room.roomId) }}
             />
-            {room.name}
+            {roomLabel(room)}
           </button>
         )
       })}
@@ -858,9 +951,9 @@ export default function BookingCalendarPage() {
             w={180}
             data={[
               { value: '', label: t('booking.calendar.allRooms') },
-              ...activeRooms.map((room) => ({
+              ...calendarRooms.map((room) => ({
                 value: String(room.roomId),
-                label: room.name,
+                label: roomLabel(room),
               })),
             ]}
             value={roomFilter == null ? '' : String(roomFilter)}
@@ -1065,7 +1158,8 @@ export default function BookingCalendarPage() {
 
               {columns.map((column) => {
                 const events = eventsByColumn.get(column.key) ?? []
-                const isToday = column.day === today()
+                /* Today's column at the current minute; after midnight, yesterday's at 1440+. */
+                const nowAt = nowInColumn(column.day, today(), minuteTick, viewWindow)
 
                 /* One click target per SLOT inside the opening window, behind the events in the
                    stacking order so a click on a booking always opens the booking. */
@@ -1223,7 +1317,7 @@ export default function BookingCalendarPage() {
                       }
 
                       const row = event.booking
-                      const room = activeRooms.find((r) => r.roomId === row.roomId)
+                      const room = calendarRooms.find((r) => r.roomId === row.roomId)
 
                       return (
                         <button
@@ -1257,15 +1351,13 @@ export default function BookingCalendarPage() {
                       )
                     })}
 
-                    {isToday &&
-                      minuteTick >= viewWindow.start &&
-                      minuteTick <= viewWindow.end && (
-                        <div
-                          className="bk-cal-now"
-                          style={{ top: toTop(minuteTick) }}
-                          aria-hidden="true"
-                        />
-                      )}
+                    {nowAt != null && (
+                      <div
+                        className="bk-cal-now"
+                        style={{ top: toTop(nowAt) }}
+                        aria-hidden="true"
+                      />
+                    )}
                   </div>
                 )
               })}
@@ -1320,7 +1412,7 @@ interface CalColumn {
   sub: string
   /** The room's colour, underlining a room column's heading. Absent on a day column. */
   accent: string | undefined
-  /** Which room a click on empty time proposes. In a day column, the first room still switched on. */
+  /** Which room a click on empty time proposes. In a day column, the first ACTIVE room still switched on. */
   defaultRoomId: number | null
   openMin: number
   closeMin: number

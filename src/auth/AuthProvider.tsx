@@ -4,6 +4,8 @@ import { AuthContext } from './authContext'
 import type { AuthContextValue } from './authContext'
 import { tokenStorage } from './tokenStorage'
 import * as authService from '../services/authService'
+import { isGateError } from '../api/gateResponse'
+import { isRateLimited } from '../api/refreshThrottle'
 import type { LoginRequest, User } from '../types/auth'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -33,15 +35,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsInitializing(false)
         return
       }
+      let reloadingForGate = false
       try {
         const current = await authService.fetchCurrentUser()
         if (!cancelled) {
           setUser(current)
         }
-      } catch {
-        tokenStorage.clear()
+      } catch (err) {
+        // The Google sign-in gate's 401 says nothing about the token: the session is KEPT, so it is
+        // still in this tab when Google lets the reload back in. While that reload is underway the
+        // loader stays up — going to /login now could only change the address being reloaded.
+        // A refresh the server only rate-limited (429, after the client has waited once) is not the
+        // session ending either (QA3 SEC-6): the tokens stay, so a reload a minute later is signed in.
+        if (isGateError(err)) reloadingForGate = err.data.reloading
+        else if (!isRateLimited(err)) tokenStorage.clear()
       } finally {
-        if (!cancelled) {
+        if (!cancelled && !reloadingForGate) {
           setIsInitializing(false)
         }
       }

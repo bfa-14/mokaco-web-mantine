@@ -25,7 +25,9 @@ import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import { leavePolicyService, leaveTypesService } from '../../services/hrService'
 import { fmtNumber } from './hrFormat'
-import type { LeavePolicy, LeaveType, LeaveYearOpenSummary } from '../../types/hr'
+import type { NumberInputValue } from '../../components/numeric'
+import { parseBoundedDecimal, parseRowCells } from '../../components/decimalInputs'
+import type { LeavePolicy, LeaveType, LeaveYearOpenSummary, LeaveYearUndoSummary } from '../../types/hr'
 
 /**
  * THE CAUTION, VERBATIM. These figures are the statutory minimums, and the screen must say so
@@ -53,8 +55,11 @@ interface TypeForm {
   requiresCertificate: boolean
   minServiceMonthsToUse: number
   noticePreferredDays: number
-  /** Null is a real value here — "this type has no fixed entitlement" — not an empty field. */
-  fixedEntitlementDays: number | null
+  /**
+   * Null (or a blank box) is a real value here — "this type has no fixed entitlement". Held as the box
+   * hands it over and converted once at save (trap 6: "1." must not empty the box, or 1.5 saves as 5).
+   */
+  fixedEntitlementDays: NumberInputValue | null
 }
 
 function toForm(t: LeaveType): TypeForm {
@@ -147,6 +152,11 @@ export default function LeavePolicyPage() {
   const [openError, setOpenError] = useState<string | null>(null)
   /** The run's per-type summary. Null until it has run; an EMPTY array is a real answer — see below. */
   const [openSummary, setOpenSummary] = useState<LeaveYearOpenSummary[] | null>(null)
+  /* QA3 (LEV-9): TAKING THE OPENING BACK, from the same dialog — for when the grid or a hire date was wrong. Two clicks:
+     the first says what it removes, the second does it; the procedure refuses once leave of the year was paid. */
+  const [undoAsk, setUndoAsk] = useState(false)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [undoResult, setUndoResult] = useState<LeaveYearUndoSummary | null>(null)
 
   const load = useCallback(async (selectId?: number) => {
     try {
@@ -254,6 +264,11 @@ export default function LeavePolicyPage() {
       setFormError(t('hr.leavePolicy.nameRequired'))
       return
     }
+    const fixedDays = parseBoundedDecimal(fixedEntitlementDays, 0, 366)
+    if (fixedDays === 'invalid') {
+      setFormError(t('hr.leavePolicy.fixedInvalid'))
+      return
+    }
     setFormError(null)
     const payload = {
       name: form.name.trim(),
@@ -265,10 +280,10 @@ export default function LeavePolicyPage() {
       // The DERIVED figure, so a type that has grown tiers since its entitlement was set actually
       // loses that entitlement on the next save instead of keeping a figure the field no longer
       // shows and nothing consults.
-      fixedEntitlementDays,
+      fixedEntitlementDays: fixedDays,
       // Null here means "no fixed entitlement", NOT "leave alone" — say so explicitly, or the
       // preserve rule on the server would keep the old figure forever.
-      clearFixedEntitlement: fixedEntitlementDays == null,
+      clearFixedEntitlement: fixedDays == null,
     }
 
     setSaving(true)
@@ -296,7 +311,23 @@ export default function LeavePolicyPage() {
   function openYearDialog() {
     setOpenError(null)
     setOpenSummary(null)
+    setUndoAsk(false)
+    setUndoResult(null)
     setYearOpen(true)
+  }
+
+  async function runYearUndo() {
+    setOpenError(null)
+    setUndoBusy(true)
+    try {
+      setUndoResult(await leavePolicyService.undoYear(openYearValue))
+      setUndoAsk(false)
+    } catch (err) {
+      // "The 2026 leave year cannot be undone: … took leave in 2026-02, a period already paid — …" — verbatim.
+      setOpenError(getErrorMessage(err))
+    } finally {
+      setUndoBusy(false)
+    }
   }
 
   async function runYearOpen() {
@@ -489,9 +520,7 @@ export default function LeavePolicyPage() {
                     step={1}
                     placeholder={fixedEntitlementBlockedBy != null ? '' : 'None'}
                     disabled={locked || fixedEntitlementBlockedBy != null}
-                    onChange={(v) =>
-                      patch({ fixedEntitlementDays: typeof v === 'number' ? v : null })
-                    }
+                    onChange={(v) => patch({ fixedEntitlementDays: v })}
                   />
                   <div className="hint">
                     {fixedEntitlementBlockedBy === 'unpaid'
@@ -747,10 +776,52 @@ export default function LeavePolicyPage() {
               </>
             ))}
 
+          {/* QA3 (LEV-9): what undoing removes, said before it is done; then what it did. */}
+          {openSummary === null && undoAsk && (
+            <div className="alert alert--warning" role="alert">
+              <p style={{ marginTop: 0 }}>{t('hr.leaveYear.undoExplain', { year: openYearValue })}</p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Button variant="default" onClick={() => setUndoAsk(false)} disabled={undoBusy}>
+                  {t('common.cancel')}
+                </Button>
+                <Button color="red" onClick={() => void runYearUndo()} loading={undoBusy} disabled={undoBusy}>
+                  {undoBusy ? t('hr.leaveYear.undoing') : t('hr.leaveYear.undoConfirm')}
+                </Button>
+              </div>
+            </div>
+          )}
+          {openSummary === null && undoResult && (
+            <p className="hint" role="status">
+              {undoResult.employeesUndone === 0
+                ? t('hr.leaveYear.undoNothing', { year: openYearValue })
+                : t('hr.leaveYear.undoDone', {
+                    count: undoResult.employeesUndone,
+                    year: openYearValue,
+                    movements: undoResult.movementsRemoved,
+                  })}
+            </p>
+          )}
+
           {/* THE STANDARD MODAL PAIR, as DecidePopup states it: variant="default" to dismiss,
               the plain filled Button to commit — the same primary this page's "Save changes" is,
               carrying `loading` while the work is in flight rather than only being disabled. */}
           <div className="form-actions">
+            {/* The way back, kept apart from the pair: only before a run, and not while it asks. */}
+            {openSummary === null && !undoAsk && (
+              <Button
+                variant="subtle"
+                color="red"
+                style={{ marginInlineEnd: 'auto' }}
+                disabled={openingBusy || undoBusy}
+                onClick={() => {
+                  setOpenError(null)
+                  setUndoResult(null)
+                  setUndoAsk(true)
+                }}
+              >
+                {t('hr.leaveYear.undo')}
+              </Button>
+            )}
             <Button variant="default" onClick={() => setYearOpen(false)} disabled={openingBusy}>
               {openSummary !== null ? t('common.close') : t('common.cancel')}
             </Button>
@@ -760,7 +831,7 @@ export default function LeavePolicyPage() {
               <Button
                 onClick={() => void runYearOpen()}
                 loading={openingBusy}
-                disabled={openingBusy}
+                disabled={openingBusy || undoBusy || undoAsk}
               >
                 {openingBusy ? t('hr.leaveYear.opening') : t('hr.leaveYear.confirm')}
               </Button>
@@ -816,8 +887,13 @@ function TierGrid({
   const [editKey, setEditKey] = useState<string | null>(null)
   /** Whether the blank insert row is open. */
   const [adding, setAdding] = useState(false)
-  /** The open editor's cells — '' is an empty editor, never a value to send. */
-  const [cells, setCells] = useState<Record<string, string | number>>({})
+  /**
+   * The open editor's cells, AS THE BOXES HOLD THEM — '' is an empty editor, never a value to send.
+   * TRAP 6 (QA3 WEB-5): a number box passes "1." as a string while a decimal is typed; turning that
+   * into '' emptied the box, so 1.5 days became 15. The row is converted once, at the save
+   * (parseRowCells), and the save waits while any cell is blank or not a number.
+   */
+  const [cells, setCells] = useState<Record<string, NumberInputValue>>({})
 
   const editing = adding || editKey != null
 
@@ -843,14 +919,15 @@ function TierGrid({
     setCells({})
   }
 
-  /** A blank cell has nothing to upsert — the commit waits until every editor holds a value. */
-  const incomplete = columns.some((c) => cells[c.field] === '' || cells[c.field] == null)
+  /** The row as numbers and text, or null while a cell is blank or not a number — nothing to upsert yet. */
+  const parsed = parseRowCells(cells, columns)
+  const incomplete = parsed == null
 
   async function commit() {
-    if (incomplete) return
+    if (parsed == null) return
     // The row IS the write: the endpoints upsert on the key, so an inserted row and an edited
     // one are the same call, and the grid never has to know which it was.
-    if (await onSet({ ...cells })) cancelEdit()
+    if (await onSet(parsed)) cancelEdit()
   }
 
   function editorRow(rowKey: string) {
@@ -876,9 +953,7 @@ function TierGrid({
                 min={0}
                 aria-label={c.caption}
                 disabled={disabled}
-                onChange={(v) =>
-                  setCells((prev) => ({ ...prev, [c.field]: typeof v === 'number' ? v : '' }))
-                }
+                onChange={(v) => setCells((prev) => ({ ...prev, [c.field]: v }))}
               />
             )}
           </Table.Td>

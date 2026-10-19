@@ -4,8 +4,14 @@ import { Link, useParams } from 'react-router-dom'
 import { Button, Select, TextInput } from '@mantine/core'
 import { IconPrinter } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
+import { useLive } from '../../live/useLive'
+import { useLiveEnabled } from '../../live/useLiveSettings'
 import { payslipsService } from '../../services/payrollService'
 import type { PayslipDetail, PayslipLine } from '../../types/payroll'
+import { fmtLocalDate } from '../hr/hrFormat'
+import { canRecordPayment } from './payrollRunRules'
 import './payroll.css'
 
 const METHODS = ['Bank', 'Cash']
@@ -19,14 +25,19 @@ const CATEGORY_TITLES: Record<PayslipLine['category'], string> = {
   EmployerCost: 'Employer cost (not part of net pay)',
 }
 
-/** Where a line's source can be inspected. Request-backed types get a badge;
- *  advance/adjustment link to their admin pages. */
-function sourceBadge(l: PayslipLine, period: string) {
+/** Where a line's source can be inspected. Request-backed types get a badge; advance/adjustment link to
+ *  their admin pages — for a PAYROLL_VIEW reader only: an employee reading their own payslip cannot open
+ *  them, so they get the same words without a link that would end on No access. */
+function sourceBadge(l: PayslipLine, period: string, canLink: boolean) {
   switch (l.sourceType) {
     case 'Advance':
-      return <Link className="pr-src" to="/payroll/advances">advance #{l.sourceId}</Link>
+      return canLink
+        ? <Link className="pr-src" to="/payroll/advances">advance #{l.sourceId}</Link>
+        : <span className="pr-src">advance #{l.sourceId}</span>
     case 'Adjustment':
-      return <Link className="pr-src" to={`/payroll/adjustments?period=${period}`}>adjustment #{l.sourceId}</Link>
+      return canLink
+        ? <Link className="pr-src" to={`/payroll/adjustments?period=${period}`}>adjustment #{l.sourceId}</Link>
+        : <span className="pr-src">adjustment #{l.sourceId}</span>
     case 'Salary': return <span className="pr-src">salary</span>
     case 'Statutory': return <span className="pr-src">statutory</span>
     case 'Attendance': return <span className="pr-src">attendance</span>
@@ -39,6 +50,13 @@ function sourceBadge(l: PayslipLine, period: string) {
 export default function PayslipPage() {
   const { id } = useParams()
   const payslipId = Number(id)
+  /* TWO READERS (QA3 WEB-15). A PAYROLL_VIEW holder reads any payslip and may follow it into the run,
+     the advances and the adjustments; the employee it is about reads their own once the month is
+     approved, and gets no link into pages that would refuse them. Recording the payment is
+     PAYROLL_APPROVE (QA3 WEB-14) — the endpoint's own code, so the form appears only where it works. */
+  const { hasPermission } = useAuth()
+  const canViewPayroll = hasPermission(PERMISSION.PAYROLL_VIEW)
+  const canApprove = hasPermission(PERMISSION.PAYROLL_APPROVE)
   const [detail, setDetail] = useState<PayslipDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [method, setMethod] = useState<'Bank' | 'Cash'>('Bank')
@@ -51,6 +69,9 @@ export default function PayslipPage() {
       .catch((e) => setError(getErrorMessage(e)))
   }, [payslipId])
   useEffect(refresh, [refresh])
+  // LIVE (QA3 WEB-16): a regenerate, an approval or a payment recorded by somebody else changes this
+  // document — a payslip left open must not keep printing yesterday's figures.
+  useLive(['payroll'], refresh, useLiveEnabled('payroll'))
 
   const p = detail?.payslip ?? null
   const lines = detail?.lines ?? []
@@ -80,7 +101,9 @@ export default function PayslipPage() {
         <div>
           <h1 className="page-title">{p.employeeName} · {p.periodYearMonth}</h1>
           <p className="page-subtitle">
-            <Link to={`/payroll/runs/${p.payrollRunId}`}>Run {p.periodYearMonth}</Link> · {p.runStatus}
+            {canViewPayroll
+              ? <Link to={`/payroll/runs/${p.payrollRunId}`}>Run {p.periodYearMonth}</Link>
+              : <>Run {p.periodYearMonth}</>} · {p.runStatus}
           </p>
         </div>
         <div className="page-head-actions">
@@ -102,7 +125,7 @@ export default function PayslipPage() {
           </div>
           <div className="pr-doc-period">
             <div>Payslip · {p.periodYearMonth}</div>
-            {p.lockedAt && <div className="pr-muted">Approved &amp; locked {new Date(p.lockedAt).toLocaleDateString()}</div>}
+            {p.lockedAt && <div className="pr-muted">Approved &amp; locked {fmtLocalDate(p.lockedAt)}</div>}
           </div>
         </div>
 
@@ -136,7 +159,7 @@ export default function PayslipPage() {
                       <td className="num">{l.unitAmount != null ? fmt(l.unitAmount) : ''}</td>
                       <td className="num">{fmt(l.amount)}</td>
                       <td>{l.currencyCode}</td>
-                      <td className="no-print">{sourceBadge(l, p.periodYearMonth)}</td>
+                      <td className="no-print">{sourceBadge(l, p.periodYearMonth, canViewPayroll)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -161,8 +184,8 @@ export default function PayslipPage() {
 
         {p.paidAt ? (
           <div className="pr-paid">Paid by {p.paymentMethod}
-            {p.paymentReference ? <> · ref {p.paymentReference}</> : null} · {new Date(p.paidAt).toLocaleDateString()}</div>
-        ) : p.runStatus === 'Approved' ? (
+            {p.paymentReference ? <> · ref {p.paymentReference}</> : null} · {fmtLocalDate(p.paidAt)}</div>
+        ) : canRecordPayment(canApprove, p.runStatus, p.paidAt) ? (
           <div className="pr-payment no-print">
             <div className="pr-card-title">Record payment</div>
             <div className="pr-actions">

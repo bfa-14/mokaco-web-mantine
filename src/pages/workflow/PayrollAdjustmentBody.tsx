@@ -5,14 +5,19 @@ import { MonthPickerInput } from '@mantine/dates'
 import { IconCalendar } from '@tabler/icons-react'
 import { monthFromPicker, monthToPicker } from '../../components/date/pickerValue'
 import { payrollAdjustmentsService } from '../../services/workflowService'
-import { adjustmentsService, payrollRunsService } from '../../services/payrollService'
+import { payrollRunsService } from '../../services/payrollService'
+import { componentTypesService } from '../../services/hrService'
 import { currenciesService } from '../../services/coreService'
-import type { PayrollComponentType, PayrollRunListItem } from '../../types/payroll'
+import type { PayrollRunListItem } from '../../types/payroll'
+import type { ComponentType } from '../../types/hr'
+import { parseDecimal } from '../../components/numeric'
+import type { NumberInputValue } from '../../components/numeric'
+import { adjustmentComponentOptions } from './adjustmentComponents'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
 import { referenceName } from '../../i18n/referenceName'
 
-const NO_TYPES: PayrollComponentType[] = []
+const NO_TYPES: ComponentType[] = []
 const NO_RUNS: PayrollRunListItem[] = []
 
 const currentMonth = () => {
@@ -27,12 +32,15 @@ const fmt = (v: number) => v.toFixed(2)
  * dropdown is the subject — HR raising on behalf is the standard flow, so no hidesEmployee.
  */
 export function usePayrollAdjustmentForm(employeeName: string | null, saving: boolean): RequestFormBody {
-  const [types, setTypes] = useState<PayrollComponentType[]>(NO_TYPES)
+  const [types, setTypes] = useState<ComponentType[]>(NO_TYPES)
   const [runs, setRuns] = useState<PayrollRunListItem[]>(NO_RUNS)
   const [currencies, setCurrencies] = useState<string[]>(['USD', 'LBP'])
 
   const [componentTypeId, setComponentTypeId] = useState<number | null>(null)
-  const [amount, setAmount] = useState<number | null>(null)
+  /* TRAP 6 (QA3 WEB-5): the box's value AS RECEIVED — "12." is a string while it is being typed, and
+     writing null back for it turned 12.50 into 50. The figure is read from it, never written into it. */
+  const [amountRaw, setAmountRaw] = useState<NumberInputValue>('')
+  const amount = parseDecimal(amountRaw)
   const [currencyCode, setCurrencyCode] = useState('USD')
   const [targetPeriod, setTargetPeriod] = useState(currentMonth())
   const [correctsRunId, setCorrectsRunId] = useState<number | null>(null)
@@ -41,12 +49,14 @@ export function usePayrollAdjustmentForm(employeeName: string | null, saving: bo
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      adjustmentsService.componentTypes().catch(() => NO_TYPES),
+      /* QA3 WEB-10: the catalogue everybody who raises an adjustment can read (EMP_VIEW). The payroll
+         one (/api/payroll/component-types) is PAYROLL_RUN's, and left this box empty for them. */
+      componentTypesService.getAll().catch(() => NO_TYPES),
       payrollRunsService.getList().catch(() => NO_RUNS),
       currenciesService.getAll().catch(() => []),
     ]).then(([ty, r, c]) => {
       if (cancelled) return
-      setTypes(ty)
+      setTypes(adjustmentComponentOptions(ty))
       setRuns(r.filter((x) => x.status === 'Approved'))
       if (c.length) setCurrencies(c.map((x) => x.currencyCode))
     })
@@ -61,7 +71,7 @@ export function usePayrollAdjustmentForm(employeeName: string | null, saving: bo
   )
 
   // The component's NAME is reference data with its own Arabic column; the category is a code.
-  const typeLabel = (ct: PayrollComponentType): string =>
+  const typeLabel = (ct: ComponentType): string =>
     t('body.payrollAdjustment.componentOption', {
       name: referenceName(ct),
       category: ct.category,
@@ -99,11 +109,11 @@ export function usePayrollAdjustmentForm(employeeName: string | null, saving: bo
         <div className="form-field">
           <NumberInput
             label={t('common.amount')}
-            value={amount ?? ''}
+            value={amountRaw}
             min={0}
             decimalScale={2}
             disabled={saving}
-            onChange={(v) => setAmount(typeof v === 'number' ? v : null)}
+            onChange={setAmountRaw}
           />
           {chosenType && (
             <div className="hint">

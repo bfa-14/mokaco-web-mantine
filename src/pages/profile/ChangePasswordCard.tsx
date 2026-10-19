@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { Button, PasswordInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
 import { meService } from '../../services/workflowService'
 
 /**
@@ -37,6 +40,7 @@ function PasswordField({
   error?: string | null
   onChange: (value: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="form-field">
       <label className="form-label" htmlFor={id}>
@@ -48,7 +52,7 @@ function PasswordField({
         value={value}
         disabled={disabled}
         visibilityToggleButtonProps={{
-          'aria-label': `Show or hide ${label.toLowerCase()}`,
+          'aria-label': t('security.password.showHide', { field: label }),
         }}
         onChange={(e) => onChange(e.currentTarget.value)}
       />
@@ -66,11 +70,16 @@ function PasswordField({
  * in the browser to compare against — and its answer is shown exactly as it arrives. Nothing here
  * guesses at the reason for a refusal.
  *
- * The session is left alone on success. Changing a password does not invalidate the token, so there
- * is no logout, no re-login prompt and no token refresh: the user stays exactly where they were,
- * with the fields cleared behind them.
+ * A SUCCESS SIGNS THE PERSON OUT, HERE AND EVERYWHERE (QA3 SEC-5). The server ends every session of
+ * the account on a password change, this tab's included: its next call would be refused and the
+ * tab thrown to the login page with no word of why. So the card says it first — the toast outlives
+ * the navigation, Notifications sit above the router — clears this tab's tokens and goes to the
+ * login page itself, where the new password is the one that works.
  */
 export function ChangePasswordCard() {
+  const { t } = useTranslation()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -92,10 +101,13 @@ export function ChangePasswordCard() {
     setError(null)
     try {
       await meService.changePassword(current, next)
-      notifications.show({ message: 'Password changed.', color: 'green', autoClose: 2500 })
+      notifications.show({ message: t('security.password.changedSignedOut'), color: 'green', autoClose: 10_000 })
       setCurrent('')
       setNext('')
       setConfirm('')
+      // The server has ended this session already; logout() only clears what the tab still holds.
+      await logout()
+      navigate('/login', { replace: true })
     } catch (err) {
       // The server's wording, unaltered — it is the only one that knows what was actually wrong.
       setError(getErrorMessage(err))
@@ -106,10 +118,9 @@ export function ChangePasswordCard() {
 
   return (
     <div className="card">
-      <div className="card-title">Change password</div>
+      <div className="card-title">{t('security.password.title')}</div>
       <p className="hint" style={{ marginBottom: 16 }}>
-        You will stay signed in on this device. Any other device stays signed in too, until its
-        session expires.
+        {t('security.password.hint')}
       </p>
 
       {error && (
@@ -120,7 +131,7 @@ export function ChangePasswordCard() {
 
       <PasswordField
         id="pw-current"
-        label="Current password"
+        label={t('security.password.current')}
         value={current}
         autoComplete="current-password"
         disabled={saving}
@@ -129,27 +140,27 @@ export function ChangePasswordCard() {
 
       <PasswordField
         id="pw-new"
-        label="New password"
+        label={t('security.password.new')}
         value={next}
         autoComplete="new-password"
         disabled={saving}
-        error={tooShort ? `Use at least ${MIN_LENGTH} characters.` : null}
+        error={tooShort ? t('security.password.tooShort', { count: MIN_LENGTH }) : null}
         onChange={setNext}
       />
 
       <PasswordField
         id="pw-confirm"
-        label="Confirm new password"
+        label={t('security.password.confirm')}
         value={confirm}
         autoComplete="new-password"
         disabled={saving}
-        error={mismatch ? 'These two do not match.' : null}
+        error={mismatch ? t('security.password.mismatch') : null}
         onChange={setConfirm}
       />
 
       <div className="form-actions">
         <Button onClick={() => void submit()} disabled={!canSubmit}>
-          {saving ? 'Changing…' : 'Change password'}
+          {saving ? t('security.password.changing') : t('security.password.title')}
         </Button>
       </div>
     </div>

@@ -469,19 +469,13 @@
   color: var(--ink-muted);
 }
 
-/* Approved leave. It OUTRANKS the rostered shift on purpose: the point of drawing it is that a
-   shift wrongly assigned over somebody's holiday should be obvious at a glance, not hidden behind
-   an innocent-looking shift chip. Green because it is a legitimate, settled state — not a problem. */
+/* Approved leave. It OUTRANKS the rostered shift in the drawing: the day reads as leave whatever
+   row sits under it. A working row under leave is the normal state (a leave is priced on the
+   rostered working days), so it is not marked as a conflict; the tooltip names the shift. Green
+   because it is a legitimate, settled state — not a problem. */
 .roster-cell--leave {
   background: #dfeee4;
   color: #2e7d4f;
-}
-
-/* Leave AND a working shift on the same day. A real contradiction that a human has to settle, so
-   it is marked rather than silently resolved. Amber = needs a decision. */
-.roster-cell--conflict {
-  outline: 2px solid #c9821f;
-  outline-offset: -2px;
 }
 
 /* An EMPTY cell is NOT a rest day — it is a day the system cannot judge at all. It has
@@ -523,6 +517,470 @@
   height: 14px;
   border-radius: 3px;
   display: inline-block;
+}
+
+/* ── Auto-roster (6/5): the draft over the grid, the week rhythm, the counters ── */
+
+/* The glyphs (pin, lock) sit in a corner of the cell. */
+.roster-cell {
+  position: relative;
+}
+
+/* A draft's Regenerate or Save is in flight: the cells take no edit until it is back. */
+.roster-table[aria-busy='true'] .roster-cell {
+  cursor: progress;
+}
+
+/* A rule before every Monday, so the 6- and 5-day weeks read as weeks. */
+.roster-table th.roster-week-start,
+.roster-table td.roster-week-start {
+  border-inline-start: 2px solid #cfc9bd;
+}
+
+/* Public holiday columns: a warm tint, stronger than the weekend's. */
+.roster-table th.roster-holiday,
+.roster-table td.roster-holiday {
+  background: #f6ead9;
+}
+
+.roster-table thead th.roster-holiday {
+  color: var(--accent-strong);
+}
+
+/* A holiday off has NO row, and rightly so (D4): it is drawn as the holiday, not as the hatched
+   hole that means "nobody decided". */
+.roster-cell--holiday {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+/* Draft days. Dashed = planned by the generator and not saved; accent = the manager's own edit. */
+.roster-cell--draft {
+  outline: 1.5px dashed rgba(23, 29, 26, 0.6);
+  outline-offset: -3px;
+}
+
+.roster-cell--edited {
+  outline: 2px dashed var(--accent-strong);
+  outline-offset: -3px;
+}
+
+/* A day the server will not let change: paid, in the past, or with attendance recorded. */
+.roster-cell--locked {
+  opacity: 0.7;
+}
+
+/* The selection's outline wins over the draft's, so a drag always shows what it covers. */
+.roster-cell.roster-cell--selected {
+  outline: 2px solid var(--brand-black);
+  outline-offset: -2px;
+}
+
+.roster-glyph {
+  position: absolute;
+  top: 1px;
+  inset-inline-end: 1px;
+  pointer-events: none;
+}
+
+.roster-glyph--lock {
+  top: auto;
+  bottom: 1px;
+}
+
+/* An issue clicked in the preview card: the grid scrolls to its day and the day flashes. */
+.roster-flash,
+.roster-flash > .roster-cell {
+  animation: roster-flash 1.8s ease-out;
+}
+
+@keyframes roster-flash {
+  0%,
+  35% {
+    box-shadow: inset 0 0 0 3px #d9480f;
+  }
+  100% {
+    box-shadow: inset 0 0 0 3px transparent;
+  }
+}
+
+/* The summary column: Work · Rest · Sat · Sun · 6·5, sticky at the row's end as the name is at its start. */
+.roster-table .roster-sum {
+  position: sticky;
+  inset-inline-end: 0;
+  z-index: 1;
+  background: var(--surface);
+  border-inline-start: 1px solid var(--border);
+  padding: 0 6px;
+}
+
+.roster-table thead .roster-sum {
+  z-index: 3;
+  background: var(--brand-offwhite);
+}
+
+.roster-sum-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 28px) minmax(70px, auto);
+  align-items: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.roster-table thead .roster-sum-grid {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.roster-strip {
+  display: inline-flex;
+  justify-content: center;
+  gap: 2px;
+}
+
+.roster-strip-week {
+  min-width: 13px;
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: #e9f1e4;
+  color: #3d5a2a;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.roster-strip-week--bad {
+  background: #fde3de;
+  color: #b91c1c;
+}
+
+.roster-strip-week--na {
+  background: #f2f1ee;
+  color: #a29d93;
+}
+
+/* The footer: on duty per day, against the minimum — and under a draft, per shift to cover. Sticky at
+   the bottom of the scroll; each row sits on the rows under it (--roster-foot-below, measured by the
+   page). */
+.roster-table tfoot th,
+.roster-table tfoot td {
+  position: sticky;
+  bottom: var(--roster-foot-below, 0px);
+  z-index: 2;
+  background: var(--brand-offwhite);
+  border-top: 1px solid var(--border);
+}
+
+.roster-table tfoot .roster-emp,
+.roster-table tfoot .roster-sum {
+  z-index: 3;
+}
+
+.roster-table tfoot .roster-emp {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.roster-table td.roster-duty {
+  padding: 3px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  /* Tight: under a draft the footer holds a row per shift too, all of it sticky over the grid. */
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.roster-duty-min {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.roster-table td.roster-duty--short {
+  background: #fde3de;
+  color: #b91c1c;
+}
+
+/* A shift with nobody on it: the one figure in the footer that must not be missed. */
+.roster-table td.roster-duty--none {
+  background: #f6b8ad;
+  color: #8f1414;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #d9705f;
+}
+
+/* A shift's row under "On duty": its name, set in from the row it details. */
+.roster-table tfoot .roster-emp.roster-foot-shift {
+  padding-inline-start: 24px !important;
+  font-weight: 500;
+}
+
+.roster-table tfoot tr + tr > * {
+  border-top-color: #f0eee9;
+}
+
+.roster-swatch--holiday {
+  background: #f6ead9;
+  border: 1px solid #ead7bb;
+}
+
+.roster-swatch--draft {
+  border: 1.5px dashed rgba(23, 29, 26, 0.6);
+}
+
+.roster-swatch--edited {
+  border: 2px dashed var(--accent-strong);
+}
+
+.roster-swatch--week {
+  width: 3px;
+  border-radius: 0;
+  background: #cfc9bd;
+}
+
+/* The draft's panel: sticky above the grid, so Save and the issues stay in reach. */
+.auto-roster-card {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  border-inline-start: 4px solid var(--accent);
+  box-shadow: 0 4px 14px rgba(46, 46, 42, 0.12);
+}
+
+.auto-roster-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.auto-roster-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auto-roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.auto-chip {
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--brand-offwhite);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.auto-chip--insert {
+  background: #edf7ef;
+  border-color: #bfe3c7;
+  color: #166534;
+}
+
+.auto-chip--update {
+  background: #fdf6e3;
+  border-color: #f0dca6;
+  color: #8a5a00;
+}
+
+.auto-chip--delete {
+  background: #fdf2ef;
+  border-color: #f3c9bd;
+  color: #b91c1c;
+}
+
+.auto-chip--edit {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.auto-roster-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 10px 0 0;
+}
+
+.auto-roster-confirm-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.auto-issues {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.auto-issues-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.auto-issues-count {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.auto-issues-count--error {
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.auto-issues-count--warning {
+  font-weight: 600;
+  color: #8a5a00;
+}
+
+.auto-issues-payroll {
+  margin-inline-start: auto;
+  font-size: 12px;
+}
+
+.auto-issues-list {
+  max-height: 132px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.auto-issue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+
+.auto-issue:hover:not(:disabled) {
+  background: var(--brand-offwhite);
+}
+
+.auto-issue:disabled {
+  cursor: default;
+}
+
+.auto-issue-icon {
+  flex: 0 0 auto;
+}
+
+.auto-issue-icon--error {
+  color: #b91c1c;
+}
+
+.auto-issue-icon--warning {
+  color: #c9821f;
+}
+
+.auto-issue-icon--info {
+  color: #5b7c99;
+}
+
+.auto-issue-title {
+  font-weight: 500;
+}
+
+.auto-issue-where {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* The drawer's small tables: staff, holidays, shifts to cover, minimums. */
+.auto-roster-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.auto-roster-table th {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: start;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.auto-roster-table td {
+  padding: 6px;
+  border-bottom: 1px solid #f0eee9;
+  vertical-align: middle;
+}
+
+.auto-roster-name {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.auto-roster-sub {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.auto-roster-off .auto-roster-name {
+  color: var(--ink-muted);
+}
+
+.auto-roster-flag {
+  margin-inline-start: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-strong);
+}
+
+.auto-roster-staffing td:first-child {
+  width: 40%;
+}
+
+.auto-roster-cover td:first-child {
+  width: 30%;
+}
+
+.auto-roster-cover td:nth-child(2) {
+  width: 22%;
+}
+
+/* Cancel / Preview stay at the bottom of the drawer however long the staff list is. */
+.auto-roster-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 16px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
 }
 
 /* Import wizard */

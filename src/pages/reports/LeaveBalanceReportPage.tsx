@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button, Select } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
@@ -8,8 +9,8 @@ import { reportsService } from '../../services/reportsService'
 import { branchesService, employeesService } from '../../services/hrService'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import type { LeaveBalanceHeader, LeaveBalanceRow } from '../../types/reports'
-import { ReportShell, ReportDocHead } from './ReportShell'
-import { REPORT_VIEW, lastMonths } from './reportShared'
+import { ReportShell, ReportDocHead, ReportNoAccess } from './ReportShell'
+import { REPORT_VIEW, lastMonths, reportBranchName } from './reportShared'
 
 /**
  * Accrued / carried over / used / remaining, per employee per leave type, as of a period.
@@ -19,6 +20,7 @@ import { REPORT_VIEW, lastMonths } from './reportShared'
  * reader must not skim past.
  */
 export default function LeaveBalanceReportPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canView = hasPermission(REPORT_VIEW)
 
@@ -95,23 +97,7 @@ export default function LeaveBalanceReportPage() {
   }, [])
 
   if (!canView) {
-    return (
-      <div>
-        <div className="page-head">
-          <div>
-            <h1 className="page-title">Leave Balance Report</h1>
-          </div>
-        </div>
-        <div className="card">
-          <div className="empty-hint">
-            <div className="empty-hint-main">
-              You do not have access to attendance reports.
-            </div>
-            Reports need the &lsquo;view attendance&rsquo; permission.
-          </div>
-        </div>
-      </div>
-    )
+    return <ReportNoAccess title={t('hr.leaveBalance.report.title')} />
   }
 
   // Only the first row of each employee shows their name and branch — computed up front rather than
@@ -125,15 +111,13 @@ export default function LeaveBalanceReportPage() {
     <div>
       <div className="page-head report-no-print">
         <div>
-          <h1 className="page-title">Leave Balance Report</h1>
-          <p className="page-subtitle">
-            Accrued, used and remaining leave per employee.
-          </p>
+          <h1 className="page-title">{t('hr.leaveBalance.report.title')}</h1>
+          <p className="page-subtitle">{t('hr.leaveBalance.report.subtitle')}</p>
         </div>
       </div>
 
       <ReportShell
-        help="One row per employee per leave type, as of the end of the chosen period. Remaining is accrued plus carried over, minus used — the column to read. A negative remaining means somebody has taken more than they had."
+        help={t('hr.leaveBalance.report.help')}
         canPrint={header !== null}
         loading={loading}
         error={error}
@@ -142,7 +126,7 @@ export default function LeaveBalanceReportPage() {
         filters={
           <>
             <div className="report-filter">
-              <span className="report-filter-label">As of</span>
+              <span className="report-filter-label">{t('hr.leaveBalance.report.asOf')}</span>
               <Select
                 data={months}
                 value={asOf}
@@ -152,14 +136,14 @@ export default function LeaveBalanceReportPage() {
               />
             </div>
             <div className="report-filter">
-              <span className="report-filter-label">Employee</span>
+              <span className="report-filter-label">{t('common.report.employee')}</span>
               <Select
                 data={employees.map((e) => ({
                   value: String(e.employeeId),
                   label: e.fullName,
                 }))}
                 value={employeeId != null ? String(employeeId) : null}
-                placeholder="All employees"
+                placeholder={t('common.report.allEmployees')}
                 searchable
                 clearable
                 w={220}
@@ -167,11 +151,11 @@ export default function LeaveBalanceReportPage() {
               />
             </div>
             <div className="report-filter">
-              <span className="report-filter-label">Branch</span>
+              <span className="report-filter-label">{t('common.branch')}</span>
               <Select
                 data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
                 value={branchId != null ? String(branchId) : null}
-                placeholder="All branches"
+                placeholder={t('common.report.allBranches')}
                 clearable
                 w={200}
                 onChange={(v) => setBranchId(v != null ? Number(v) : null)}
@@ -182,7 +166,7 @@ export default function LeaveBalanceReportPage() {
               leftSection={<IconSearch size={16} />}
               onClick={() => void generate()}
             >
-              Generate
+              {t('common.report.generate')}
             </Button>
           </>
         }
@@ -190,23 +174,25 @@ export default function LeaveBalanceReportPage() {
         {header && (
           <>
             <ReportDocHead
-              title={header.reportTitle}
+              title={t('hr.leaveBalance.report.title')}
               generatedUtc={header.generatedUtc}
               meta={[
-                { label: 'As of', value: header.asOfPeriod },
-                { label: 'Branch', value: header.branchName },
+                { label: t('hr.leaveBalance.report.asOf'), value: header.asOfPeriod },
+                { label: t('common.branch'), value: reportBranchName(header.branchName) },
               ]}
             />
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>Employee</th>
-                  <th>Branch</th>
-                  <th>Leave type</th>
-                  <th className="num">Accrued</th>
-                  <th className="num">Carried over</th>
-                  <th className="num">Used</th>
-                  <th className="num">Remaining</th>
+                  <th>{t('common.report.employee')}</th>
+                  <th>{t('common.branch')}</th>
+                  <th>{t('hr.leaveBalance.report.leaveType')}</th>
+                  <th className="num">{t('hr.leaveBalance.report.accrued')}</th>
+                  <th className="num">{t('hr.leaveBalance.carriedOver')}</th>
+                  <th className="num">{t('hr.leaveBalance.used')}</th>
+                  {/* QA3 LEV-14: the fifth figure, so every row adds up on paper */}
+                  <th className="num">{t('hr.leaveBalance.adjusted')}</th>
+                  <th className="num">{t('hr.leaveBalance.remaining')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -219,16 +205,17 @@ export default function LeaveBalanceReportPage() {
                         {!r.isPaid && (
                           <span
                             className="report-anomaly"
-                            title="Time taken in this type is unpaid."
+                            title={t('hr.leaveBalance.report.unpaidTitle')}
                           >
                             {' '}
-                            (unpaid)
+                            {t('hr.leaveBalance.report.unpaidTag')}
                           </span>
                         )}
                       </td>
                       <td className="num">{r.accrued.toFixed(2)}</td>
                       <td className="num">{r.carriedOver.toFixed(2)}</td>
                       <td className="num">{r.used.toFixed(2)}</td>
+                      <td className="num">{(r.adjusted ?? 0).toFixed(2)}</td>
                       <td
                         className={
                           r.remaining < 0

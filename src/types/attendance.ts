@@ -318,6 +318,35 @@ export interface RosterGap {
   employeeId: number
   fullName: string
   workDate: string
+  /**
+   * QA3 (ROS-8): the branch the employee belonged to ON that day — the gap belongs to that branch's month.
+   * Absent from an older API.
+   */
+  branchId?: number | null
+}
+
+/**
+ * GET /api/roster/leave-days (QA3 ROS-4 / LEV-5) — who is on APPROVED leave, by day: the days an approved leave request
+ * covers (FromDate..ApprovedToDate), a half day as 0.5. Read from the requests, not the ledger: the ledger books a
+ * month of leave on one date and also holds exit-permission minutes converted to leave.
+ */
+export interface RosterLeaveDay {
+  employeeId: number
+  /** 'yyyy-MM-ddT00:00:00' from the API. */
+  date: string
+  /** 1 = the whole day, 0.5 = half of it. */
+  daysOnLeave: number
+}
+
+/** POST /api/roster/rederive-month (QA3 REL-16): one branch-month's completed days derived again. */
+export interface RosterRederiveRequest {
+  branchId: number
+  /** 'yyyy-MM'. */
+  yearMonth: string
+}
+
+export interface RosterRederiveResult {
+  daysRederived: number
 }
 
 /**
@@ -354,6 +383,8 @@ export interface RosterMonthStatus {
   /** True once anything on the roster moved after lastApprovedAt — the only reason to resubmit. */
   changedSinceApproval?: boolean
   lastChangedUtc?: string | null
+  /** QA3 (ROS-2): when the month's attendance days were last derived against its roster (approval, nightly, by hand). */
+  rederivedAt?: string | null
 }
 
 /** DELETE /api/attendance/rosters — what clearing one branch-month removed. */
@@ -392,6 +423,8 @@ export interface RosterGenerateRequest {
   weekdays: string
   /** OFF by default: leaving it off keeps manual changes already made. */
   overwrite: boolean
+  /** QA3 (ROS-14): only the days the employee belongs to this branch. Null = every branch the caller may plan. */
+  branchId?: number | null
 }
 
 /** POST /api/roster/generate-bulk. */
@@ -402,21 +435,28 @@ export interface RosterGenerateBulkRequest {
   shiftId: number
   weekdays: string
   overwrite: boolean
+  /** QA3 (ROS-14): only the days each employee belongs to this branch. Null = every branch the caller may plan. */
+  branchId?: number | null
 }
 
-/** POST /api/roster/copy-period. Weekday-aligned: a Monday shift lands on a Monday. */
+/**
+ * POST /api/roster/copy-period. Weekday-aligned: a Monday shift lands on a Monday.
+ * QA3 (ROS-3): ONE branch — the days each employee belongs to it, in the source month and in the target month.
+ */
 export interface RosterCopyPeriodRequest {
   sourceYearMonth: string
   targetYearMonth: string
   employeeId: number | null
   overwrite: boolean
+  branchId: number
 }
 
-/** POST /api/roster/apply-pattern. */
+/** POST /api/roster/apply-pattern. QA3 (ROS-3): ONE branch, like the copy. */
 export interface RosterApplyPatternRequest {
   yearMonth: string
   employeeId: number | null
   overwrite: boolean
+  branchId: number
 }
 
 /** PUT /api/roster/patterns/{employeeId} — the editor always sends all seven days. */
@@ -432,6 +472,8 @@ export interface RosterGenerateResult {
 
 export interface RosterBulkResult {
   employeesProcessed: number
+  /** QA3 (ROS-13): the days actually written. Absent from an older API. */
+  rowsInserted?: number
 }
 
 /* ── Processed attendance ── */
@@ -634,6 +676,21 @@ export interface QuarantineMapResult {
   punchesResolved: number
   daysDerived: number
   daysAlreadyPaid: number
+}
+
+/**
+ * POST /api/attendance/device-quarantine/dismiss (QA3): "this PIN belongs to nobody". The waiting punches are set
+ * aside with the reason - kept (the terminal's next copy stays a duplicate), no longer waiting; mapping the PIN later
+ * takes them back.
+ */
+export interface QuarantineDismissRequest {
+  deviceId: number
+  enrollPin: string
+  note: string
+}
+
+export interface QuarantineDismissResult {
+  punchesDismissed: number
 }
 
 /** null = undecided (the minutes are covered in pay meanwhile) | Excused | Deducted | Corrected. */
@@ -929,4 +986,318 @@ export interface ProcessResult {
 
 export interface MarkAbsenteesResult {
   absenteesMarked: number
+}
+
+/* ── Auto-roster (6/5 rhythm, fair weekends) — api/roster/auto, docs/AUTO_ROSTER.md §4 ── */
+
+/*
+ * What the drawer SENDS is typed as unions: the page only ever writes these values. What the
+ * server SENDS BACK (a cell's state, origin and change, an issue's severity and code) is a plain
+ * string, for the reason RosterMonthStatus gives: a value from a newer server must render as
+ * itself, not break the grid it appears on.
+ */
+
+/** D11. FillEmpty: only empty days. ReplanAuto: also days still as the generator wrote them. ReplanAll: all but pinned/locked/leave. */
+export type AutoRosterMode = 'FillEmpty' | 'ReplanAuto' | 'ReplanAll'
+
+/** D2. Aligned: everyone's first planned week is a 6-day week. Staggered: half the team starts on 5. */
+export type AutoRosterRhythmStart = 'Aligned' | 'Staggered'
+
+/** How many people work one public holiday. A holiday not listed is closed (0). */
+export interface AutoRosterHolidayCover {
+  date: string
+  count: number
+}
+
+/** "This week is a 5-day week": re-anchors one employee's rhythm; saved by the commit. */
+export interface AutoRosterRhythmOverride {
+  employeeId: number
+  /** Any day of the week; the planner moves it back to that week's Monday. */
+  weekStart: string
+  /** 6 or 5. */
+  workDays: number
+}
+
+/**
+ * A day the manager set by hand in the draft. Regenerate plans AROUND these — each is fixed exactly
+ * as sent. A rest day is isRestDay with no shift; no shift and not a rest day means "leave it empty".
+ */
+export interface AutoRosterDraftCell {
+  employeeId: number
+  workDate: string
+  shiftId?: number | null
+  isRestDay: boolean
+  /** "Keep when regenerating" — saved as a pin by the commit. */
+  isPinned?: boolean | null
+}
+
+/** POST api/roster/auto/preview. */
+export interface AutoRosterRequest {
+  branchId: number
+  /** 'yyyy-MM'. */
+  month: string
+  mode: AutoRosterMode
+  /** Null = the RosterRhythmStart setting. Only decides rhythms that are not stored yet. */
+  rhythmStart?: AutoRosterRhythmStart | null
+  defaultShiftId?: number | null
+  holidayCover: AutoRosterHolidayCover[]
+  /** The complete off-rotation list: the drawer always sends every staff member's state. */
+  offRotationEmployeeIds: number[]
+  rhythmOverrides: AutoRosterRhythmOverride[]
+  draftCells: AutoRosterDraftCell[]
+}
+
+/** The row a cell had when the preview read it — echoed back by the commit as its concurrency check. */
+export interface AutoRosterCellExpected {
+  exists: boolean
+  shiftId?: number | null
+  isRestDay?: boolean | null
+}
+
+/** One employee-day of the draft (the whole Monday–Sunday window, not only the month). */
+export interface AutoRosterCell {
+  employeeId: number
+  workDate: string
+  /** work · rest · none (none = no row: a public holiday off, or nothing known). */
+  state: string
+  shiftId?: number | null
+  /** planned · fact · locked · pinned · leave · holiday · draft · ghost · outside. */
+  origin: string
+  /** insert · update · delete · unchanged · kept. "kept" is never sent back to the commit. */
+  change: string
+  reasonCode?: string | null
+  /** A small JSON object with the reason's figures, e.g. '{"owed":0.86}' or '{"shift":"Evening"}'. */
+  reasonArgs?: string | null
+  expected: AutoRosterCellExpected
+}
+
+/** An employee's 6/5 anchor: the week of anchorWeekStart has anchorWorkDays working days, then it alternates. */
+export interface AutoRosterRhythm {
+  employeeId: number
+  /** A Monday. */
+  anchorWeekStart: string
+  anchorWorkDays: number
+  /** Not stored yet, or changed by an override: the commit saves it. */
+  isNew: boolean
+}
+
+/** One week of an employee's 6·5 strip. */
+export interface AutoRosterWeekCounter {
+  /** A Monday. */
+  weekStart: string
+  /** The rhythm's type for the week: 6 or 5. */
+  workDays: number
+  rests: number
+  /** Rest days the week should hold — fewer than 7 − workDays when part of it is not employed. */
+  quota: number
+  /** Rests = quota, or the shortfall was absorbed by a leave. Drawn red when false. */
+  ok: boolean
+}
+
+export interface AutoRosterEmployeeCounters {
+  employeeId: number
+  /** Working days in the month (D14: payroll still assumes 26; 6/5 gives about 24). */
+  workDays: number
+  restDays: number
+  saturdaysOff: number
+  sundaysOff: number
+  /** Weekend fair-share balance after this plan: positive = owed days off, negative = had more than a fair share. */
+  owedSaturday: number
+  owedSunday: number
+  weeks: AutoRosterWeekCounter[]
+}
+
+/** On duty on one shift a day must cover (D16), against that shift's minimum and target. */
+export interface AutoRosterShiftCounter {
+  shiftId: number
+  onDuty: number
+  min: number
+  target?: number | null
+}
+
+/** The footer cell under a day. On a public holiday `min` is the cover asked for. */
+export interface AutoRosterDayCounters {
+  date: string
+  onDuty: number
+  min?: number | null
+  target?: number | null
+  /**
+   * Each shift the day must cover (D16), in the order they start. Empty on a closed holiday, and
+   * when the branch has no shift to cover.
+   */
+  shifts: AutoRosterShiftCounter[]
+}
+
+/** Something the plan could not satisfy, or a rule an edit breaks. An error blocks the save. */
+export interface AutoRosterIssue {
+  /** error · warning · info. */
+  severity: string
+  /** The §2.7 code (and D16's SHIFT_UNCOVERED) — translated under attendance.roster.auto.issue. */
+  code: string
+  employeeId?: number | null
+  date?: string | null
+  /** D16: the shift a SHIFT_UNCOVERED or per-shift SHORT_STAFFED issue is about — named on the card in the page's language. */
+  shiftId?: number | null
+  /** The server's English sentence with the figures; shown when the code is unknown here. */
+  message: string
+}
+
+/** What saving the draft would do to the month's rows. */
+export interface AutoRosterSummary {
+  inserts: number
+  updates: number
+  deletes: number
+  unchanged: number
+  kept: number
+}
+
+/** POST api/roster/auto/preview → the draft. Writes nothing. */
+export interface AutoRosterPreview {
+  branchId: number
+  /** The 1st of the month. */
+  monthDate: string
+  /** Monday on/before the 1st. */
+  windowFrom: string
+  /** Sunday on/after the last day. */
+  windowTo: string
+  cells: AutoRosterCell[]
+  rhythm: AutoRosterRhythm[]
+  perEmployee: AutoRosterEmployeeCounters[]
+  perDay: AutoRosterDayCounters[]
+  issues: AutoRosterIssue[]
+  summary: AutoRosterSummary
+}
+
+/** One month cell the commit writes: upsert a working/rest row, or delete the row (a holiday off). */
+export interface AutoRosterCommitCell {
+  employeeId: number
+  workDate: string
+  action: 'upsert' | 'delete'
+  shiftId?: number | null
+  isRestDay: boolean
+  expected: AutoRosterCellExpected
+  /** The planner chose it (ReplanAuto may change it later); false for the manager's own edit. */
+  isAuto: boolean
+  reasonCode?: string | null
+  /** Null = leave the pin as it is. */
+  isPinned?: boolean | null
+}
+
+/** A rhythm (and the on-rotation flag) the commit stores. */
+export interface AutoRosterCommitRhythm {
+  employeeId: number
+  /** Left out (with anchorWorkDays) when only the on-rotation flag is stored. */
+  anchorWeekStart?: string
+  anchorWorkDays?: number
+  onRotation: boolean
+}
+
+/** POST api/roster/auto/commit — the request, plus exactly the cells to write. */
+export interface AutoRosterCommitRequest extends AutoRosterRequest {
+  cells: AutoRosterCommitCell[]
+  rhythm: AutoRosterCommitRhythm[]
+}
+
+export interface AutoRosterCommitResult {
+  runId: number
+  rowsInserted: number
+  rowsUpdated: number
+  rowsDeleted: number
+}
+
+/** The 'Roster' settings section (§3.2), keys in camelCase. */
+export interface AutoRosterSettings {
+  rosterRhythmStart: string
+  rosterHolidayCountsAsRest: boolean
+  rosterMaxConsecutiveWorkDays: number
+  rosterPreferredMaxConsecutiveWorkDays: number
+  rosterFairnessLookbackWeeks: number
+  rosterPairRestDays: boolean
+  rosterPatternRestDays: string
+  rosterMinHoursBetweenShifts: number
+  rosterMinWeeklyRestHours: number
+}
+
+/** A row of the drawer's staff list. */
+export interface AutoRosterSetupStaff {
+  employeeId: number
+  fullName: string
+  position?: string | null
+  onRotation: boolean
+  /** The stored anchor, if any. */
+  anchorWeekStart?: string | null
+  anchorWorkDays?: number | null
+  /** 6 or 5: the month's first week as the planner would use it now. */
+  firstWeekWorkDays: number
+}
+
+export interface AutoRosterSetupHoliday {
+  date: string
+  name: string
+  isPaid: boolean
+}
+
+export interface AutoRosterSetupShift {
+  shiftId: number
+  name: string
+}
+
+/** Minimum (and target) on duty for a branch. dayOfWeek 1 = Monday .. 7 = Sunday, null = every day; shiftId null = any shift. */
+export interface StaffingRequirementDto {
+  dayOfWeek?: number | null
+  shiftId?: number | null
+  minOnDuty: number
+  targetOnDuty?: number | null
+}
+
+/** GET api/roster/auto/setup — everything the drawer opens with. */
+export interface AutoRosterSetup {
+  branchId: number
+  monthDate: string
+  settings: AutoRosterSettings
+  staff: AutoRosterSetupStaff[]
+  /** The branch's stored rows, day-level and per shift, exactly as saved. */
+  staffing: StaffingRequirementDto[]
+  /**
+   * D16 — the shifts every day must cover, as the planner will read them (active shifts only). The
+   * branch's stored per-shift rows when it has any — a row with minOnDuty 0 is "this shift need not
+   * be covered" — else the shifts it actually runs, found from its last 8 weeks of roster and weekly
+   * patterns, each { dayOfWeek: null, minOnDuty: 1, targetOnDuty: null }.
+   */
+  shiftCover: StaffingRequirementDto[]
+  /** shiftCover was found, not stored: the branch has no per-shift row. True with an empty list = nothing found. */
+  shiftCoverDetected: boolean
+  holidays: AutoRosterSetupHoliday[]
+  /** Active shifts only — an inactive shift is never written. */
+  shifts: AutoRosterSetupShift[]
+  /** The branch's last saved run, as the drawer's defaults. Null before the first run. */
+  lastParams?: AutoRosterRequest | null
+  monthStatus?: string | null
+  /** A roster approval waiting on the month: nothing may be planned until it is decided. */
+  openRequestId?: number | null
+}
+
+/** GET api/roster/auto/cells — the pin and the auto marker of a saved day. */
+export interface RosterCellInfo {
+  employeeId: number
+  workDate: string
+  isPinned: boolean
+  /** The row still equals what the generator wrote; any other writer makes it manual. */
+  isAuto: boolean
+  reasonCode?: string | null
+}
+
+/** PUT api/roster/auto/rhythm — on/off rotation, and optionally the anchor. */
+export interface RosterRhythmDto {
+  employeeId: number
+  onRotation: boolean
+  anchorWeekStart?: string | null
+  anchorWorkDays?: number | null
+}
+
+/** PUT api/roster/auto/pin — pins a SAVED day; it writes no roster row. */
+export interface RosterPinRequest {
+  employeeId: number
+  workDate: string
+  isPinned: boolean
 }

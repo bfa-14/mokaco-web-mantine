@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button, Loader } from '@mantine/core'
 import { IconChevronDown, IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -33,6 +34,7 @@ function ForwardChevron() {
  */
 export default function OrgChartPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { tierName } = useApprovalTiers()
 
   const [nodes, setNodes] = useState<OrgTreeNode[]>([])
@@ -136,7 +138,7 @@ export default function OrgChartPage() {
         className="wf-org-row"
         role="button"
         tabIndex={0}
-        title={`Open ${n.fullName}`}
+        title={t('hr.orgChart.open', { name: n.fullName })}
         onClick={open}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -157,8 +159,8 @@ export default function OrgChartPage() {
             aria-expanded={!isCollapsed}
             aria-label={
               isCollapsed
-                ? `Show who reports to ${n.fullName}`
-                : `Hide who reports to ${n.fullName}`
+                ? t('hr.orgChart.showReports', { name: n.fullName })
+                : t('hr.orgChart.hideReports', { name: n.fullName })
             }
             // The row opens the employee; the chevron must not, or the tree is unusable.
             onClick={(e) => {
@@ -192,8 +194,8 @@ export default function OrgChartPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Org chart</h1>
-          <p className="page-subtitle">Who reports to whom, across the company.</p>
+          <h1 className="page-title">{t('hr.orgChart.title')}</h1>
+          <p className="page-subtitle">{t('hr.orgChart.subtitle')}</p>
         </div>
         {placed.length > 0 && (
           <div className="page-head-actions">
@@ -204,17 +206,13 @@ export default function OrgChartPage() {
               }
               onClick={() => (collapsed.size > 0 ? setCollapsed(new Set()) : collapseAll())}
             >
-              {collapsed.size > 0 ? 'Expand all' : 'Collapse all'}
+              {collapsed.size > 0 ? t('hr.orgChart.expandAll') : t('hr.orgChart.collapseAll')}
             </Button>
           </div>
         )}
       </div>
 
-      <PageHelp>
-        Each person sits under their manager. A line-manager approval step climbs this tree from the
-        requester. Click anyone to open their record; to change a reporting line, edit them and set
-        their “Reports to”.
-      </PageHelp>
+      <PageHelp>{t('hr.orgChart.help')}</PageHelp>
 
       {error && (
         <div className="alert alert--error" role="alert">
@@ -229,8 +227,8 @@ export default function OrgChartPage() {
       ) : nodes.length === 0 ? (
         <div className="card">
           <div className="empty-hint">
-            <div className="empty-hint-main">No employees to chart yet.</div>
-            Add employees and set who they report to, and the tree will build itself.
+            <div className="empty-hint-main">{t('hr.orgChart.empty')}</div>
+            {t('hr.orgChart.emptyHint')}
           </div>
         </div>
       ) : (
@@ -244,13 +242,8 @@ export default function OrgChartPage() {
               so the hierarchy above stays true. */}
           {unplaced.length > 0 && (
             <div className="card" style={{ marginTop: 16 }}>
-              <h2 className="card-title">Not placed in the hierarchy</h2>
-              <p className="wf-org-note">
-                {unplaced.length === 1 ? 'This person has' : 'These people have'} no “Reports to”
-                set, so they do not appear in the tree above. Open{' '}
-                {unplaced.length === 1 ? 'them' : 'each of them'} and set a manager on their
-                employee form.
-              </p>
+              <h2 className="card-title">{t('hr.orgChart.unplacedTitle')}</h2>
+              <p className="wf-org-note">{t('hr.orgChart.unplaced', { count: unplaced.length })}</p>
               {unplaced.map((n) => renderRow(n, 0))}
             </div>
           )}

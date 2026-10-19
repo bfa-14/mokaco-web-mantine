@@ -23,6 +23,9 @@ interface LoginForm {
 /** Takes `t` as an argument: a module-level function has no hook, and the fallbacks are translated. */
 function messageFromError(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) {
+    // Sign-in is rate-limited per address (QA3 SEC-6): the 429 gets its sentence in the reader's
+    // language rather than the server's English one.
+    if (error.status === 429) return t('auth.tooManyAttempts')
     // The backend returns a specific message in { error } for failed logins; surface it directly.
     return error.message || t('auth.errorGeneric')
   }

@@ -21,11 +21,11 @@ import type {
   EmployeeUnlinkResult,
   EmployeeUpdateRequest,
   LeaveBalance,
-  LeaveDay,
   LeaveLedgerEntry,
   LeaveLedgerPostRequest,
   LeavePolicy,
   LeaveYearOpenSummary,
+  LeaveYearUndoSummary,
   LeaveRelationEntitlement,
   LeaveType,
   LeaveTypeUpsertRequest,
@@ -33,11 +33,9 @@ import type {
   OrgTreeNode,
   Position,
   ReportingLineEntry,
-  SalaryComponent,
-  SalaryComponentCreateRequest,
-  SalaryComponentUpdateRequest,
   EmployeeSalaryComponent,
   SalaryComponentSetRequest,
+  SwapCounterparts,
 } from '../types/hr'
 
 /** All HR endpoints: read requires EMP_VIEW, write requires EMP_EDIT. */
@@ -182,6 +180,18 @@ export const leavePolicyService = {
   openYear: (year: number) =>
     apiRequest<LeaveYearOpenSummary[]>(`/api/leave/year-open?year=${year}`, { method: 'POST' }),
 
+  /**
+   * QA3 (LEV-9): TAKES BACK the opening of the current year -- the entitlement, the carry-over, the close of the old
+   * year and the expiry that followed -- for everybody (or one employee), so the year can be opened again after the
+   * grid or a hire date was corrected. Refused, with the sentence to show, once leave of the year was used in a period
+   * already paid.
+   */
+  undoYear: (year: number, employeeId?: number) =>
+    apiRequest<LeaveYearUndoSummary>(
+      `/api/leave/year-undo?year=${year}` + (employeeId != null ? `&employeeId=${employeeId}` : ''),
+      { method: 'POST' },
+    ),
+
   setAccrualTier: (leaveTypeId: number, minServiceYears: number, annualDays: number) =>
     apiRequest<void>(`/api/leave-types/${leaveTypeId}/accrual-tier`, {
       method: 'PUT',
@@ -287,9 +297,9 @@ export const employeesService = {
     }),
 
   /**
-   * Sets the employee's approval tier (1 staff / 2 management / 3 executive) — which published chain
-   * their requests follow. Its own endpoint, not part of the update body, because it is a workflow
-   * decision with its own validation. Returns the employee's new tier standing.
+   * Sets the employee's approval tier — any tier of the dictionary, 1 being the head — which picks
+   * the published chain their requests follow. Its own endpoint, not part of the update body, because
+   * it is a workflow decision with its own validation. Returns the employee's new tier standing.
    */
   setApprovalTier: (employeeId: number, approvalTier: number) =>
     apiRequest<{ employeeId: number; fullName: string; approvalTier: number }>(
@@ -311,6 +321,13 @@ export const employeesService = {
   /** The employee's chain of command, bottom-up (lvl 0 = themselves). Shown under the "Reports to" field. */
   getReportingLine: (employeeId: number) =>
     apiRequest<ReportingLineEntry[]>(`/api/employees/${employeeId}/reporting-line`),
+
+  /**
+   * Who this employee can swap a rostered day with (QA3 WEB-2) — signed-in only, scoped by the
+   * procedure. Replaces filtering getAll(), which is branch-scoped and so empty for staff.
+   */
+  getSwapCounterparts: (employeeId: number) =>
+    apiRequest<SwapCounterparts>(`/api/employees/${employeeId}/swap-counterparts`),
 
   /** The whole org tree, pre-sorted depth-first — for the org-chart page. */
   getOrgTree: () => apiRequest<OrgTreeNode[]>('/api/employees/org-tree'),
@@ -363,31 +380,18 @@ export const approvalTiersService = {
     apiRequest<void>(`/api/hr/approval-tiers/${tierNo}`, { method: 'DELETE' }),
 }
 
-export const salaryComponentsService = {
-  getByEmployee: (employeeId: number) =>
-    apiRequest<SalaryComponent[]>(
-      `/api/salary-components/by-employee/${employeeId}`,
-    ),
-  create: (request: SalaryComponentCreateRequest) =>
-    apiRequest<{ salaryComponentId: number }>('/api/salary-components', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    }),
-  update: (id: number, request: SalaryComponentUpdateRequest) =>
-    apiRequest<void>(`/api/salary-components/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(request),
-    }),
-  remove: (id: number) =>
-    apiRequest<void>(`/api/salary-components/${id}`, { method: 'DELETE' }),
-}
+/*
+ * THE RAW SALARY-ROW WRITES ARE GONE (QA3 PAY-6 / REL-2). salaryComponentsService used to POST / PUT /
+ * DELETE /api/salary-components: insert, edit in place and hard-delete, with no locked-month check and
+ * the standing row never closed — a raise was paid on top of the old salary. The API has retired those
+ * routes; a salary changes only through salaryAdminService below.
+ */
 
 /**
- * SALARY ADMINISTRATION — the history-preserving path, and the one the Salaries page uses.
+ * SALARY ADMINISTRATION — the history-preserving path, and the one the employee's Salary tab uses.
  *
- * Distinct from {@link salaryComponentsService} above, which edits a row in place. These three
- * never rewrite history: `set` closes the standing row the day before and opens a new one, and
- * `end` closes a row on a date rather than erasing it.
+ * The ONLY way a salary changes. These never rewrite history: `set` closes the standing row the
+ * day before and opens a new one, and `end` closes a row on a date rather than erasing it.
  *
  * Both writes RETURN the employee's rows as they now stand, so a page can render the result of its
  * own change without a second fetch — and without a window where the screen and the truth differ.
@@ -464,17 +468,6 @@ export const leaveLedgerService = {
     apiRequest<LeaveLedgerEntry[]>(
       `/api/leave-ledger/by-employee/${employeeId}` +
         (period ? `?period=${encodeURIComponent(period)}` : ''),
-    ),
-  /**
-   * Everybody's approved leave days in a range, one row per employee-day.
-   *
-   * The roster uses this to avoid scheduling a shift on somebody's leave day. Kept as its own
-   * endpoint rather than a loop over getByEmployee, which would be a round trip per person per
-   * month just to draw a calendar.
-   */
-  getLeaveDays: (from: string, to: string) =>
-    apiRequest<LeaveDay[]>(
-      `/api/leave/days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     ),
   getBalance: (employeeId: number, period?: string) =>
     apiRequest<LeaveBalance[]>(

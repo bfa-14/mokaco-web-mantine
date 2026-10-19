@@ -7,8 +7,10 @@ import type {
   Role,
   RoleRejectionBehaviour,
   RoleSignatureRequirement,
+  RolePickItem,
   UnlinkedUser,
   UserListItem,
+  UserPickItem,
   UserSignatureInfo,
 } from '../types/security'
 
@@ -16,6 +18,14 @@ import type {
 export const usersService = {
   getAll(): Promise<UserListItem[]> {
     return apiRequest<UserListItem[]>('/api/users')
+  },
+
+  /**
+   * The ACTIVE accounts as a pick-list (id, username, employee name) — WORKFLOW_CONFIGURE, NOT
+   * USER_MANAGE: the chain builder's picker, whose holders need not manage users.
+   */
+  names(): Promise<UserPickItem[]> {
+    return apiRequest<UserPickItem[]>('/api/users/names')
   },
 
   /** Accounts not yet linked to any employee — feeds the "link account" picker. */
@@ -56,6 +66,11 @@ export const usersService = {
 export const rolesService = {
   getRoles(): Promise<Role[]> {
     return apiRequest<Role[]>('/api/roles')
+  },
+
+  /** Every role as a pick-list (id, name) — WORKFLOW_CONFIGURE, NOT ROLE_MANAGE (the chain builder). */
+  names(): Promise<RolePickItem[]> {
+    return apiRequest<RolePickItem[]>('/api/roles/names')
   },
 
   createRole(name: string): Promise<{ roleId: number }> {

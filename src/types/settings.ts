@@ -98,6 +98,19 @@ export const PUNCH_DIRECTION_KEYS: readonly string[] = [
   PUNCH_DEBOUNCE_MINUTES_KEY,
 ]
 
+/**
+ * The Google sign-in gate's four rows (Section 'Security'). Pulled out of the generic list and NOT
+ * editable there: the API refuses them on PUT /api/settings/{key}, because only the Google sign-in
+ * tab's own endpoint (api/access) carries the guard that stops somebody locking everyone out —
+ * themself included. That tab owns them; see types/access.ts.
+ */
+export const GOOGLE_SIGNIN_KEYS: readonly string[] = [
+  'GoogleSignInRequired',
+  'GoogleClientId',
+  'GoogleSignInDays',
+  'GoogleSignInEpoch',
+]
+
 /** The confirmation phrase, exactly as core.usp_System_ResetTestData compares it. */
 export const RESET_CONFIRM_PHRASE = 'DELETE ALL DATA'
 
