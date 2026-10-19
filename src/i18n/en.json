@@ -234,7 +234,23 @@
     "required": "(required)",
     "period": "Period",
     "ok": "OK",
-    "pageInfo": "{{from}}–{{to}} of {{total}}"
+    "pageInfo": "{{from}}–{{to}} of {{total}}",
+    "report": {
+      "employee": "Employee",
+      "print": "Print",
+      "printHint": "Print just the report — no menus, no buttons.",
+      "generateFirst": "Generate the report first.",
+      "generate": "Generate",
+      "chooseTitle": "Choose your options and press Generate.",
+      "chooseHint": "The report will appear here, ready to print.",
+      "noDataTitle": "No data for this selection.",
+      "noDataHint": "Nothing was recorded for these options. Try a different period or branch.",
+      "generatedOn": "Generated on",
+      "noAccess": "You do not have access to reports.",
+      "noAccessHint": "Reports need the ‘View reports’ permission. Ask whoever administers the system.",
+      "allBranches": "All branches",
+      "allEmployees": "All employees"
+    }
   },
   "workflow": {
     "leaveNotice": {
@@ -1290,6 +1306,49 @@
         },
         "holidayHeader": "Public holiday: {{name}}"
       }
+    },
+    "reports": {
+      "col": {
+        "shift": "Shift",
+        "firstIn": "First in",
+        "lastOut": "Last out",
+        "late": "Late",
+        "workedHours": "Worked hrs",
+        "overtime": "Overtime",
+        "exit": "Exit",
+        "dayFraction": "Day fraction",
+        "status": "Status",
+        "source": "Source",
+        "daysWorked": "Days worked",
+        "fullDays": "Full days",
+        "present": "Present",
+        "absent": "Absent",
+        "leave": "Leave",
+        "rest": "Rest",
+        "exitLeaveDays": "Exit-leave days",
+        "approvedLeaveDays": "Appr. leave days",
+        "unpaidAbsence": "Unpaid absence"
+      },
+      "source": {
+        "Device": "Device",
+        "Excel": "Excel",
+        "Manual": "Manual"
+      },
+      "daily": {
+        "title": "Daily Attendance Sheet",
+        "subtitle": "Who was in, late, absent or off on a day.",
+        "help": "One row per employee for a single day, grouped by branch. Use it as the morning sheet: who clocked in, who was late, who never showed. A warning icon marks a day whose punches did not add up — its hours are not yet trustworthy.",
+        "anomaly": "The punches on this day did not add up — the hours are not yet trustworthy.",
+        "tally_one": "{{count}} employee · Present {{present}} · Late {{late}} · Absent {{absent}} · On leave {{leave}}",
+        "tally_other": "{{count}} employees · Present {{present}} · Late {{late}} · Absent {{absent}} · On leave {{leave}}"
+      },
+      "monthly": {
+        "title": "Monthly Attendance Summary",
+        "subtitle": "The sheet to review before running payroll.",
+        "help": "One row per employee for the month, with every figure payroll turns into a pay line. Review it before running a payroll period; the number to watch is unpaid absence days. Overtime here is detected, not automatically paid.",
+        "totals_one": "Totals — {{count}} employee",
+        "totals_other": "Totals — {{count}} employees"
+      }
     }
   },
   "payroll": {
@@ -1620,7 +1679,17 @@
       "noneForYear": "No leave types have a balance for {{year}}.",
       "yearNotOpened": "No leave year opened for {{year}} — open it from Leave policy.",
       "openFromPolicy": "Leave policy",
-      "unavailable": "The yearly balance could not be read."
+      "unavailable": "The yearly balance could not be read.",
+      "report": {
+        "title": "Leave Balance Report",
+        "subtitle": "Accrued, used and remaining leave per employee.",
+        "help": "One row per employee per leave type, as of the end of the chosen period. Remaining is accrued plus carried over, minus used, plus adjusted (corrections, the year-end close, expired carry-over) — the column to read. A negative remaining means somebody has taken more than they had.",
+        "asOf": "As of",
+        "leaveType": "Leave type",
+        "accrued": "Accrued",
+        "unpaidTag": "(unpaid)",
+        "unpaidTitle": "Time taken in this type is unpaid."
+      }
     },
     "leaveAdjust": {
       "action": "Adjust balance",
