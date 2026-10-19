@@ -37,6 +37,13 @@ export interface ComponentType {
    * an absent flag as active.
    */
   isActive?: boolean
+  /**
+   * The code payroll finds a type it WRITES by (BASIC, OVERTIME, NSSF_EMPLOYEE, …) — null for a type
+   * people assign themselves. QA3 PAY-10: a system type cannot be renamed, re-categorised, deactivated
+   * or deleted; the procedures refuse and the page does not offer it. Optional: an older API omits it.
+   */
+  systemCode?: string | null
+  isSystem?: boolean
 }
 
 /**
@@ -475,17 +482,6 @@ export interface OrgTreeNode {
   depth: number
 }
 
-/** Row from GET /api/salary-components/by-employee/{id}. */
-export interface SalaryComponent {
-  salaryComponentId: number
-  componentTypeId: number
-  componentName: string
-  amount: number
-  currencyCode: string
-  effectiveFrom: string
-  effectiveTo: string | null
-}
-
 /**
  * One salary row on the SALARY ADMINISTRATION page — current or historical.
  *
@@ -530,21 +526,8 @@ export interface SalaryComponentEndRequest {
   effectiveTo: string
 }
 
-export interface SalaryComponentCreateRequest {
-  employeeId: number
-  componentTypeId: number
-  amount: number
-  currencyCode: string
-  effectiveFrom: string
-  effectiveTo: string | null
-}
-
-export interface SalaryComponentUpdateRequest {
-  amount: number
-  currencyCode: string
-  effectiveFrom: string
-  effectiveTo: string | null
-}
+/* The raw create / update request shapes are gone with their routes (QA3 PAY-6): a salary is SET from a
+   date (SalaryComponentSetRequest) or ENDED on one (SalaryComponentEndRequest). */
 
 /** Row from GET /api/documents/by-employee/{id}. */
 export interface Document {
