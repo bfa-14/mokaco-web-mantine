@@ -539,7 +539,8 @@
       "workingDays_one": "{{value}} of the balance",
       "workingDays_other": "{{value}} of the balance",
       "costNothing": "— working days only: of the {{calendar}} calendar day(s), {{rest}} rest day(s) and {{holidays}} public holiday(s) cost nothing.",
-      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays."
+      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays.",
+      "overBalancePending": "That is more than the {{days}} left of the {{type}} balance once the {{pending}} already asked for in requests still waiting are counted. The request will be refused unless the company allows a negative balance."
     },
     "tip": {
       "branchPlaceholder": "Which branch?",
@@ -1005,7 +1006,13 @@
       "pickEmployee": "Choose the employee this PIN belongs to.",
       "mapped": "{{count}} punch(es) given to {{employee}}.",
       "result": "PIN {{pin}} is now {{employee}}: {{punches}} punch(es) resolved, {{days}} day(s) derived again.",
-      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them."
+      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them.",
+      "aside": "Set aside",
+      "asideTitle": "Set aside the punches of PIN {{pin}}?",
+      "asideBody": "{{count}} punch(es) from {{device}} wait under this PIN. If it belongs to nobody (a visitor, a test enrolment), set them aside: they are kept with your reason and no longer wait here. Mapping the PIN later takes them back.",
+      "asideNote": "Why (whose PIN it is, or why it belongs to nobody)",
+      "asideNoteRequired": "Say why these punches are set aside.",
+      "asideDone": "{{count}} punch(es) of PIN {{pin}} set aside."
     },
     "roster": {
       "auto": {
@@ -1569,7 +1576,14 @@
       "colExpired": "Expired",
       "nothingToDo": "Nothing to do — every employee was already opened for {{year}}.",
       "prorated_one": "{{count}} employee was hired part way through the year, so their grant is proportional.",
-      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional."
+      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional.",
+      "undo": "Undo this year's opening",
+      "undoExplain": "Takes back what opening {{year}} wrote for every employee — the entitlement, the carry-over, the close of last year and any expiry that followed — so the year can be opened again after the grid or a hire date was corrected. Refused once leave of {{year}} was used in a period already paid.",
+      "undoConfirm": "Undo the opening",
+      "undoing": "Undoing…",
+      "undoDone_one": "The opening of {{year}} was taken back for {{count}} employee ({{movements}} ledger movements). Open the year again when the grid is right.",
+      "undoDone_other": "The opening of {{year}} was taken back for {{count}} employees ({{movements}} ledger movements). Open the year again when the grid is right.",
+      "undoNothing": "Nothing to undo — {{year}} was not opened for anybody yet."
     },
     "leavePolicy": {
       "fixedFromTiers": "Days come from this type's tiers — fixed entitlement does not apply.",
@@ -1920,7 +1934,8 @@
       "openList": "Open All bookings",
       "seats_one": "{{count}} seat",
       "seats_other": "{{count}} seats",
-      "slotHint": "Book {{room}} at {{time}} — drag for a longer slot"
+      "slotHint": "Book {{room}} at {{time}} — drag for a longer slot",
+      "retired": "{{room}} (inactive)"
     },
     "drawer": {
       "title": "Booking #{{id}}",
@@ -1966,12 +1981,18 @@
       "personsHint": "This room takes {{min}} to {{max}} people.",
       "hoursHint": "{{day}}: open {{open}}–{{close}}.",
       "closedDay": "This room is closed on {{day}}.",
-      "endAfterStart": "The end time must be after the start time.",
+      "endAfterStart": "The end time must be after the start time (an end up to 06:00 is the next morning).",
       "emailHint": "Optional — with an address, the guest is emailed their confirmation.",
       "addonPerHour": "{{name}} — {{price}} per hour",
       "addonFixed": "{{name}} — {{price}}",
-      "previewHint": "An estimate. The price that is stored is the one the server works out when the booking is taken.",
-      "emailInvalid": "Enter a valid e-mail address."
+      "emailInvalid": "Enter a valid e-mail address.",
+      "hoursHintNextMorning": "{{day}}: open {{open}}–{{close}} the next morning. A start after midnight belongs to the next date.",
+      "nextMorning": "Ends at {{end}} the next morning — {{hours}} h.",
+      "discount": "Discount for {{hours}} h ({{percent}} %)",
+      "depositPercent": "Deposit ({{percent}} %)",
+      "quoteHint": "The server's price: the hour discount and the deposit for this notice, as the booking will store them.",
+      "quoteRefused": "Cannot price this yet: {{reason}}",
+      "quoting": "Working out the price…"
     },
     "block": {
       "title": "Block room",
@@ -2098,7 +2119,10 @@
       "paidInFull": "PAID",
       "balanceDue": "BALANCE DUE",
       "print": "Print",
-      "notFound": "That booking could not be found."
+      "notFound": "That booking could not be found.",
+      "roomChargePlain": "Room — {{hours}} h",
+      "discount": "Discount ({{percent}} %)",
+      "nothingDue": "NOTHING DUE"
     },
     "cancelledBy": {
       "Staff": "Staff",

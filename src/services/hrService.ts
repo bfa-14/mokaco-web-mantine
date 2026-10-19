@@ -26,6 +26,7 @@ import type {
   LeaveLedgerPostRequest,
   LeavePolicy,
   LeaveYearOpenSummary,
+  LeaveYearUndoSummary,
   LeaveRelationEntitlement,
   LeaveType,
   LeaveTypeUpsertRequest,
@@ -182,6 +183,18 @@ export const leavePolicyService = {
    */
   openYear: (year: number) =>
     apiRequest<LeaveYearOpenSummary[]>(`/api/leave/year-open?year=${year}`, { method: 'POST' }),
+
+  /**
+   * QA3 (LEV-9): TAKES BACK the opening of the current year -- the entitlement, the carry-over, the close of the old
+   * year and the expiry that followed -- for everybody (or one employee), so the year can be opened again after the
+   * grid or a hire date was corrected. Refused, with the sentence to show, once leave of the year was used in a period
+   * already paid.
+   */
+  undoYear: (year: number, employeeId?: number) =>
+    apiRequest<LeaveYearUndoSummary>(
+      `/api/leave/year-undo?year=${year}` + (employeeId != null ? `&employeeId=${employeeId}` : ''),
+      { method: 'POST' },
+    ),
 
   setAccrualTier: (leaveTypeId: number, minServiceYears: number, annualDays: number) =>
     apiRequest<void>(`/api/leave-types/${leaveTypeId}/accrual-tier`, {

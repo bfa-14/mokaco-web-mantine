@@ -1,6 +1,7 @@
 import { Button, Checkbox, NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core'
 import { useTranslation } from 'react-i18next'
 import { SettingRow } from './SettingsCard'
+import { boolValue, isOn } from './settingValues'
 import { SHOW_PAGE_HELP_KEY, type Setting } from '../../types/settings'
 import { t as translate } from '../../i18n/t'
 
@@ -157,34 +158,9 @@ const KNOWN: Record<
  * The WhatsApp access token belongs here for the same reason and one more: it is a BEARER token, so
  * anyone who reads it off the screen can send as this business until it is rotated.
  */
-const SECRET_KEYS = new Set(['SmtpPassword', 'WhatsAppAccessToken'])
+// QA3: the booking mail account's password and the server-to-server booking key are secrets too.
+const SECRET_KEYS = new Set(['SmtpPassword', 'WhatsAppAccessToken', 'BookingSmtpPassword', 'BookingApiKey'])
 
-/**
- * THE TWO DIALECTS core.SETTING actually stores a bool in.
- *
- * The table holds both: AllowSystemReset and NotifyOnRequestClosed are '1', while ShowPageHelp and
- * MachinePullEnabled are 'true'. Reading only 'true' as on — which is what this file did — shows
- * every '1' row as OFF and, worse, writes 'true' the first time somebody touches it. That is not
- * cosmetic for NotifyOnRequestClosed: core.usp_Email_QueueClosedRequests tests `<> '1'` and RETURNS,
- * so a switch that saved 'true' would silently turn the automatic mail OFF while displaying it as on.
- */
-const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on'])
-
-/** Is this stored value the ON state, in either dialect? */
-function isOn(value: string): boolean {
-  return TRUE_VALUES.has(value.trim().toLowerCase())
-}
-
-/**
- * The new value to store, IN THE DIALECT THE ROW ALREADY USES — read from what the server holds, not
- * from the draft, so toggling twice returns the row to exactly the string it started with. A key
- * with no value yet has no dialect to keep, and gets 'true'/'false'.
- */
-function boolValue(stored: string, on: boolean): string {
-  const current = stored.trim()
-  const numeric = current === '1' || current === '0'
-  return numeric ? (on ? '1' : '0') : on ? 'true' : 'false'
-}
 
 /**
  * Values a setting of this key may take, when it is a fixed choice rather than free text.

@@ -27,7 +27,7 @@ import { leavePolicyService, leaveTypesService } from '../../services/hrService'
 import { fmtNumber } from './hrFormat'
 import type { NumberInputValue } from '../../components/numeric'
 import { parseRowCells } from '../../components/decimalInputs'
-import type { LeavePolicy, LeaveType, LeaveYearOpenSummary } from '../../types/hr'
+import type { LeavePolicy, LeaveType, LeaveYearOpenSummary, LeaveYearUndoSummary } from '../../types/hr'
 
 /**
  * THE CAUTION, VERBATIM. These figures are the statutory minimums, and the screen must say so
@@ -149,6 +149,11 @@ export default function LeavePolicyPage() {
   const [openError, setOpenError] = useState<string | null>(null)
   /** The run's per-type summary. Null until it has run; an EMPTY array is a real answer — see below. */
   const [openSummary, setOpenSummary] = useState<LeaveYearOpenSummary[] | null>(null)
+  /* QA3 (LEV-9): TAKING THE OPENING BACK, from the same dialog — for when the grid or a hire date was wrong. Two clicks:
+     the first says what it removes, the second does it; the procedure refuses once leave of the year was paid. */
+  const [undoAsk, setUndoAsk] = useState(false)
+  const [undoBusy, setUndoBusy] = useState(false)
+  const [undoResult, setUndoResult] = useState<LeaveYearUndoSummary | null>(null)
 
   const load = useCallback(async (selectId?: number) => {
     try {
@@ -298,7 +303,23 @@ export default function LeavePolicyPage() {
   function openYearDialog() {
     setOpenError(null)
     setOpenSummary(null)
+    setUndoAsk(false)
+    setUndoResult(null)
     setYearOpen(true)
+  }
+
+  async function runYearUndo() {
+    setOpenError(null)
+    setUndoBusy(true)
+    try {
+      setUndoResult(await leavePolicyService.undoYear(openYearValue))
+      setUndoAsk(false)
+    } catch (err) {
+      // "The 2026 leave year cannot be undone: … took leave in 2026-02, a period already paid — …" — verbatim.
+      setOpenError(getErrorMessage(err))
+    } finally {
+      setUndoBusy(false)
+    }
   }
 
   async function runYearOpen() {
@@ -749,10 +770,52 @@ export default function LeavePolicyPage() {
               </>
             ))}
 
+          {/* QA3 (LEV-9): what undoing removes, said before it is done; then what it did. */}
+          {openSummary === null && undoAsk && (
+            <div className="alert alert--warning" role="alert">
+              <p style={{ marginTop: 0 }}>{t('hr.leaveYear.undoExplain', { year: openYearValue })}</p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Button variant="default" onClick={() => setUndoAsk(false)} disabled={undoBusy}>
+                  {t('common.cancel')}
+                </Button>
+                <Button color="red" onClick={() => void runYearUndo()} loading={undoBusy} disabled={undoBusy}>
+                  {undoBusy ? t('hr.leaveYear.undoing') : t('hr.leaveYear.undoConfirm')}
+                </Button>
+              </div>
+            </div>
+          )}
+          {openSummary === null && undoResult && (
+            <p className="hint" role="status">
+              {undoResult.employeesUndone === 0
+                ? t('hr.leaveYear.undoNothing', { year: openYearValue })
+                : t('hr.leaveYear.undoDone', {
+                    count: undoResult.employeesUndone,
+                    year: openYearValue,
+                    movements: undoResult.movementsRemoved,
+                  })}
+            </p>
+          )}
+
           {/* THE STANDARD MODAL PAIR, as DecidePopup states it: variant="default" to dismiss,
               the plain filled Button to commit — the same primary this page's "Save changes" is,
               carrying `loading` while the work is in flight rather than only being disabled. */}
           <div className="form-actions">
+            {/* The way back, kept apart from the pair: only before a run, and not while it asks. */}
+            {openSummary === null && !undoAsk && (
+              <Button
+                variant="subtle"
+                color="red"
+                style={{ marginInlineEnd: 'auto' }}
+                disabled={openingBusy || undoBusy}
+                onClick={() => {
+                  setOpenError(null)
+                  setUndoResult(null)
+                  setUndoAsk(true)
+                }}
+              >
+                {t('hr.leaveYear.undo')}
+              </Button>
+            )}
             <Button variant="default" onClick={() => setYearOpen(false)} disabled={openingBusy}>
               {openSummary !== null ? t('common.close') : t('common.cancel')}
             </Button>
@@ -762,7 +825,7 @@ export default function LeavePolicyPage() {
               <Button
                 onClick={() => void runYearOpen()}
                 loading={openingBusy}
-                disabled={openingBusy}
+                disabled={openingBusy || undoBusy || undoAsk}
               >
                 {openingBusy ? t('hr.leaveYear.opening') : t('hr.leaveYear.confirm')}
               </Button>

@@ -55,6 +55,8 @@ import type {
   ShiftPatternUpsertRequest,
   ShiftUpdateRequest,
   QuarantinedDeviceUser,
+  QuarantineDismissRequest,
+  QuarantineDismissResult,
   QuarantineMapRequest,
   QuarantineMapResult,
   WorkedWithoutRoster,
@@ -287,6 +289,11 @@ export const attendanceService = {
   /** D9: enrols the PIN, hands the waiting punches to the employee and replays them (ATTENDANCE_IMPORT). */
   mapDeviceQuarantine: (request: QuarantineMapRequest) =>
     apiRequest<QuarantineMapResult>('/api/attendance/device-quarantine/map', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+  dismissDeviceQuarantine: (request: QuarantineDismissRequest) =>
+    apiRequest<QuarantineDismissResult>('/api/attendance/device-quarantine/dismiss', {
       method: 'POST',
       body: JSON.stringify(request),
     }),

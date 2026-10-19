@@ -987,6 +987,13 @@ export interface LeaveRequestPayload {
    * False when the type has no preference, so a type that never set one cannot look breached.
    */
   noticeShorterThanPreferred: boolean
+  /**
+   * QA3 (LEV-2): the last day the APPROVED leave covers -- toDate, or for a partial approval the last granted day (a
+   * partial approval keeps the first days). Null until approved and posted.
+   */
+  approvedToDate?: string | null
+  /** QA3: paid or unpaid as approved (the type's flag at final approval). */
+  paidSnapshot?: boolean | null
 }
 
 export interface MyLeaveRequest {
@@ -1000,6 +1007,8 @@ export interface MyLeaveRequest {
   daysApproved: number | null
   reason: string | null
   submittedAt: string
+  /** QA3 (LEV-2): the last approved day once approved, else null. */
+  approvedToDate?: string | null
 }
 
 /** An employee's balance for one leave type (GET /api/employees/{id}/leave-balance?leaveTypeId=). */
@@ -1035,6 +1044,10 @@ export interface LeaveWorkingDays {
   /** True for a type with a fixed entitlement (maternity): a span of the calendar, every day counts. */
   countsCalendarDays: boolean
   balance: number
+  /** QA3: days already promised to the employee's requests of this type still waiting (Pending / On hold). */
+  pendingDays?: number
+  /** QA3: the server refuses a request beyond balance - pendingDays for this type (paid, accruing, not discretionary). */
+  balanceEnforced?: boolean
 }
 
 export interface LeaveRequestCreateRequest {

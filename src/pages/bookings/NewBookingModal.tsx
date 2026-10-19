@@ -14,31 +14,38 @@ import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'
 import { FormErrorBoundary } from '../workflow/FormErrorBoundary'
-import type { RoomCatalog } from '../../types/booking'
+import type { RoomCatalog, StaffQuote } from '../../types/booking'
 import {
   dayOfWeek,
   hhmm,
-  minutesOf,
   money,
   today,
   weekdayName,
   withSeconds,
 } from './bookingShared'
+import { addClock, closeMinOf, formSpan } from './bookingTimes'
+import { latestOnly } from './latestOnly'
 
 /**
  * Take a booking by hand — the manual half of the same procedure the website posts to.
  *
- * THE TOTAL IS PREVIEWED, NOT CALCULATED. What is shown here is a copy of the server's arithmetic,
- * run for the operator's benefit so they can quote a price before committing; the number that is
- * STORED is the one the procedure works out and returns. They agree today because the formula is
- * simple (rate × hours, plus add-ons, deposit is a percentage) — but where they ever disagree, the
- * server wins, and the confirmation notification quotes what came back rather than what was shown.
+ * THE PRICE SHOWN IS THE SERVER'S QUOTE (WEB-9 / QA3 BKG-10). The form used to work out rate × hours
+ * and the room's flat deposit percentage itself, so it showed 60.00 with a 25 % deposit where the
+ * booking then stored 54.00 (the three-hour discount) with 50 % (the short-notice tier). It now asks
+ * POST /api/bookings/quote — the same procedure the booking is priced by — a moment after the room,
+ * date, times or add-ons change, and shows only the answer for what is on the form now (a sequence
+ * number drops a late answer). A slot the server would refuse shows its sentence instead.
+ *
+ * THE NIGHT RUNS PAST MIDNIGHT (QA3 BKG-2): an end at or before the start is the next morning, up to
+ * 06:00 — 22:00 → 01:00 is a three-hour booking, as the API reads it — and a start after midnight is
+ * the NEXT date's (the calendar fills the date in when such a slot is clicked).
  *
  * OPENING HOURS ARE OFFERED, NOT ENFORCED. The day's open/close are pushed into the time inputs as
- * min/max and named in a hint, because a form that lets you type 03:00 and then refuses is worse
- * than one that steers. The actual refusal is still the server's — the room could be closed, the
- * slot taken a second ago, or the length outside the room's min/max — and it arrives as a sentence
- * this dialog shows verbatim.
+ * min/max (only when the room closes the same day: 07:00–01:00 is no range a time input can hold) and
+ * named in a hint, because a form that lets you type 03:00 and then refuses is worse than one that
+ * steers. The actual refusal is still the server's — the room could be closed, the slot taken a second
+ * ago, or the length outside the room's min/max — and it arrives as a sentence this dialog shows
+ * verbatim.
  *
  * ADD-ONS ARE A Checkbox.Group, NOT ONE HANDLER PER BOX. Mantine hands the group's onChange the full
  * list of checked values, so there is no event object to read late. The first version read
@@ -102,7 +109,7 @@ export function NewBookingModal({
     setRoomId(room)
     setBookDate(initialDate ?? today())
     setStartTime(initialStart ?? '09:00')
-    setEndTime(initialEnd ?? (initialStart ? shiftHour(initialStart) : '10:00'))
+    setEndTime(initialEnd ?? (initialStart ? addClock(initialStart, 60) : '10:00'))
     setPersons(catalog.rooms.find((r) => r.roomId === room)?.minPersons ?? 1)
     setGuestName('')
     setGuestPhone('')
@@ -128,36 +135,60 @@ export function NewBookingModal({
     [catalog.addons, roomId],
   )
 
-  /** Duration in hours. Negative or zero is a real state here — the form guards on it below. */
-  const hours = (minutesOf(endTime) - minutesOf(startTime)) / 60
+  /** The span the times mean — 22:00 → 01:00 is 1320–1500 — or null when they mean none. */
+  const span = formSpan(startTime, endTime)
 
-  /** The preview. See the class remark: an echo of the server's sum, not the source of it. */
-  const preview = useMemo(() => {
-    if (!room || hours <= 0) return null
+  /** Does the chosen day close after midnight? Then the time inputs carry no min/max. */
+  const closesNextMorning =
+    !!dayHours && !dayHours.isClosed && closeMinOf(dayHours.closeTime) >= 1440
 
-    const addonTotal = roomAddons
-      .filter((addon) => addonIds.includes(addon.addonId))
-      .reduce(
-        (sum, addon) =>
-          sum +
-          (addon.priceType === 'PerHour'
-            ? round2(addon.price * hours)
-            : addon.price),
-        0,
-      )
+  /* ── the server's price (see the class remark) ─────────────────────────────────────────────── */
 
-    const total = round2(room.pricePerHour * hours) + addonTotal
-    return {
-      total,
-      deposit: round2((total * room.depositPercent) / 100),
-      currency: room.currencyCode,
-    }
-  }, [room, hours, roomAddons, addonIds])
+  const addonKey = addonIds
+    .slice()
+    .sort((a, b) => a - b)
+    .join(',')
+  /** What is on the form now, as one string — a quote is shown only for the key it was asked for. */
+  const quoteKey =
+    opened && roomId != null && bookDate && span
+      ? `${roomId}|${bookDate}|${startTime}|${endTime}|${addonKey}`
+      : null
+  const [priced, setPriced] = useState<{
+    key: string
+    quote: StaffQuote | null
+    error: string | null
+  } | null>(null)
+  const [quoteLatest] = useState(latestOnly)
+
+  useEffect(() => {
+    if (quoteKey == null || roomId == null) return
+    const isLatest = quoteLatest.begin()
+    const timer = window.setTimeout(() => {
+      bookingsService
+        .quote({
+          roomId,
+          bookDate,
+          startTime: withSeconds(startTime),
+          endTime: withSeconds(endTime),
+          addonIds: addonKey ? addonKey.split(',').map(Number) : [],
+        })
+        .then((quote) => {
+          if (isLatest()) setPriced({ key: quoteKey, quote, error: null })
+        })
+        .catch((err) => {
+          if (isLatest()) setPriced({ key: quoteKey, quote: null, error: getErrorMessage(err) })
+        })
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [quoteKey, roomId, bookDate, startTime, endTime, addonKey, quoteLatest])
+
+  /** The answer for what is on the form NOW; anything else is not shown. */
+  const current = priced && priced.key === quoteKey ? priced : null
 
   const missing =
     !room ||
     !bookDate ||
-    hours <= 0 ||
+    !span ||
     persons < 1 ||
     guestName.trim() === '' ||
     guestPhone.trim() === ''
@@ -283,8 +314,8 @@ export function NewBookingModal({
               id="bk-new-start"
               type="time"
               value={startTime}
-              min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
-              max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
+              min={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.openTime) : undefined}
+              max={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.closeTime) : undefined}
               onChange={(e) => setStartTime(e.currentTarget.value)}
             />
           </div>
@@ -297,8 +328,8 @@ export function NewBookingModal({
               id="bk-new-end"
               type="time"
               value={endTime}
-              min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
-              max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
+              min={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.openTime) : undefined}
+              max={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.closeTime) : undefined}
               onChange={(e) => setEndTime(e.currentTarget.value)}
             />
           </div>
@@ -308,7 +339,7 @@ export function NewBookingModal({
                 nullable does not narrow it, so the compiler still needs to see the check here. */}
             {dayHours && !dayHours.isClosed ? (
               <div className="hint">
-                {t('booking.new.hoursHint', {
+                {t(closesNextMorning ? 'booking.new.hoursHintNextMorning' : 'booking.new.hoursHint', {
                   day: weekdayName(bookDate),
                   open: hhmm(dayHours.openTime),
                   close: hhmm(dayHours.closeTime),
@@ -319,8 +350,16 @@ export function NewBookingModal({
                 {t('booking.new.closedDay', { day: weekdayName(bookDate) })}
               </div>
             )}
-            {hours <= 0 && (
+            {!span && (
               <div className="hint">{t('booking.new.endAfterStart')}</div>
+            )}
+            {span && span.end > 1440 && (
+              <div className="hint">
+                {t('booking.new.nextMorning', {
+                  end: hhmm(endTime),
+                  hours: (span.end - span.start) / 60,
+                })}
+              </div>
             )}
           </div>
 
@@ -406,17 +445,38 @@ export function NewBookingModal({
             </div>
           )}
 
-          {preview && (
-            <div className="form-field full">
-              <div className="bk-money-row bk-money-row--total">
-                <span>{t('booking.fields.total')}</span>
-                <span>{money(preview.total, preview.currency)}</span>
-              </div>
-              <div className="bk-money-row">
-                <span>{t('booking.fields.deposit')}</span>
-                <span>{money(preview.deposit, preview.currency)}</span>
-              </div>
-              <div className="hint">{t('booking.new.previewHint')}</div>
+          {quoteKey != null && (
+            <div className="form-field full" aria-live="polite">
+              {current?.quote ? (
+                <>
+                  {current.quote.discountAmount > 0 && (
+                    <div className="bk-money-row">
+                      <span>
+                        {t('booking.new.discount', {
+                          percent: current.quote.discountPercent,
+                          hours: current.quote.hours,
+                        })}
+                      </span>
+                      <span>−{money(current.quote.discountAmount, current.quote.currencyCode)}</span>
+                    </div>
+                  )}
+                  <div className="bk-money-row bk-money-row--total">
+                    <span>{t('booking.fields.total')}</span>
+                    <span>{money(current.quote.totalAmount, current.quote.currencyCode)}</span>
+                  </div>
+                  <div className="bk-money-row">
+                    <span>
+                      {t('booking.new.depositPercent', { percent: current.quote.depositPercent })}
+                    </span>
+                    <span>{money(current.quote.depositDue, current.quote.currencyCode)}</span>
+                  </div>
+                  <div className="hint">{t('booking.new.quoteHint')}</div>
+                </>
+              ) : current?.error ? (
+                <div className="hint">{t('booking.new.quoteRefused', { reason: current.error })}</div>
+              ) : (
+                <div className="hint">{t('booking.new.quoting')}</div>
+              )}
             </div>
           )}
         </div>
@@ -432,17 +492,4 @@ export function NewBookingModal({
       </FormErrorBoundary>
     </Modal>
   )
-}
-
-/** 'HH:mm' one hour later, clamped to 23:59 so a 23:30 slot still produces a valid end. */
-function shiftHour(value: string): string {
-  const total = Math.min(23 * 60 + 59, minutesOf(value) + 60)
-  const hours = Math.floor(total / 60)
-  const minutes = total % 60
-  return `${`${hours}`.padStart(2, '0')}:${`${minutes}`.padStart(2, '0')}`
-}
-
-/** Money rounding, matching the procedure's ROUND(x, 2) so the preview does not drift by a cent. */
-function round2(value: number): number {
-  return Math.round(value * 100) / 100
 }

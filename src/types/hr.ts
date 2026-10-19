@@ -139,6 +139,12 @@ export interface LeavePolicy {
  * independent: an employee can be granted this year AND have last year's remainder carried in, or
  * granted it and have last year's expire, by the type's own carry-over rule.
  */
+/** What undoing the opening of the current year took back (POST /api/leave/year-undo, QA3 LEV-9). */
+export interface LeaveYearUndoSummary {
+  employeesUndone: number
+  movementsRemoved: number
+}
+
 export interface LeaveYearOpenSummary {
   leaveTypeName: string
   /** Employees this run opened. Already-opened ones are skipped, so a second run reports 0. */
@@ -594,6 +600,10 @@ export interface LeaveLedgerEntry {
   effectiveDate: string
   note: string | null
   createdAt: string
+  /** What wrote a non-manual row: 'LeaveYear' (the year opening), 'ExitPermission'. Null for a manual movement. */
+  sourceType?: string | null
+  /** QA3 (LEV-9): only a manual adjustment may be deleted -- see leaveLedgerRows.ts. */
+  canDelete?: boolean
 }
 
 /**
