@@ -229,7 +229,9 @@
     "clear": "Clear.",
     "inactiveOption": "{{name}} (inactive)",
     "required": "(required)",
-    "period": "Period"
+    "period": "Period",
+    "ok": "OK",
+    "pageInfo": "{{from}}–{{to}} of {{total}}"
   },
   "workflow": {
     "leaveNotice": {
@@ -576,7 +578,7 @@
       "sameRole": "Same role: {{role}}",
       "chooseEmployeeFirst": "Choose the employee first",
       "counterpartRequired": "Choose who you are swapping with",
-      "noCounterpart": "Nobody else holds this role ({{role}}). Swaps are between employees in the same role — pick a different employee above, or check Positions in HR.",
+      "noCounterpart": "Nobody else at this branch holds this role ({{role}}). Swaps are between employees of the same branch in the same role — pick a different employee above, or check Positions in HR.",
       "yourDate": "Your shift date",
       "yourDateRequired": "Which of your days?",
       "theirDate": "Counterpart’s shift date",
@@ -1413,7 +1415,10 @@
       "tierFirst": "Select the tier first",
       "managerOption": "{{name}} — {{tier}}",
       "managerCleared": "That manager is more junior than the new tier, so the choice was cleared. Pick someone at this tier or above.",
-      "noCandidates": "Nobody holds a tier senior enough to manage this person."
+      "noCandidates": "Nobody holds a tier senior enough to manage this person.",
+      "tierLabel": "Approval tier",
+      "tierHint": "Tier 1 is the head of the company; a higher number is more junior. A new employee starts on the lowest tier unless you choose another.",
+      "tierRequired": "Choose the employee's tier."
     },
     "tiers": {
       "title": "Approval tiers",
@@ -1529,6 +1534,32 @@
       "cancelled": "Planned transfer cancelled.",
       "cancelFailed": "Could not cancel the transfer.",
       "loadFailed": "Could not load the branch history."
+    },
+    "employees": {
+      "title": "Employees",
+      "subtitle": "The people records for Moka & Co.",
+      "onlyMissing": "Show only employees without a login",
+      "new": "New Employee",
+      "cols": {
+        "id": "ID",
+        "fullName": "Full Name",
+        "hired": "Hired",
+        "tier": "Tier",
+        "status": "Status",
+        "login": "Login",
+        "actions": "Actions"
+      },
+      "active": "Active",
+      "terminated": "Terminated",
+      "noLogin": "no login",
+      "accountDisabled": "account disabled",
+      "openProfile": "Open profile",
+      "remove": "Remove",
+      "removeTitle": "Confirm removal",
+      "removeBody": "Remove <name>{{name}}</name>? They leave the lists — and payroll — for good, so only somebody who has left and has been paid for every month can be removed. If anything is still open, you are told what.",
+      "removed": "{{name}} removed.",
+      "allHaveLogin": "Every employee has a login.",
+      "empty": "No employees found."
     }
   },
   "settings": {

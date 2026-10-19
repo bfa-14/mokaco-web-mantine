@@ -300,6 +300,33 @@ export interface EmployeeCreateRequest {
   phoneNumber: string | null
   /** 'en' or 'ar'. The procedure defaults it to 'en' and folds anything unrecognised down to it. */
   preferredLanguage: string
+  /**
+   * The seniority tier (1 = the head). The form always sends one — the lowest tier unless another
+   * was chosen; null would let the API pick the lowest tier itself (QA3 LEAD-1), never tier 1.
+   */
+  approvalTier: number | null
+}
+
+/** One person of GET /api/employees/{id}/swap-counterparts (QA3 WEB-2). */
+export interface SwapCounterpart {
+  employeeId: number
+  fullName: string
+  position: string
+  branch: string
+  /** Set for a colleague who is leaving later; one who has already left is not listed. */
+  terminationDate: string | null
+  isRequester: boolean
+}
+
+/**
+ * GET /api/employees/{id}/swap-counterparts — who the requester can swap a rostered day with: the
+ * ACTIVE colleagues of their branch in the same position (the database decides), and the requester
+ * themself for the form's wording. Answered for the employee themself, somebody who sees them, or
+ * somebody who raises requests for others; anyone else gets the refusal's sentence.
+ */
+export interface SwapCounterparts {
+  requester: SwapCounterpart | null
+  counterparts: SwapCounterpart[]
 }
 
 /** PUT /api/employees/{id}. */
@@ -381,10 +408,6 @@ export const employeeLabel = (e: EmployeeLabelSource | null | undefined): string
  */
 export const EMPLOYEE_SEARCH_EXPR: string[] = ['fullName', 'position']
 
-/**
- * The approval-tier options for the employee form. Tier 1 (Staff) is the default; management and
- * executive requests may follow shorter approval chains.
- */
 /**
  * One row of hr.APPROVAL_TIER — the seniority dictionary.
  *

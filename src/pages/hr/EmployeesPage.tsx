@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, Select, Switch, Table, TextInput } from '@mantine/core'
@@ -17,6 +18,7 @@ import { EmployeeFormPopup } from './EmployeeFormPopup'
 import type { EmployeeListItem, EmployeeLoginStatus } from '../../types/hr'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
 import { alignStart } from '../../i18n/physical'
+import { currentLocale } from '../../i18n'
 
 /**
  * notify(msg, type, ms) → Mantine notifications, adapted once so every call site below
@@ -39,11 +41,12 @@ interface ConfirmState {
 
 /** The login-state indicator for one employee, from the merged login-status map. */
 function LoginStateCell({ status }: { status: EmployeeLoginStatus | undefined }) {
+  const { t } = useTranslation()
   if (!status || !status.hasLogin) {
-    return <span className="badge badge--muted">no login</span>
+    return <span className="badge badge--muted">{t('hr.employees.noLogin')}</span>
   }
   if (status.userIsActive === false) {
-    return <span style={{ color: '#b7791f', fontWeight: 600 }}>account disabled</span>
+    return <span style={{ color: '#b7791f', fontWeight: 600 }}>{t('hr.employees.accountDisabled')}</span>
   }
   return (
     <span style={{ color: '#2f855a', fontWeight: 600 }}>
@@ -77,6 +80,7 @@ const PAGE_SIZES = ['15', '30', '50']
 
 export default function EmployeesPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   // The login column and its filter are account administration — shown only to those who can manage it.
   const canManageAccounts = hasPermission('USER_MANAGE')
@@ -161,21 +165,26 @@ export default function EmployeesPage() {
     void reload()
   }
 
+  /* REMOVING IS FOR SOMEBODY WHO HAS LEFT AND BEEN PAID (QA3 REL-5). A removed employee is invisible
+     to payroll from then on, so the API refuses anybody still employed, and a leaver with a month no
+     locked payroll run has paid or an adjustment or advance still open. Its sentence names what is
+     still open — a month, an adjustment — so it stays on screen long enough to be read. */
   async function handleDelete(employee: EmployeeListItem) {
     const ok = await askConfirm(
-      <>
-        Remove <b>{employee.fullName}</b>? This soft-deletes the employee (the record is kept, but
-        hidden from the list).
-      </>,
-      'Confirm removal',
+      <Trans
+        i18nKey="hr.employees.removeBody"
+        values={{ name: employee.fullName }}
+        components={{ name: <b /> }}
+      />,
+      t('hr.employees.removeTitle'),
     )
     if (!ok) return
     try {
       await employeesService.remove(employee.employeeId)
-      notify(`${employee.fullName} removed.`, 'success', 2200)
+      notify(t('hr.employees.removed', { name: employee.fullName }), 'success', 2200)
       await reload()
     } catch (err) {
-      notify(getErrorMessage(err), 'error', 4000)
+      notify(getErrorMessage(err), 'error', 9000)
     }
   }
 
@@ -191,9 +200,9 @@ export default function EmployeesPage() {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('employeeId', { header: 'ID' }),
+      columnHelper.accessor('employeeId', { header: t('hr.employees.cols.id') }),
       columnHelper.accessor('fullName', {
-        header: 'Full Name',
+        header: t('hr.employees.cols.fullName'),
         cell: (info) => {
           const emp = info.row.original
           return (
@@ -206,23 +215,23 @@ export default function EmployeesPage() {
       // Position / department / branch are the three org axes people slice this list by, and each
       // is a closed set — dropdowns of what is actually present, so no option comes back empty.
       columnHelper.accessor('position', {
-        header: 'Position',
+        header: t('common.position'),
         meta: { filterOptions: optionsFrom(rows, (r) => r.position) },
       }),
       columnHelper.accessor('department', {
-        header: 'Department',
+        header: t('common.department'),
         meta: { filterOptions: optionsFrom(rows, (r) => r.department) },
       }),
       columnHelper.accessor('branch', {
-        header: 'Branch',
+        header: t('common.branch'),
         meta: { filterOptions: optionsFrom(rows, (r) => r.branch) },
       }),
       columnHelper.accessor('hireDate', {
-        header: 'Hired',
-        cell: (info) => (info.getValue() ? new Date(info.getValue()).toLocaleDateString() : ''),
+        header: t('hr.employees.cols.hired'),
+        cell: (info) => (info.getValue() ? new Date(info.getValue()).toLocaleDateString(currentLocale()) : ''),
         // Sorts by the timestamp, matches on the locale date the cell prints.
         meta: { filterText: (v) =>
-          v ? new Date(v).toLocaleDateString() : '' },
+          v ? new Date(v).toLocaleDateString(currentLocale()) : '' },
       }),
       /* Approval tier — EVERY tier is tagged, including tier 1.
          It used to hide tier 1 as "the unremarkable default", which was a rank test: it assumed 1
@@ -230,7 +239,7 @@ export default function EmployeesPage() {
          of the organisation now, so hiding it hid exactly the people most worth seeing — and with
          an editable dictionary there is no default tier to be quiet about. It is a label. */
       columnHelper.accessor('approvalTier', {
-        header: 'Tier',
+        header: t('hr.employees.cols.tier'),
         enableGlobalFilter: false,
         cell: (info) => (
           <span className="badge badge--muted">{tierName(info.row.original.approvalTier)}</span>
@@ -244,22 +253,23 @@ export default function EmployeesPage() {
       // cell shows one of two words, and the filter matches those.
       columnHelper.accessor((r) => r.terminationDate ?? '', {
         id: 'terminationDate',
-        header: 'Status',
+        header: t('hr.employees.cols.status'),
         enableGlobalFilter: false,
         cell: (info) =>
           info.row.original.terminationDate ? (
-            <span className="badge badge--off">Terminated</span>
+            <span className="badge badge--off">{t('hr.employees.terminated')}</span>
           ) : (
-            <span className="badge badge--on">Active</span>
+            <span className="badge badge--on">{t('hr.employees.active')}</span>
           ),
         meta: { filterText: (v) =>
-          v ? 'Terminated' : 'Active', filterOptions: ['Active', 'Terminated'] },
+          v ? t('hr.employees.terminated') : t('hr.employees.active'),
+          filterOptions: [t('hr.employees.active'), t('hr.employees.terminated')] },
       }),
       ...(canManageAccounts
         ? [
             columnHelper.display({
               id: 'login',
-              header: 'Login',
+              header: t('hr.employees.cols.login'),
               cell: (info) => (
                 <LoginStateCell status={logins.get(info.row.original.employeeId)} />
               ),
@@ -268,15 +278,15 @@ export default function EmployeesPage() {
         : []),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: t('hr.employees.cols.actions'),
         cell: (info) => {
           const emp = info.row.original
           return (
             <div className="grid-actions">
               <ActionIcon
                 variant="subtle"
-                title="Open profile"
-                aria-label="Open profile"
+                title={t('hr.employees.openProfile')}
+                aria-label={t('hr.employees.openProfile')}
                 onClick={() => navigate(`/hr/employees/${emp.employeeId}`)}
               >
                 <IconSearch size={16} />
@@ -286,8 +296,8 @@ export default function EmployeesPage() {
                 <ActionIcon
                   variant="subtle"
                   color="red"
-                  title="Remove"
-                  aria-label="Remove"
+                  title={t('hr.employees.remove')}
+                  aria-label={t('hr.employees.remove')}
                   onClick={() => void handleDelete(emp)}
                 >
                   <IconTrash size={16} />
@@ -301,7 +311,7 @@ export default function EmployeesPage() {
     // `rows` (the unfiltered load) feeds the three dropdowns' option lists — deliberately not
     // `displayed`, so narrowing one column does not empty the choices in the others.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [canManageAccounts, canEdit, logins, navigate, rows, tierName],
+    [canManageAccounts, canEdit, logins, navigate, rows, tierName, t],
   )
 
   const table = useReactTable({
@@ -333,8 +343,8 @@ export default function EmployeesPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Employees</h1>
-          <p className="page-subtitle">The people records for Moka &amp; Co.</p>
+          <h1 className="page-title">{t('hr.employees.title')}</h1>
+          <p className="page-subtitle">{t('hr.employees.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           {canManageAccounts && (
@@ -351,21 +361,21 @@ export default function EmployeesPage() {
                 checked={onlyMissing}
                 onChange={(e) => setOnlyMissing(e.currentTarget.checked)}
               />
-              Show only employees without a login
+              {t('hr.employees.onlyMissing')}
             </span>
           )}
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={16} />
           </ActionIcon>
           {canEdit && (
             <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateVisible(true)}>
-              New Employee
+              {t('hr.employees.new')}
             </Button>
           )}
         </div>
@@ -387,7 +397,7 @@ export default function EmployeesPage() {
             <TextInput
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search"
+              placeholder={t('common.search')}
               leftSection={<IconSearch size={14} />}
               w={240}
               size="xs"
@@ -424,7 +434,7 @@ export default function EmployeesPage() {
                 <Table.Tr>
                   <Table.Td colSpan={columns.length}>
                     <div className="empty-hint" style={{ padding: 16 }}>
-                      {onlyMissing ? 'Every employee has a login.' : 'No employees found.'}
+                      {onlyMissing ? t('hr.employees.allHaveLogin') : t('hr.employees.empty')}
                     </div>
                   </Table.Td>
                 </Table.Tr>
@@ -454,8 +464,11 @@ export default function EmployeesPage() {
 
           <Group justify="space-between" mt="xs">
             <span className="hint" style={{ margin: 0 }}>
-              {total === 0 ? 0 : pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, total)} of {total}
+              {t('common.pageInfo', {
+                from: total === 0 ? 0 : pageIndex * pageSize + 1,
+                to: Math.min((pageIndex + 1) * pageSize, total),
+                total,
+              })}
             </span>
             <Group gap="xs">
               <Select
@@ -495,9 +508,9 @@ export default function EmployeesPage() {
           <div>{confirmState.message}</div>
           <div className="form-actions">
             <Button variant="default" onClick={() => settleConfirm(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
-            <Button onClick={() => settleConfirm(true)}>OK</Button>
+            <Button onClick={() => settleConfirm(true)}>{t('common.ok')}</Button>
           </div>
         </Modal>
       )}

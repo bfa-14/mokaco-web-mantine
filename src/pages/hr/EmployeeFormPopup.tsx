@@ -28,6 +28,7 @@ import type {
 } from '../../types/hr'
 import { employeeLabel } from '../../types/hr'
 import { useApprovalTiers } from '../../hr/useApprovalTiers'
+import { effectiveTier as tierOnForm } from '../../hr/tierDefault'
 import { branchOptions, departmentOptions, positionOptions } from '../../hr/assignableOptions'
 import { useTranslation } from 'react-i18next'
 import { CONTACT_REQUIRED_MESSAGE, emailError, phoneError } from '../../components/contact'
@@ -74,9 +75,9 @@ interface FormState {
   /**
    * 1 = head of the organisation, and a bigger number is more junior.
    *
-   * NULL IS A REAL STATE ON CREATE — "not chosen yet" — and it is load-bearing: the "Reports to"
-   * candidates are derived from this number, so offering that field before a tier exists would
-   * offer a list nobody can yet say is right. On edit it is always filled from the record.
+   * NULL ON CREATE MEANS "NOT CHOSEN": the form then offers the LOWEST tier of the dictionary (see
+   * effectiveTier), never tier 1 — a new employee who silently became tier 1 was the head of every
+   * tier-scoped chain and of the salary band (QA3 LEAD-1). On edit it is always filled from the record.
    */
   approvalTier: number | null
   /** Who this person reports to, or null for the top of a line. Saved via its own endpoint. */
@@ -116,6 +117,8 @@ interface FieldErrors {
   departmentId?: string
   positionId?: string
   hireDate?: string
+  /** A new employee's tier is required — normally the lowest one is already chosen. */
+  approvalTier?: string
   /**
    * The reporting-line endpoint's own refusal.
    *
@@ -203,14 +206,22 @@ export function EmployeeFormPopup({
    * absent from its data renders blank, and saving that blank would silently demote them. So a
    * missing tier is added back as its own option rather than dropped.
    */
-  const { options: tierOptionsFromDict, tierName } = useApprovalTiers()
+  const { options: tierOptionsFromDict, tierName, tiers } = useApprovalTiers()
+  /**
+   * THE TIER THE FORM STANDS ON. On create, an untouched tier is the LOWEST of the dictionary (the
+   * highest number — src/hr/tierDefault.ts), which is also what the API decides for a create without
+   * one. It is derived rather than written into the form when the popup opens, because the
+   * dictionary may still be loading then; it is SENT on save either way, so there is no second call
+   * and no moment in which the new person holds a tier nobody chose (QA3 LEAD-1).
+   */
+  const effectiveTier = tierOnForm(form.approvalTier, isEdit, tiers)
   const tierOptions =
-    form.approvalTier == null ||
-    tierOptionsFromDict.some((o) => o.value === String(form.approvalTier))
+    effectiveTier == null ||
+    tierOptionsFromDict.some((o) => o.value === String(effectiveTier))
       ? tierOptionsFromDict
       : [
           ...tierOptionsFromDict,
-          { value: String(form.approvalTier), label: tierName(form.approvalTier) },
+          { value: String(effectiveTier), label: tierName(effectiveTier) },
         ]
 
   /** The confirm dialog currently on screen, if any — see ConfirmState. */
@@ -352,7 +363,7 @@ export function EmployeeFormPopup({
    * Select's onChange; silence is the one outcome that must not happen here.
    */
   const managerOptions: ManagerOption[] = (() => {
-      const tier = form.approvalTier
+      const tier = effectiveTier
       const opts: ManagerOption[] =
         tier == null
           ? []
@@ -425,6 +436,7 @@ export function EmployeeFormPopup({
     if (form.departmentId == null) errors.departmentId = 'Department is required'
     if (form.positionId == null) errors.positionId = 'Position is required'
     if (!form.hireDate) errors.hireDate = 'Hire date is required'
+    if (!isEdit && effectiveTier == null) errors.approvalTier = t('hr.employeeForm.tierRequired')
     /* CONTACT. On CREATE both are required and must parse — the API refuses otherwise, with these
        same sentences. On EDIT nothing blocks on a missing address (the hint under the fields says
        what it costs), and a stored value is judged only if it was CHANGED: a legacy number that
@@ -474,7 +486,7 @@ export function EmployeeFormPopup({
         }
         // The tier has its own endpoint too; only touch it when it actually changed. Null means
         // "left alone" — the field cannot be un-set once chosen, so this only skips.
-        if (form.approvalTier != null && form.approvalTier !== (employee.approvalTier ?? 1)) {
+        if (form.approvalTier != null && form.approvalTier !== (employee.approvalTier ?? null)) {
           await employeesService.setApprovalTier(employee.employeeId, form.approvalTier)
         }
         /* Reports-to is its own endpoint as well; only when changed. THE TRIGGER IS THE REAL RULE —
@@ -510,12 +522,11 @@ export function EmployeeFormPopup({
           phoneNumber: form.phoneNumber.trim() || null,
           preferredLanguage: form.preferredLanguage,
           hireDate: form.hireDate,
+          // ALWAYS SENT, with the create itself (QA3 LEAD-1): the tier chosen, or the lowest one the
+          // form offered. A follow-up call left a window — and a failure — in which the new person
+          // held the column default, which was tier 1: the head.
+          approvalTier: effectiveTier,
         })
-        // Create defaults everyone to Staff; set the tier straight after only when it differs.
-        // An untouched tier (null) leaves the server's own default standing, as before.
-        if (form.approvalTier != null && form.approvalTier !== 1) {
-          await employeesService.setApprovalTier(created.employeeId, form.approvalTier)
-        }
         /* A new employee reports to nobody by default; set it only when one was chosen. The
            employee EXISTS by now, so a refusal here cannot be undone by closing — the message goes
            under the field and the popup stays open on it, the same as the edit path. */
@@ -664,6 +675,53 @@ export function EmployeeFormPopup({
             />
           </div>
 
+          {/* Approval tier — the person's seniority: which population's chain their requests follow
+              and which salary band applies. An HR fact, so it sits with the employment fields for
+              everybody who may edit an employee (the API gates it on EMP_EDIT), not with the account
+              section. On create it starts on the LOWEST tier and is always sent (QA3 LEAD-1). */}
+          <div className="form-field full">
+            <label className="form-label" htmlFor="emp-tier">
+              {t('hr.employeeForm.tierLabel')}
+            </label>
+            <Select
+              id="emp-tier"
+              // From the dictionary, not a constant — a company that renames tier 2 or adds a
+              // fourth sees it here without a release.
+              data={tierOptions}
+              value={effectiveTier != null ? String(effectiveTier) : null}
+              allowDeselect={false}
+              placeholder={t('hr.employeeForm.tierPlaceholder')}
+              w={220}
+              disabled={saving}
+              error={fieldErrors.approvalTier}
+              /* CHANGING THE TIER CAN INVALIDATE THE MANAGER. Promote somebody to tier 1 and the
+                 tier-2 manager above them is suddenly junior to them, which the trigger refuses.
+                 Cleared here, WITH a sentence, rather than left to fail at save — and computed
+                 from `form` outside the updater, since a setState cannot be issued inside one. */
+              onChange={(v) => {
+                const tier = v != null ? Number(v) : null
+                const managerTier =
+                  form.reportsToEmployeeId != null ? tierOf(form.reportsToEmployeeId) : null
+                const keeps =
+                  form.reportsToEmployeeId == null ||
+                  (tier != null && managerTier != null && managerTier <= tier)
+                setForm((f) => ({
+                  ...f,
+                  approvalTier: tier,
+                  reportsToEmployeeId: keeps ? f.reportsToEmployeeId : null,
+                }))
+                setTierClearedManager(!keeps)
+                // A stale server refusal about a manager who is no longer selected is noise.
+                setFieldErrors((fe) => ({
+                  ...fe,
+                  approvalTier: undefined,
+                  reportsTo: keeps ? fe.reportsTo : undefined,
+                }))
+              }}
+            />
+            <div className="hint">{t('hr.employeeForm.tierHint')}</div>
+          </div>
+
           {/* Reports to — the reporting line a LineManager chain step climbs. Optional (the top of the
               org reports to nobody), self excluded, saved via its own endpoint. */}
           <div className="form-field full">
@@ -691,9 +749,9 @@ export function EmployeeFormPopup({
               clearable
               // The candidates ARE the tier's; without one there is no list to offer, so the field
               // says which question to answer first instead of presenting an empty dropdown.
-              disabled={saving || form.approvalTier == null}
+              disabled={saving || effectiveTier == null}
               placeholder={
-                form.approvalTier == null
+                effectiveTier == null
                   ? t('hr.employeeForm.tierFirst')
                   : 'Select a manager…'
               }
@@ -709,7 +767,7 @@ export function EmployeeFormPopup({
             {tierClearedManager && (
               <div className="form-error">{t('hr.employeeForm.managerCleared')}</div>
             )}
-            {form.approvalTier == null ? (
+            {effectiveTier == null ? (
               <div className="hint">{t('hr.employeeForm.tierFirst')}</div>
             ) : (
               managerOptions.length === 0 && (
@@ -896,48 +954,6 @@ export function EmployeeFormPopup({
         {canManageAccounts && (
           <div className="form-section">
             <h3 className="form-section-title">System access</h3>
-
-            {/* Approval tier — which population's chain this person's requests follow. Staff is the
-                default; management and executive may follow shorter chains. */}
-            <div className="form-field full">
-              <label className="form-label" htmlFor="emp-tier">
-                Approval tier
-              </label>
-              <Select
-                id="emp-tier"
-                // From the dictionary, not a constant — a company that renames tier 2 or adds a
-                // fourth sees it here without a release.
-                data={tierOptions}
-                value={form.approvalTier != null ? String(form.approvalTier) : null}
-                allowDeselect={false}
-                placeholder={t('hr.employeeForm.tierPlaceholder')}
-                w={220}
-                disabled={saving}
-                /* CHANGING THE TIER CAN INVALIDATE THE MANAGER. Promote somebody to tier 1 and the
-                   tier-2 manager above them is suddenly junior to them, which the trigger refuses.
-                   Cleared here, WITH a sentence, rather than left to fail at save — and computed
-                   from `form` outside the updater, since a setState cannot be issued inside one. */
-                onChange={(v) => {
-                  const tier = v != null ? Number(v) : null
-                  const managerTier =
-                    form.reportsToEmployeeId != null ? tierOf(form.reportsToEmployeeId) : null
-                  const keeps =
-                    form.reportsToEmployeeId == null ||
-                    (tier != null && managerTier != null && managerTier <= tier)
-                  setForm((f) => ({
-                    ...f,
-                    approvalTier: tier,
-                    reportsToEmployeeId: keeps ? f.reportsToEmployeeId : null,
-                  }))
-                  setTierClearedManager(!keeps)
-                  // A stale server refusal about a manager who is no longer selected is noise.
-                  if (!keeps) setFieldErrors((fe) => ({ ...fe, reportsTo: undefined }))
-                }}
-              />
-              <div className="hint">
-                Management and executive requests may follow shorter approval chains.
-              </div>
-            </div>
 
             {/* No unlinked accounts and none currently linked → offer the path to create one, on the
                 Users page, because creating a login is a security action and stays there. */}
