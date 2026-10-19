@@ -44,8 +44,11 @@ import type {
   RosterGenerateBulkRequest,
   RosterGenerateRequest,
   RosterGenerateResult,
+  RosterLeaveDay,
   RosterMonthStatus,
   RosterClearResult,
+  RosterRederiveRequest,
+  RosterRederiveResult,
   Setting,
   SettingUpsertRequest,
   Shift,
@@ -206,14 +209,29 @@ export const rosterService = {
       method: 'POST',
       body: JSON.stringify(request),
     }),
-  /** Weekday-aligned: a Monday shift lands on a Monday, not on the same date number. */
+  /**
+   * Weekday-aligned: a Monday shift lands on a Monday, not on the same date number.
+   * QA3 (ROS-3): ONE branch (`branchId`); a request without one is refused with a 400.
+   */
   copyPeriod: (request: RosterCopyPeriodRequest) =>
     apiRequest<RosterGenerateResult>('/api/roster/copy-period', {
       method: 'POST',
       body: JSON.stringify(request),
     }),
+  /** QA3 (ROS-3): ONE branch (`branchId`), like the copy. */
   applyPattern: (request: RosterApplyPatternRequest) =>
     apiRequest<RosterGenerateResult>('/api/roster/apply-pattern', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+
+  /**
+   * QA3 (REL-16): "Re-derive month" — the branch-month's completed days (the 1st to yesterday) derived again against
+   * the roster as it stands (ATTENDANCE_MANAGE, the branches the caller may plan). Approving a month does it by itself;
+   * paid days and days entered by hand are left as they are.
+   */
+  rederiveMonth: (request: RosterRederiveRequest) =>
+    apiRequest<RosterRederiveResult>('/api/roster/rederive-month', {
       method: 'POST',
       body: JSON.stringify(request),
     }),
@@ -241,10 +259,24 @@ export const rosterService = {
       { method: 'DELETE' },
     ),
 
-  /** Employee-days with NO roster row. These block payroll. */
-  getGaps: (from: string, to: string) =>
+  /**
+   * Employee-days with NO roster row. These block payroll. QA3: `branchId` = one branch, by the branch each employee
+   * belonged to ON the day (ROS-8); a public holiday of that branch is not a gap (ROS-10).
+   */
+  getGaps: (from: string, to: string, branchId?: number | null) =>
     apiRequest<RosterGap[]>(
-      `/api/roster/gaps?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      `/api/roster/gaps?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+        (branchId ? `&branchId=${branchId}` : ''),
+    ),
+
+  /**
+   * QA3 (ROS-4 / LEV-5): who is on APPROVED leave, by day — the roster grid's leave overlay. From the approved leave
+   * requests (the days the approval covers, a half day as 0.5), the branch of the day, scoped like the roster read.
+   */
+  leaveDays: (from: string, to: string, branchId?: number | null) =>
+    apiRequest<RosterLeaveDay[]>(
+      `/api/roster/leave-days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+        (branchId ? `&branchId=${branchId}` : ''),
     ),
 
   getPatterns: (employeeId: number) =>

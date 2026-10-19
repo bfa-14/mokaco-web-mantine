@@ -318,6 +318,35 @@ export interface RosterGap {
   employeeId: number
   fullName: string
   workDate: string
+  /**
+   * QA3 (ROS-8): the branch the employee belonged to ON that day — the gap belongs to that branch's month.
+   * Absent from an older API.
+   */
+  branchId?: number | null
+}
+
+/**
+ * GET /api/roster/leave-days (QA3 ROS-4 / LEV-5) — who is on APPROVED leave, by day: the days an approved leave request
+ * covers (FromDate..ApprovedToDate), a half day as 0.5. Read from the requests, not the ledger: the ledger books a
+ * month of leave on one date and also holds exit-permission minutes converted to leave.
+ */
+export interface RosterLeaveDay {
+  employeeId: number
+  /** 'yyyy-MM-ddT00:00:00' from the API. */
+  date: string
+  /** 1 = the whole day, 0.5 = half of it. */
+  daysOnLeave: number
+}
+
+/** POST /api/roster/rederive-month (QA3 REL-16): one branch-month's completed days derived again. */
+export interface RosterRederiveRequest {
+  branchId: number
+  /** 'yyyy-MM'. */
+  yearMonth: string
+}
+
+export interface RosterRederiveResult {
+  daysRederived: number
 }
 
 /**
@@ -354,6 +383,8 @@ export interface RosterMonthStatus {
   /** True once anything on the roster moved after lastApprovedAt — the only reason to resubmit. */
   changedSinceApproval?: boolean
   lastChangedUtc?: string | null
+  /** QA3 (ROS-2): when the month's attendance days were last derived against its roster (approval, nightly, by hand). */
+  rederivedAt?: string | null
 }
 
 /** DELETE /api/attendance/rosters — what clearing one branch-month removed. */
@@ -392,6 +423,8 @@ export interface RosterGenerateRequest {
   weekdays: string
   /** OFF by default: leaving it off keeps manual changes already made. */
   overwrite: boolean
+  /** QA3 (ROS-14): only the days the employee belongs to this branch. Null = every branch the caller may plan. */
+  branchId?: number | null
 }
 
 /** POST /api/roster/generate-bulk. */
@@ -402,21 +435,28 @@ export interface RosterGenerateBulkRequest {
   shiftId: number
   weekdays: string
   overwrite: boolean
+  /** QA3 (ROS-14): only the days each employee belongs to this branch. Null = every branch the caller may plan. */
+  branchId?: number | null
 }
 
-/** POST /api/roster/copy-period. Weekday-aligned: a Monday shift lands on a Monday. */
+/**
+ * POST /api/roster/copy-period. Weekday-aligned: a Monday shift lands on a Monday.
+ * QA3 (ROS-3): ONE branch — the days each employee belongs to it, in the source month and in the target month.
+ */
 export interface RosterCopyPeriodRequest {
   sourceYearMonth: string
   targetYearMonth: string
   employeeId: number | null
   overwrite: boolean
+  branchId: number
 }
 
-/** POST /api/roster/apply-pattern. */
+/** POST /api/roster/apply-pattern. QA3 (ROS-3): ONE branch, like the copy. */
 export interface RosterApplyPatternRequest {
   yearMonth: string
   employeeId: number | null
   overwrite: boolean
+  branchId: number
 }
 
 /** PUT /api/roster/patterns/{employeeId} — the editor always sends all seven days. */
@@ -432,6 +472,8 @@ export interface RosterGenerateResult {
 
 export interface RosterBulkResult {
   employeesProcessed: number
+  /** QA3 (ROS-13): the days actually written. Absent from an older API. */
+  rowsInserted?: number
 }
 
 /* ── Processed attendance ── */
