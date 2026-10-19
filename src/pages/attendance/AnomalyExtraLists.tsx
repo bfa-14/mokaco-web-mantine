@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Button, Group, Loader, Select, Table } from '@mantine/core'
+import { Button, Group, Loader, Select, Table, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconUserCheck } from '@tabler/icons-react'
+import { IconArchive, IconUserCheck } from '@tabler/icons-react'
 import { Modal } from '../../components/dialogs'
 import { getErrorMessage } from '../../api/errorMessage'
 import { attendanceService } from '../../services/attendanceService'
@@ -14,6 +14,7 @@ import type { QuarantinedDeviceUser, QuarantineMapResult, WorkedWithoutRoster } 
 import { employeeLabel } from '../../types/hr'
 import type { EmployeeListItem } from '../../types/hr'
 import { formatDate, formatMinutes, formatTime, periodLabel } from './attendanceFormat'
+import { DISMISS_NOTE_MAX, dismissRequestFor } from './quarantineDismiss'
 
 /**
  * WORKED WITHOUT A ROSTER (rule 12). The month's roster is APPROVED and gives this employee no row for the day, yet
@@ -141,6 +142,9 @@ export function DeviceQuarantineList({
   const [saving, setSaving] = useState(false)
   const [dialogError, setDialogError] = useState<string | null>(null)
   const [last, setLast] = useState<(QuarantineMapResult & { employeeName: string; enrollPin: string }) | null>(null)
+  /* QA3: setting the punches of a PIN that belongs to nobody aside, with the reason */
+  const [aside, setAside] = useState<QuarantinedDeviceUser | null>(null)
+  const [asideNote, setAsideNote] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -174,6 +178,37 @@ export function DeviceQuarantineList({
     setTarget(row)
     setEmployeeId(null)
     setDialogError(null)
+  }
+
+  function openAside(row: QuarantinedDeviceUser) {
+    setAside(row)
+    setAsideNote('')
+    setDialogError(null)
+  }
+
+  async function submitAside() {
+    if (!aside) return
+    const request = dismissRequestFor(aside, asideNote)
+    if (!request) {
+      setDialogError(t('attendance.quarantine.asideNoteRequired'))
+      return
+    }
+    setSaving(true)
+    try {
+      const result = await attendanceService.dismissDeviceQuarantine(request)
+      notifications.show({
+        message: t('attendance.quarantine.asideDone', { count: result.punchesDismissed, pin: aside.enrollPin }),
+        color: 'green',
+        autoClose: 4000,
+      })
+      setAside(null)
+      await load()
+      onMapped()
+    } catch (err) {
+      setDialogError(getErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function submit() {
@@ -264,9 +299,14 @@ export function DeviceQuarantineList({
                     <Table.Td>{`${formatDate(r.lastPunch)} ${formatTime(r.lastPunch)}`}</Table.Td>
                     <Table.Td style={{ textAlign: 'end' }}>
                       {canMap && (
-                        <Button size="compact-sm" variant="subtle" leftSection={<IconUserCheck size={14} />} onClick={() => open(r)}>
-                          {t('attendance.quarantine.map')}
-                        </Button>
+                        <Group gap={4} justify="flex-end" wrap="nowrap">
+                          <Button size="compact-sm" variant="subtle" leftSection={<IconUserCheck size={14} />} onClick={() => open(r)}>
+                            {t('attendance.quarantine.map')}
+                          </Button>
+                          <Button size="compact-sm" variant="subtle" color="gray" leftSection={<IconArchive size={14} />} onClick={() => openAside(r)}>
+                            {t('attendance.quarantine.aside')}
+                          </Button>
+                        </Group>
                       )}
                     </Table.Td>
                   </Table.Tr>
@@ -313,6 +353,48 @@ export function DeviceQuarantineList({
             </Button>
             <Button onClick={() => void submit()} loading={saving}>
               {t('attendance.quarantine.map')}
+            </Button>
+          </Group>
+        </Modal>
+      )}
+
+      {aside && (
+        <Modal opened onClose={() => !saving && setAside(null)} title={t('attendance.quarantine.asideTitle', { pin: aside.enrollPin })} size={480} centered>
+          <p style={{ marginTop: 0 }}>
+            {t('attendance.quarantine.asideBody', {
+              count: aside.punchCount,
+              device: aside.deviceName || aside.serialNumber || `#${aside.deviceId}`,
+            })}
+          </p>
+          <div className="form-field">
+            <label className="form-label" htmlFor="quarantine-aside-note">
+              {t('attendance.quarantine.asideNote')}
+            </label>
+            <Textarea
+              id="quarantine-aside-note"
+              value={asideNote}
+              maxLength={DISMISS_NOTE_MAX}
+              autosize
+              minRows={2}
+              disabled={saving}
+              onChange={(e) => {
+                const value = e.currentTarget.value
+                setAsideNote(value)
+                setDialogError(null)
+              }}
+            />
+          </div>
+          {dialogError && (
+            <div className="alert alert--error" role="alert">
+              {dialogError}
+            </div>
+          )}
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={() => setAside(null)} disabled={saving}>
+              {t('common.cancel')}
+            </Button>
+            <Button color="gray" onClick={() => void submitAside()} loading={saving}>
+              {t('attendance.quarantine.aside')}
             </Button>
           </Group>
         </Modal>

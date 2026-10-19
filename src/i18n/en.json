@@ -998,7 +998,13 @@
       "pickEmployee": "Choose the employee this PIN belongs to.",
       "mapped": "{{count}} punch(es) given to {{employee}}.",
       "result": "PIN {{pin}} is now {{employee}}: {{punches}} punch(es) resolved, {{days}} day(s) derived again.",
-      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them."
+      "resultPaid": "{{count}} day(s) are already paid and were left as paid — raise a payroll adjustment for them.",
+      "aside": "Set aside",
+      "asideTitle": "Set aside the punches of PIN {{pin}}?",
+      "asideBody": "{{count}} punch(es) from {{device}} wait under this PIN. If it belongs to nobody (a visitor, a test enrolment), set them aside: they are kept with your reason and no longer wait here. Mapping the PIN later takes them back.",
+      "asideNote": "Why (whose PIN it is, or why it belongs to nobody)",
+      "asideNoteRequired": "Say why these punches are set aside.",
+      "asideDone": "{{count}} punch(es) of PIN {{pin}} set aside."
     },
     "roster": {
       "auto": {
