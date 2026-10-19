@@ -953,7 +953,8 @@
       "noPunchesHint": "If somebody did punch, the machine has not been read yet — pull it from Attendance → Devices, or check that machine's last pull.",
       "goToToday": "Go to today",
       "print": "Print sheet for {{date}}",
-      "printTitle": "Open the printable daily sheet for {{date}} and this branch."
+      "printTitle": "Open the printable daily sheet for {{date}} and this branch.",
+      "fractionInvalid": "A day fraction is a number from 0 to 1 — 0.5 is half a day."
     },
     "pairs": {
       "expand": "Show the punch pairs behind this day",

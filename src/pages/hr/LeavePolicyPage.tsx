@@ -25,6 +25,8 @@ import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import { leavePolicyService, leaveTypesService } from '../../services/hrService'
 import { fmtNumber } from './hrFormat'
+import type { NumberInputValue } from '../../components/numeric'
+import { parseRowCells } from '../../components/decimalInputs'
 import type { LeavePolicy, LeaveType, LeaveYearOpenSummary } from '../../types/hr'
 
 /**
@@ -816,8 +818,13 @@ function TierGrid({
   const [editKey, setEditKey] = useState<string | null>(null)
   /** Whether the blank insert row is open. */
   const [adding, setAdding] = useState(false)
-  /** The open editor's cells — '' is an empty editor, never a value to send. */
-  const [cells, setCells] = useState<Record<string, string | number>>({})
+  /**
+   * The open editor's cells, AS THE BOXES HOLD THEM — '' is an empty editor, never a value to send.
+   * TRAP 6 (QA3 WEB-5): a number box passes "1." as a string while a decimal is typed; turning that
+   * into '' emptied the box, so 1.5 days became 15. The row is converted once, at the save
+   * (parseRowCells), and the save waits while any cell is blank or not a number.
+   */
+  const [cells, setCells] = useState<Record<string, NumberInputValue>>({})
 
   const editing = adding || editKey != null
 
@@ -843,14 +850,15 @@ function TierGrid({
     setCells({})
   }
 
-  /** A blank cell has nothing to upsert — the commit waits until every editor holds a value. */
-  const incomplete = columns.some((c) => cells[c.field] === '' || cells[c.field] == null)
+  /** The row as numbers and text, or null while a cell is blank or not a number — nothing to upsert yet. */
+  const parsed = parseRowCells(cells, columns)
+  const incomplete = parsed == null
 
   async function commit() {
-    if (incomplete) return
+    if (parsed == null) return
     // The row IS the write: the endpoints upsert on the key, so an inserted row and an edited
     // one are the same call, and the grid never has to know which it was.
-    if (await onSet({ ...cells })) cancelEdit()
+    if (await onSet(parsed)) cancelEdit()
   }
 
   function editorRow(rowKey: string) {
@@ -876,9 +884,7 @@ function TierGrid({
                 min={0}
                 aria-label={c.caption}
                 disabled={disabled}
-                onChange={(v) =>
-                  setCells((prev) => ({ ...prev, [c.field]: typeof v === 'number' ? v : '' }))
-                }
+                onChange={(v) => setCells((prev) => ({ ...prev, [c.field]: v }))}
               />
             )}
           </Table.Td>
