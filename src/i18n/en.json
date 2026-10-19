@@ -1828,7 +1828,10 @@
       "paidInFull": "PAID",
       "balanceDue": "BALANCE DUE",
       "print": "Print",
-      "notFound": "That booking could not be found."
+      "notFound": "That booking could not be found.",
+      "roomChargePlain": "Room — {{hours}} h",
+      "discount": "Discount ({{percent}} %)",
+      "nothingDue": "NOTHING DUE"
     },
     "cancelledBy": {
       "Staff": "Staff",

@@ -1976,7 +1976,10 @@
       "paidInFull": "مدفوع بالكامل",
       "balanceDue": "المتبقي",
       "print": "طباعة",
-      "notFound": "تعذّر العثور على هذا الحجز."
+      "notFound": "تعذّر العثور على هذا الحجز.",
+      "roomChargePlain": "الغرفة — {{hours}} ساعة",
+      "discount": "خصم ({{percent}} %)",
+      "nothingDue": "لا شيء مستحق"
     },
     "cancelledBy": {
       "Staff": "الموظفون",
