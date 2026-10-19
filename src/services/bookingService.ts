@@ -20,6 +20,8 @@ import type {
   RoomHoursPayload,
   RoomUpsertPayload,
   Room,
+  StaffQuote,
+  StaffQuotePayload,
 } from '../types/booking'
 
 /**
@@ -51,6 +53,17 @@ export const bookingsService = {
   /** A booking typed in by staff: Confirmed on arrival, exempt from the website's lead-time rules. */
   createManual: (payload: BookingCreatePayload) =>
     apiRequest<BookingCreated>('/api/bookings/manual', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * What a staff booking would cost before it is taken — the server's own quote (WEB-9 / QA3 BKG-10):
+   * the hour discount, the lead-time deposit tier and the floor, as the booking will store them. A
+   * slot the server would refuse (closed, too long, in the past) answers 400 with its sentence.
+   */
+  quote: (payload: StaffQuotePayload) =>
+    apiRequest<StaffQuote>('/api/bookings/quote', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

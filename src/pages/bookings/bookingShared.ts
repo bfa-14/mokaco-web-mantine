@@ -4,8 +4,8 @@ import type {
   BookingRow,
   BookingStatus,
   RefundStatus,
-  RoomHours,
 } from '../../types/booking'
+import { clockOf } from './bookingTimes'
 
 /**
  * The handful of ideas every Bookings screen shares: the two permissions, the date and time
@@ -129,11 +129,12 @@ export function minutesOf(value: string): number {
   return hours * 60 + (minutes || 0)
 }
 
-/** Minutes since midnight → 'HH:mm'. */
+/**
+ * Minutes since midnight → 'HH:mm', ON THE CLOCK: the calendar's minutes run past midnight (a room
+ * closing at 01:00 ends at 1500), and 1500 is '01:00', not '25:00' (QA3 BKG-2).
+ */
 export function fromMinutes(total: number): string {
-  const hours = Math.floor(total / 60)
-  const minutes = total % 60
-  return `${`${hours}`.padStart(2, '0')}:${`${minutes}`.padStart(2, '0')}`
+  return clockOf(total)
 }
 
 /**
@@ -158,35 +159,13 @@ export function overlaps(
 
 /* ── the calendar's window ───────────────────────────────────────────────────────────────────── */
 
-/** Fallback opening window when a room has no hours at all — the same 09:00–22:00 a new room is born with. */
-export const DEFAULT_OPEN_MINUTES = 9 * 60
-export const DEFAULT_CLOSE_MINUTES = 22 * 60
-
 /** The calendar's row height, in pixels per hour. Also what turns a booking's minutes into a block. */
 export const PIXELS_PER_HOUR = 56
 
-/**
- * The vertical window the calendar draws: the earliest open and latest close across the rooms and
- * days on screen, widened to whole hours.
- *
- * COMPUTED FROM THE HOURS ACTUALLY SHOWN rather than fixed at 00:00–24:00, because a grid with
- * fourteen empty small hours at the top pushes the working day off the screen. Rooms that are closed
- * on every day in view contribute nothing, which is why the default window is the fallback.
- */
-export function visibleWindow(hours: RoomHours[]): { start: number; end: number } {
-  const open = hours.filter((h) => !h.isClosed)
-  if (open.length === 0) {
-    return { start: DEFAULT_OPEN_MINUTES, end: DEFAULT_CLOSE_MINUTES }
-  }
-
-  const earliest = Math.min(...open.map((h) => minutesOf(h.openTime)))
-  const latest = Math.max(...open.map((h) => minutesOf(h.closeTime)))
-
-  return {
-    start: Math.floor(earliest / 60) * 60,
-    end: Math.min(24 * 60, Math.ceil(latest / 60) * 60),
-  }
-}
+/* The vertical window is bookingTimes.calendarWindow: computed from the hours actually shown (a grid
+   with fourteen empty small hours at the top pushes the working day off the screen), with a close at
+   or before 06:00 read as the NEXT morning — the rooms close at 01:00, which is 1500, and the old
+   window, capped at 24:00, came out 07:00–01:00 with a negative height (QA3 BKG-2). */
 
 /* ── status ──────────────────────────────────────────────────────────────────────────────────── */
 

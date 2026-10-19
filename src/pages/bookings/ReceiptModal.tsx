@@ -7,6 +7,7 @@ import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'
 import type { BookingReceipt } from '../../types/booking'
 import { dayLabel, hhmm, hoursLabel, money, stamp, statusLabel } from './bookingShared'
+import { balanceOwed, receiptRoomLine } from './bookingMoney'
 import './bookings.css'
 
 /**
@@ -26,6 +27,15 @@ import './bookings.css'
  * booking when it was taken, so a reprint after a rename still shows what the guest paid for; the
  * policy text is read from the room as it stands today. That asymmetry is the server's and is worth
  * knowing before somebody "fixes" it.
+ *
+ * THE ROOM LINE IS THE BOOKED ONE (QA3 BKG-10). It printed "3 h at <today's rate>" beside the room's
+ * share after the hour discount, so a re-priced or discounted booking printed a line that did not
+ * multiply out. The line is now the room BEFORE the discount at the rate it was booked at, then the
+ * discount as its own line, all from the stored amounts (bookingMoney.receiptRoomLine).
+ *
+ * A CANCELLED OR NO-SHOW BOOKING OWES NOTHING (QA3 BKG-8): its footer reads NOTHING DUE, never
+ * BALANCE DUE — the guest is not chased for a booking that did not happen; a refund owed back is the
+ * drawer's business.
  */
 export function ReceiptModal({
   bookingId,
@@ -71,7 +81,16 @@ export function ReceiptModal({
 
   const header = receipt?.header ?? null
   const currency = header?.currencyCode ?? ''
-  const isPaid = (header?.balanceDue ?? 0) <= 0
+  const settled = header != null && (header.status === 'Cancelled' || header.status === 'NoShow')
+  const isPaid = (header ? balanceOwed(header.status, header.balanceDue) : 0) <= 0
+  const roomLine = header
+    ? receiptRoomLine(
+        header.totalAmount,
+        (receipt?.addons ?? []).map((addon) => addon.amount),
+        header.discountAmount,
+        header.hours,
+      )
+    : null
 
   return (
     <Modal
@@ -150,22 +169,25 @@ export function ReceiptModal({
                   <tbody>
                     <tr>
                       <td>
-                        {t('booking.receipt.roomCharge', {
-                          hours: hoursLabel(header.hours),
-                          rate: money(header.pricePerHour, currency),
-                        })}
+                        {/* From the stored amounts, never the room's current rate (see the class
+                            remark): the room before its discount, at the rate that makes it. */}
+                        {roomLine?.rate != null
+                          ? t('booking.receipt.roomCharge', {
+                              hours: hoursLabel(header.hours),
+                              rate: money(roomLine.rate, currency),
+                            })
+                          : t('booking.receipt.roomChargePlain', { hours: hoursLabel(header.hours) })}
                       </td>
-                      <td className="num">
-                        {/* The room's share is the total less the add-on lines: the server stores
-                            the TOTAL, not a breakdown, and re-deriving it from the current rate
-                            would disagree with the total whenever the room has been re-priced. */}
-                        {money(
-                          header.totalAmount -
-                            (receipt?.addons ?? []).reduce((sum, a) => sum + a.amount, 0),
-                          currency,
-                        )}
-                      </td>
+                      <td className="num">{money(roomLine?.gross ?? 0, currency)}</td>
                     </tr>
+                    {roomLine != null && roomLine.discount > 0 && (
+                      <tr>
+                        <td>
+                          {t('booking.receipt.discount', { percent: header.discountPercent ?? 0 })}
+                        </td>
+                        <td className="num">−{money(roomLine.discount, currency)}</td>
+                      </tr>
+                    )}
                     {(receipt?.addons ?? []).map((addon, index) => (
                       <tr key={`${addon.name}-${index}`}>
                         <td>{addon.name}</td>
@@ -233,12 +255,14 @@ export function ReceiptModal({
                 }
               >
                 <span>
-                  {isPaid
-                    ? t('booking.receipt.paidInFull')
-                    : t('booking.receipt.balanceDue')}
+                  {settled
+                    ? t('booking.receipt.nothingDue')
+                    : isPaid
+                      ? t('booking.receipt.paidInFull')
+                      : t('booking.receipt.balanceDue')}
                 </span>
                 <span>
-                  {money(isPaid ? header.paidAmount : header.balanceDue, currency)}
+                  {money(settled ? 0 : isPaid ? header.paidAmount : header.balanceDue, currency)}
                 </span>
               </div>
 
