@@ -12,6 +12,7 @@ import type {
   AvailabilityDecisionResult,
   AvailabilityPayload,
   DecisionOption,
+  DelegateCandidate,
   DecisionTypeConfig,
   DraftDecision,
   SignatureRequirement,
@@ -126,6 +127,14 @@ export const chainsService = {
    */
   getRaisableRequestTypes: () =>
     apiRequest<RaisableRequestType[]>('/api/workflow/request-types/raisable'),
+
+  /**
+   * Every ACTIVE request type, for filtering lists of requests (QA3 WEB-13). Any signed-in user may
+   * read it — the requests hub's type filter is for approvers, who configure nothing and may decide
+   * types they cannot raise themselves.
+   */
+  getActiveRequestTypes: () =>
+    apiRequest<RequestType[]>('/api/workflow/request-types/active'),
   upsertRequestType: (body: {
     code: string
     name: string
@@ -332,7 +341,18 @@ export const requestsService = {
    */
   approve: (
     id: number,
-    body?: { comment?: string | null; changeSummary?: string | null; code?: string; password?: string },
+    body?: {
+      comment?: string | null
+      changeSummary?: string | null
+      code?: string
+      password?: string
+      /**
+       * The step the approver was looking at (QA3 WF-2). When somebody else decided it first the
+       * server refuses with "This step was decided a moment ago — reload." (409) instead of signing
+       * the step that came next.
+       */
+      stepNo?: number | null
+    },
   ) =>
     apiRequest<ApproveResult>(`/api/requests/${id}/approve`, {
       method: 'POST',
@@ -341,6 +361,7 @@ export const requestsService = {
         changeSummary: body?.changeSummary ?? null,
         code: body?.code ?? null,
         password: body?.password ?? null,
+        stepNo: body?.stepNo ?? null,
       }),
     }),
 
@@ -376,6 +397,13 @@ export const requestsService = {
     }),
 
   /** Hand this step to a named person; it stays open. The decision Code is recorded with it. */
+  /**
+   * The people the waiting step can be handed to — the picker behind "Hand to someone else" (QA3
+   * WEB-7). Empty for anybody who cannot act on the step.
+   */
+  delegateCandidates: (id: number) =>
+    apiRequest<DelegateCandidate[]>(`/api/requests/${id}/delegate-candidates`),
+
   delegate: (id: number, toUserId: number, reason: string, code?: string) =>
     apiRequest<void>(`/api/requests/${id}/delegate`, {
       method: 'POST',
@@ -464,7 +492,10 @@ export const requestsService = {
     apiRequest<RequestEmailStatus[] | null>(`/api/requests/${id}/email-status`)
       .then((v) => v ?? []),
 
-  /** HR only. Reopen a REJECTED or CANCELLED request to the step that closed it. Approved cannot be reopened. */
+  /**
+   * HR only. Reopen a CANCELLED request (QA3 WF-14): a rejected or approved one has a decision that
+   * stands — its signer retracts it the same day, after that the GM and the Owner reopen it together.
+   */
   reopen: (id: number, reason: string) =>
     apiRequest<void>(`/api/requests/${id}/reopen`, {
       method: 'POST',
@@ -479,23 +510,28 @@ export const requestsService = {
    * are the only way back once it has.
    *
    * NEITHER TAKES A PERMISSION and neither is pre-checked here. Who may retract (the last signer,
-   * same UTC day) and who may reopen (the GM and the Owner, together) is decided by the database,
+   * same Beirut day, on a closed request) and who may reopen (the GM and the Owner: two people, each
+   * signing with their password) is decided by the database,
    * exactly as approve and reject are. Every refusal names the rule that was broken AND the path
    * that would work — the next-day retract names the GM + Owner route, a consumed adjustment names
    * the counter-adjustment — so they are shown verbatim and never replaced.
    */
 
   /**
-   * Take back the LAST decision on this request, as the person who made it, on the same UTC day.
+   * Take back the decision that CLOSED this request (approved or rejected), as the person who made
+   * it, on the same Beirut day (QA3 WF-3). What an approval did is undone with it.
+   *
+   * `password` is sent where the struck decision was signed (or the caller's role signs everything);
+   * a missing or wrong one is a 400 that changes nothing.
    *
    * Deliberately does NOT check whether the request's effects have been consumed: that answer lives
-   * in the database (a locked payslip, a started recovery, an applied attendance day), and its
-   * refusal tells the user what to do instead — which no disabled button could.
+   * in the database (a locked payslip, a started recovery, a paid period), and its refusal tells the
+   * user what to do instead — which no disabled button could.
    */
-  retract: (id: number, reason: string) =>
+  retract: (id: number, reason: string, password?: string) =>
     apiRequest<ApproveResult>(`/api/workflow/requests/${id}/retract`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason, password: password ?? null }),
     }),
 
   /**
@@ -506,12 +542,13 @@ export const requestsService = {
    * 'Reopened' means it completed and the request is back at its last step. Reporting the first as
    * a success is how somebody walks away believing a request was reopened when it was not.
    *
-   * The reason is required on the first signature only; the second inherits it.
+   * The reason is required on the first signature only; the second inherits it. EACH half is signed
+   * with the signer's own password (QA3 WF-14) — a missing or wrong one is a 400 that changes nothing.
    */
-  reopenWithSecondSignature: (id: number, reason: string) =>
+  reopenWithSecondSignature: (id: number, reason: string, password: string) =>
     apiRequest<ReopenResult>(`/api/workflow/requests/${id}/reopen`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason, password }),
     }),
   reject: (id: number, reason: string, extra?: { code?: string; password?: string }) =>
     apiRequest<void>(`/api/requests/${id}/reject`, {
@@ -523,11 +560,19 @@ export const requestsService = {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),
-  /** HR only. Rewrites who must sign a live request, so the reason is mandatory. */
-  moveVersion: (id: number, reason: string, targetWorkflowDefinitionId?: number) =>
+  /**
+   * HR only. Rewrites who must sign a live request, so the reason is mandatory. A move that would
+   * leave nothing to sign approves the request, so the server refuses it (409) until it is sent
+   * again with `confirmClose` (QA3 WF-10).
+   */
+  moveVersion: (id: number, reason: string, targetWorkflowDefinitionId?: number, confirmClose = false) =>
     apiRequest<MoveVersionResult>(`/api/requests/${id}/move-version`, {
       method: 'POST',
-      body: JSON.stringify({ targetWorkflowDefinitionId: targetWorkflowDefinitionId ?? null, reason }),
+      body: JSON.stringify({
+        targetWorkflowDefinitionId: targetWorkflowDefinitionId ?? null,
+        reason,
+        confirmClose,
+      }),
     }),
 
   /**

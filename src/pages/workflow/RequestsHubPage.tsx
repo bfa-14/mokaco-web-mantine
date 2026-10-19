@@ -472,11 +472,13 @@ export default function RequestsHubPage() {
     tabRef.current = tab
   }, [tab])
 
-  // Types feed the type filter; loaded once. (Unchanged, incl. the raisable fallback for ?type=.)
+  // Types feed the type filter; loaded once (incl. the raisable fallback for ?type=). The ACTIVE list
+  // is readable by any signed-in user (QA3 WEB-13) — the full catalogue needs WORKFLOW_CONFIGURE,
+  // so an approver without it used to get no filter at all.
   useEffect(() => {
     let cancelled = false
     async function loadTypes() {
-      const catalogue = await chainsService.getRequestTypes().catch(() => null)
+      const catalogue = await chainsService.getActiveRequestTypes().catch(() => null)
       if (cancelled) return
       if (catalogue) setTypes(catalogue.filter((t) => t.isActive))
 
@@ -855,6 +857,7 @@ export default function RequestsHubPage() {
         <DecidePopup
           requestId={decideFor.requestInstanceId}
           requestTypeCode={decideFor.requestTypeCode}
+          stepNo={decideFor.currentStepNo}
           signature={signatures.get(decideFor.requestInstanceId) ?? null}
           mySignature={mySignature}
           /* A card carries less context than the detail page, so the summary repeats it in full. */

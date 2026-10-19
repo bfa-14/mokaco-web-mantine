@@ -303,6 +303,16 @@
       "Money": "Money",
       "People": "People",
       "Other": "Other"
+    },
+    "delegate": {
+      "toLabel": "Hand to",
+      "toPlaceholder": "Choose a person…",
+      "chooseSomeone": "Choose who to hand this step to.",
+      "reasonRequired": "Say why you are handing this over — the person receiving it needs the context."
+    },
+    "moveVersion": {
+      "confirmApprove": "Move to v{{version}} and approve",
+      "movedAndApproved": "Moved to v{{version}}. Nothing was left to sign, so the request is approved."
     }
   },
   "requests": {
@@ -478,7 +488,10 @@
       "password": "Your password",
       "confirm": "Retract my decision",
       "busy": "Retracting…",
-      "done": "Decision withdrawn. Step {{step}} is waiting for a fresh decision."
+      "done": "Decision withdrawn. Step {{step}} is waiting for a fresh decision.",
+      "passwordRequired": "Your password is required to sign this.",
+      "retracted": "Decision retracted. Step {{step}} is waiting for a fresh decision.",
+      "undoesApproval": "This request is approved: retracting the decision also undoes what the approval did — leave days come back, an advance or adjustment is removed, the attendance day is worked out again."
     },
     "email": {
       "action": "Email the employee",
@@ -488,6 +501,11 @@
       "pending": "{{channel}} queued — attempt {{attempt}}/3",
       "channelEmail": "Email",
       "channelWhatsApp": "WhatsApp"
+    },
+    "reopen": {
+      "signExplain": "Reopening a closed request is signed: the General Manager and the Owner each sign with their own password.",
+      "password": "Your password",
+      "passwordRequired": "Your password is required to sign the reopen."
     }
   },
   "body": {
