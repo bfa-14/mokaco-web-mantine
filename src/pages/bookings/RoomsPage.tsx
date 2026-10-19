@@ -18,6 +18,8 @@ import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../api/errorMessage'
 import { PageHelp } from '../../components/PageHelp'
 import { roomsService } from '../../services/bookingService'
+import { useCalendarChanged } from '../../live/bookingLive'
+import { latestOnly } from './latestOnly'
 import type {
   AddonPriceType,
   Room,
@@ -61,22 +63,35 @@ export default function RoomsPage() {
   const [hoursFor, setHoursFor] = useState<Room | null>(null)
   const [addonsFor, setAddonsFor] = useState<Room | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  /* An answer a later load has superseded is dropped (latestOnly): the live refresh below can
+     overlap a save's own reload. */
+  const [catalogLatest] = useState(latestOnly)
+  const load = useCallback(async (quiet = false) => {
+    const isLatest = catalogLatest.begin()
+    if (!quiet) setLoading(true)
     try {
-      setCatalog(await roomsService.getCatalog(true))
+      const result = await roomsService.getCatalog(true)
+      if (!isLatest()) return
+      setCatalog(result)
       setError(null)
     } catch (err) {
-      setError(getErrorMessage(err))
+      if (isLatest() && !quiet) setError(getErrorMessage(err))
     } finally {
-      setLoading(false)
+      // A quiet refresh never showed the loader; a loud one superseded by a quiet one still clears it.
+      if (!quiet) setLoading(false)
     }
-  }, [])
+  }, [catalogLatest])
 
   useEffect(() => {
     if (!canManage) return
     void load()
   }, [canManage, load])
+
+  /* LIVE (QA3 BKG-14): a room, its hours or its add-ons changed at another till refresh the list
+     QUIETLY — no loader, so a dialog open here is not disturbed. */
+  useCalendarChanged((message) => {
+    if (message.kind === 'room') void load(true)
+  }, canManage)
 
   if (!canManage) {
     return (

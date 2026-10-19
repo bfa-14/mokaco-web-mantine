@@ -1650,7 +1650,8 @@
       "openList": "Open All bookings",
       "seats_one": "{{count}} seat",
       "seats_other": "{{count}} seats",
-      "slotHint": "Book {{room}} at {{time}} — drag for a longer slot"
+      "slotHint": "Book {{room}} at {{time}} — drag for a longer slot",
+      "retired": "{{room}} (inactive)"
     },
     "drawer": {
       "title": "Booking #{{id}}",

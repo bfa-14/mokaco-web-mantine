@@ -1798,7 +1798,8 @@
       "openList": "فتح كل الحجوزات",
       "seats_one": "مقعد واحد",
       "seats_other": "{{count}} مقاعد",
-      "slotHint": "حجز {{room}} الساعة {{time}} — اسحب لمدة أطول"
+      "slotHint": "حجز {{room}} الساعة {{time}} — اسحب لمدة أطول",
+      "retired": "{{room}} (غير مفعّلة)"
     },
     "drawer": {
       "title": "الحجز رقم {{id}}",

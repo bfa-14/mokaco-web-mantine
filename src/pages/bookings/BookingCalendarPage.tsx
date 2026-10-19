@@ -75,13 +75,15 @@ import {
   calendarWindow,
   clockMinutes,
   closeMinOf,
+  NEXT_MORNING_LIMIT,
   nowInColumn,
   placeInColumns,
   slotToForm,
   spanOf,
 } from './bookingTimes'
 import { BookingDrawer } from './BookingDrawer'
-import { useBookingChanged } from '../../live/bookingLive'
+import { latestOnly } from './latestOnly'
+import { useBookingChanged, useCalendarChanged } from '../../live/bookingLive'
 import { NewBookingModal } from './NewBookingModal'
 import { BlockRoomModal } from './BlockRoomModal'
 import './bookings.css'
@@ -123,6 +125,9 @@ import './bookings.css'
  * the website's 00:00–01:00 start (stored on the next date) is drawn under the previous night at
  * 24:00–25:00, and a slot clicked after midnight opens the forms on the next date. The range is
  * fetched with ONE DAY MORE for the last night's after-midnight bookings.
+ *
+ * A RETIRED ROOM WITH BOOKINGS STILL SHOWS (QA3 BKG-11): deactivating a room stops new bookings, it
+ * does not cancel the ones it has, and those used to vanish from the calendar with its column.
  */
 export default function BookingCalendarPage() {
   const { t } = useTranslation()
@@ -228,22 +233,24 @@ export default function BookingCalendarPage() {
     end: string | null
   }>({ roomId: null, date: null, start: null, end: null })
 
-  /* The catalogue: rooms, their weekly hours, their add-ons. Loaded once — a room's opening hours
-     do not change while somebody is paging through a month. */
-  useEffect(() => {
-    let cancelled = false
-    roomsService
-      .getCatalog(true)
-      .then((result) => {
-        if (!cancelled) setCatalog(result)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err))
-      })
-    return () => {
-      cancelled = true
+  /* The catalogue: rooms, their weekly hours, their add-ons. Loaded once, and again when a room, its
+     hours or its add-ons are edited at another till (CalendarChanged 'room', below). An answer a
+     later load has superseded is dropped (latestOnly). */
+  const [catalogLatest] = useState(latestOnly)
+  const loadCatalog = useCallback(async () => {
+    const isLatest = catalogLatest.begin()
+    try {
+      const result = await roomsService.getCatalog(true)
+      if (isLatest()) setCatalog(result)
+    } catch (err) {
+      if (isLatest()) setError(getErrorMessage(err))
     }
-  }, [])
+  }, [catalogLatest])
+
+  useEffect(() => {
+    void loadCatalog()
+    return () => catalogLatest.cancel()
+  }, [loadCatalog, catalogLatest])
 
   /* The two grid settings, and ONLY for somebody who may read them.
      /api/settings is SETTING_MANAGE, which most of the people who live on this page do not have —
@@ -280,10 +287,16 @@ export default function BookingCalendarPage() {
   /**
    * The range's bookings and blocks.
    *
+   * ONLY THE LATEST ANSWER IS DRAWN (WEB-17). Paging through weeks, a live message and a filter change
+   * each start a fetch, and an older answer arriving last used to overwrite the newer range: the
+   * sequence guard (latestOnly, RequestsHubPage's reqSeq) marks the latest call and drops the rest.
+   *
    * ONE DAY MORE THAN THE RANGE (QA3 BKG-2): the last night runs past midnight, and a booking that
    * starts after midnight is stored on the next date — it is drawn under the last day, so it is fetched.
    */
+  const [rangeLatest] = useState(latestOnly)
   const load = useCallback(async () => {
+    const isLatest = rangeLatest.begin()
     if (tooLong) {
       // A range past the cap is not drawn, so it is not fetched either — the point of the cap is
       // that a quarter of bookings is a report, not a screenful.
@@ -295,18 +308,25 @@ export default function BookingCalendarPage() {
     setLoading(true)
     try {
       const result = await bookingsService.getRange(rangeFrom, addDays(rangeTo, 1), roomFilter)
+      if (!isLatest()) return // a newer fetch superseded this one
       setBookings(result.bookings)
       setBlocks(result.blocks)
       setError(null)
     } catch (err) {
+      if (!isLatest()) return
       setError(getErrorMessage(err))
       setBookings([])
       setBlocks([])
     } finally {
-      setLoading(false)
-      setFirstLoad(false)
+      if (isLatest()) {
+        setLoading(false)
+        setFirstLoad(false)
+      }
     }
-  }, [rangeFrom, rangeTo, roomFilter, tooLong])
+  }, [rangeFrom, rangeTo, roomFilter, tooLong, rangeLatest])
+
+  // Leaving the page makes whatever is still in flight stale.
+  useEffect(() => () => rangeLatest.cancel(), [rangeLatest])
 
   useEffect(() => {
     if (!canView) return
@@ -317,10 +337,16 @@ export default function BookingCalendarPage() {
      grid without a reload. The message is only the trigger; the blocks still come from the same GET. */
   useBookingChanged(() => void load(), canView)
 
+  /* LIVE, WITHOUT A BOOKING (QA3 BKG-14): a block laid or lifted at another till redraws the range; a
+     room, its hours or its add-ons edited redraws the rooms too. */
+  useCalendarChanged((message) => {
+    void load()
+    if (message.kind === 'room') void loadCatalog()
+  }, canView)
+
   /* ── which rooms, which days ───────────────────────────────────────────────────────────────── */
 
-  /** Every active room, in SortOrder — the order the colours follow. Retired rooms never get a
-   *  column, because nothing can be booked in one. */
+  /** Every active room, in SortOrder — the order the colours follow. */
   const activeRooms: Room[] = useMemo(
     () =>
       catalog.rooms
@@ -331,23 +357,53 @@ export default function BookingCalendarPage() {
   )
 
   /**
+   * The rooms the calendar draws: every active room, then any RETIRED room that still has something
+   * on the calendar in the fetched range (QA3 BKG-11). Deactivating a room stops new bookings — it does
+   * not cancel the ones it has, and those used to vanish with the room's column. A retired room's
+   * column is shut (nothing can be booked in it) but its bookings are drawn and can be opened.
+   */
+  const calendarRooms: Room[] = useMemo(() => {
+    // The extra day fetched counts only for its after-midnight part (the last night's).
+    const inRange = (day: string, item: Parameters<typeof spanOf>[0]) =>
+      day.slice(0, 10) <= rangeTo || spanOf(item).start < NEXT_MORNING_LIMIT
+    const inUse = new Set([
+      ...bookings
+        .filter((b) => (showCancelled || b.status !== 'Cancelled') && inRange(b.bookDate, b))
+        .map((b) => b.roomId),
+      ...blocks.filter((b) => inRange(b.blockDate, b)).map((b) => b.roomId),
+    ])
+    const retired = catalog.rooms
+      .filter((room) => !room.isActive && inUse.has(room.roomId))
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.roomId - b.roomId)
+    return [...activeRooms, ...retired]
+  }, [activeRooms, catalog.rooms, bookings, blocks, showCancelled, rangeTo])
+
+  /**
    * The colour a room wears, fixed by its place in SortOrder and read from the theme.
    *
    * Computed over ALL active rooms, not the filtered ones, so narrowing to a single room does not
    * repaint it — the chip in the legend and the stripe on a card mean the same thing in every view.
+   * A retired room still in view takes the colours after the active ones, so it repaints nobody.
    */
   const roomColor = useMemo(() => {
     const map = new Map<number, string>()
-    activeRooms.forEach((room, index) => {
+    calendarRooms.forEach((room, index) => {
       const palette = theme.colors[roomPalette(index)]
       map.set(room.roomId, palette?.[6] ?? theme.colors.gray[6])
     })
     return map
-  }, [activeRooms, theme.colors])
+  }, [calendarRooms, theme.colors])
+
+  /** A room's name, marked when it is retired. */
+  const roomLabel = useCallback(
+    (room: Room) => (room.isActive ? room.name : t('booking.calendar.retired', { room: room.name })),
+    [t],
+  )
 
   const filteredRooms = useMemo(
-    () => activeRooms.filter((room) => roomFilter == null || room.roomId === roomFilter),
-    [activeRooms, roomFilter],
+    () => calendarRooms.filter((room) => roomFilter == null || room.roomId === roomFilter),
+    [calendarRooms, roomFilter],
   )
 
   /** What the grid actually draws: the filtered rooms minus the ones switched off in the legend. */
@@ -394,9 +450,9 @@ export default function BookingCalendarPage() {
     [roomColumns, focusDay, rangeDays],
   )
 
-  /** Hours for the rooms and weekdays actually on screen — the time axis is computed from these. */
+  /** Hours for the (active) rooms and weekdays actually on screen — the time axis is computed from these. */
   const relevantHours: RoomHours[] = useMemo(() => {
-    const roomIds = new Set(visibleRooms.map((r) => r.roomId))
+    const roomIds = new Set(visibleRooms.filter((r) => r.isActive).map((r) => r.roomId))
     const dows = new Set(days.map(dayOfWeek))
     return catalog.hours.filter((h) => roomIds.has(h.roomId) && dows.has(h.dayOfWeek))
   }, [catalog.hours, visibleRooms, days])
@@ -463,10 +519,12 @@ export default function BookingCalendarPage() {
    * opening window it is drawn against, which is the union of its rooms' hours for that weekday.
    */
   const columns: CalColumn[] = useMemo(() => {
-    /* The union of the rooms' hours that weekday, a 01:00 close as 1500 (QA3 BKG-2). */
+    /* The union of the rooms' hours that weekday, a 01:00 close as 1500 (QA3 BKG-2). A retired room
+       takes no bookings, so its hours open nothing. */
     function windowFor(day: string, rooms: Room[]) {
       const dow = dayOfWeek(day)
       const open = rooms
+        .filter((room) => room.isActive)
         .map((room) => catalog.hours.find((h) => h.roomId === room.roomId && h.dayOfWeek === dow))
         .filter((h): h is RoomHours => !!h && !h.isClosed)
 
@@ -484,10 +542,10 @@ export default function BookingCalendarPage() {
         key: `room-${room.roomId}`,
         day,
         rooms: [room],
-        title: room.name,
+        title: roomLabel(room),
         sub: t('booking.calendar.seats', { count: room.seats }),
         accent: roomColor.get(room.roomId),
-        defaultRoomId: room.roomId,
+        defaultRoomId: room.isActive ? room.roomId : null,
         ...windowFor(day, [room]),
       }))
     }
@@ -501,10 +559,10 @@ export default function BookingCalendarPage() {
       // of the date that every column on screen already agrees on.
       sub: dayLabel(day).slice(0, 5),
       accent: undefined,
-      defaultRoomId: visibleRooms[0]?.roomId ?? null,
+      defaultRoomId: visibleRooms.find((room) => room.isActive)?.roomId ?? null,
       ...windowFor(day, visibleRooms),
     }))
-  }, [roomColumns, days, visibleRooms, catalog.hours, roomColor, t])
+  }, [roomColumns, days, visibleRooms, catalog.hours, roomColor, roomLabel, t])
 
   /* ── the events in each column ─────────────────────────────────────────────────────────────── */
 
@@ -787,7 +845,7 @@ export default function BookingCalendarPage() {
               className="bk-room-dot"
               style={{ background: roomColor.get(room.roomId) }}
             />
-            {room.name}
+            {roomLabel(room)}
           </button>
         )
       })}
@@ -893,9 +951,9 @@ export default function BookingCalendarPage() {
             w={180}
             data={[
               { value: '', label: t('booking.calendar.allRooms') },
-              ...activeRooms.map((room) => ({
+              ...calendarRooms.map((room) => ({
                 value: String(room.roomId),
-                label: room.name,
+                label: roomLabel(room),
               })),
             ]}
             value={roomFilter == null ? '' : String(roomFilter)}
@@ -1259,7 +1317,7 @@ export default function BookingCalendarPage() {
                       }
 
                       const row = event.booking
-                      const room = activeRooms.find((r) => r.roomId === row.roomId)
+                      const room = calendarRooms.find((r) => r.roomId === row.roomId)
 
                       return (
                         <button
@@ -1354,7 +1412,7 @@ interface CalColumn {
   sub: string
   /** The room's colour, underlining a room column's heading. Absent on a day column. */
   accent: string | undefined
-  /** Which room a click on empty time proposes. In a day column, the first room still switched on. */
+  /** Which room a click on empty time proposes. In a day column, the first ACTIVE room still switched on. */
   defaultRoomId: number | null
   openMin: number
   closeMin: number
