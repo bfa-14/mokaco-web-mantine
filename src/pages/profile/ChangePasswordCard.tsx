@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { Button, PasswordInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
+import { useAuth } from '../../auth/useAuth'
 import { meService } from '../../services/workflowService'
 
 /**
@@ -68,12 +70,16 @@ function PasswordField({
  * in the browser to compare against — and its answer is shown exactly as it arrives. Nothing here
  * guesses at the reason for a refusal.
  *
- * The session is left alone on success. Changing a password does not invalidate the token, so there
- * is no logout, no re-login prompt and no token refresh: the user stays exactly where they were,
- * with the fields cleared behind them.
+ * A SUCCESS SIGNS THE PERSON OUT, HERE AND EVERYWHERE (QA3 SEC-5). The server ends every session of
+ * the account on a password change, this tab's included: its next call would be refused and the
+ * tab thrown to the login page with no word of why. So the card says it first — the toast outlives
+ * the navigation, Notifications sit above the router — clears this tab's tokens and goes to the
+ * login page itself, where the new password is the one that works.
  */
 export function ChangePasswordCard() {
   const { t } = useTranslation()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -95,10 +101,13 @@ export function ChangePasswordCard() {
     setError(null)
     try {
       await meService.changePassword(current, next)
-      notifications.show({ message: t('security.password.changed'), color: 'green', autoClose: 2500 })
+      notifications.show({ message: t('security.password.changedSignedOut'), color: 'green', autoClose: 10_000 })
       setCurrent('')
       setNext('')
       setConfirm('')
+      // The server has ended this session already; logout() only clears what the tab still holds.
+      await logout()
+      navigate('/login', { replace: true })
     } catch (err) {
       // The server's wording, unaltered — it is the only one that knows what was actually wrong.
       setError(getErrorMessage(err))

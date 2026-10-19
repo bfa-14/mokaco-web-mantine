@@ -17,7 +17,10 @@
     "signingIn": "Signing in…",
     "brandFooter": "Moka & Co · HRMS",
     "errorGeneric": "Unable to sign in. Please try again.",
-    "errorUnknown": "Something went wrong. Please try again."
+    "errorUnknown": "Something went wrong. Please try again.",
+    "refreshWaiting": "Too many sign-ins from this network right now. You are still signed in; the page carries on within a minute.",
+    "refreshLimited": "Too many sign-ins from this network right now. You are still signed in; try again in a minute.",
+    "tooManyAttempts": "Too many sign-in attempts. Wait a minute and try again."
   },
   "environment": {
     "badge": "TEST",
@@ -1417,7 +1420,7 @@
     },
     "password": {
       "title": "Change password",
-      "hint": "You will stay signed in on this device. Any other device stays signed in too, until its session expires.",
+      "hint": "Changing your password signs you out everywhere, this device included. You then sign in again with the new password.",
       "current": "Current password",
       "new": "New password",
       "confirm": "Confirm new password",
@@ -1426,7 +1429,7 @@
       "tooShort_other": "Use at least {{count}} characters.",
       "mismatch": "These two do not match.",
       "changing": "Changing…",
-      "changed": "Password changed."
+      "changedSignedOut": "Password changed. You are signed out everywhere; sign in again with the new password."
     },
     "users": {
       "title": "Users",
