@@ -19,7 +19,7 @@ import { getErrorMessage } from '../../api/errorMessage'
 import { chainsService } from '../../services/workflowService'
 import { employeesService } from '../../services/hrService'
 import { rolesService, usersService } from '../../services/securityService'
-import type { Role, UserListItem } from '../../types/security'
+import type { RolePickItem, UserPickItem } from '../../types/security'
 import type {
   ApproverRole,
   DefinitionCopySource,
@@ -80,8 +80,10 @@ export default function ChainBuilderPage() {
 
   const [definition, setDefinition] = useState<WorkflowDefinition | null>(null)
   const [steps, setSteps] = useState<WorkflowStep[]>([])
-  const [roles, setRoles] = useState<Role[]>([])
-  const [users, setUsers] = useState<UserListItem[]>([])
+  /* The two pick-lists come from the signed-in-only reads (QA3): this page is WORKFLOW_CONFIGURE's,
+     and the full lists need ROLE_MANAGE / USER_MANAGE — without those both boxes were empty. */
+  const [roles, setRoles] = useState<RolePickItem[]>([])
+  const [users, setUsers] = useState<UserPickItem[]>([])
   // Approver roles WITH their active-member counts — the deputy picker warns from these.
   const [approverRoles, setApproverRoles] = useState<ApproverRole[]>([])
   // The deepest current reporting line, fetched once — a Line-manager step past it skips for everyone.
@@ -209,8 +211,8 @@ export default function ChainBuilderPage() {
       const [defs, stepList, roleList, userList, approverList, depth] = await Promise.all([
         chainsService.getDefinitions(),
         chainsService.getSteps(defId),
-        rolesService.getRoles().catch(() => [] as Role[]),
-        usersService.getAll().catch(() => [] as UserListItem[]),
+        rolesService.names().catch(() => [] as RolePickItem[]),
+        usersService.names().catch(() => [] as UserPickItem[]),
         chainsService.getApprovers().catch(() => [] as ApproverRole[]),
         // Advisory only — a failed read just means no depth warning, never a broken builder.
         employeesService.getOrgMaxDepth().catch(() => null),
@@ -701,7 +703,10 @@ export default function ChainBuilderPage() {
             <div className="form-field">
               <label className="form-label">Which user</label>
               <Select
-                data={users.map((u) => ({ value: String(u.userId), label: u.username }))}
+                data={users.map((u) => ({
+                  value: String(u.userId),
+                  label: u.employeeName ? `${u.username} — ${u.employeeName}` : u.username,
+                }))}
                 value={userId != null ? String(userId) : null}
                 searchable
                 allowDeselect={false}
