@@ -648,18 +648,3 @@ export interface LeaveLedgerPostRequest {
   note: string | null
 }
 
-/**
- * One employee-day on approved leave — GET /api/leave/days?from=&to=
- *
- * A deliberately small shape, because it is a SEAM. Leave is currently derived from
- * hr.LEAVE_LEDGER ('Usage' movements matched on EffectiveDate); workflow.LEAVE_REQUEST, with a
- * real FromDate..ToDate to expand, belongs to the workflow stage and does not exist yet. When it
- * arrives only the server side of this contract changes.
- */
-export interface LeaveDay {
-  employeeId: number
-  /** The day itself. Arrives as a full timestamp, so compare it truncated to 'yyyy-MM-dd'. */
-  date: string
-  /** 1.00 for a whole day, 0.50 for a half. Positive: the ledger's negative sign is normalised away server-side. */
-  daysOnLeave: number
-}

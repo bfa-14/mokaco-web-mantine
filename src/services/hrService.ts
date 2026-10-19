@@ -21,7 +21,6 @@ import type {
   EmployeeUnlinkResult,
   EmployeeUpdateRequest,
   LeaveBalance,
-  LeaveDay,
   LeaveLedgerEntry,
   LeaveLedgerPostRequest,
   LeavePolicy,
@@ -477,17 +476,6 @@ export const leaveLedgerService = {
     apiRequest<LeaveLedgerEntry[]>(
       `/api/leave-ledger/by-employee/${employeeId}` +
         (period ? `?period=${encodeURIComponent(period)}` : ''),
-    ),
-  /**
-   * Everybody's approved leave days in a range, one row per employee-day.
-   *
-   * The roster uses this to avoid scheduling a shift on somebody's leave day. Kept as its own
-   * endpoint rather than a loop over getByEmployee, which would be a round trip per person per
-   * month just to draw a calendar.
-   */
-  getLeaveDays: (from: string, to: string) =>
-    apiRequest<LeaveDay[]>(
-      `/api/leave/days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     ),
   getBalance: (employeeId: number, period?: string) =>
     apiRequest<LeaveBalance[]>(
