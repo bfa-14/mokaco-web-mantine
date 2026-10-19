@@ -1282,7 +1282,35 @@
           }
         },
         "holidayHeader": "Public holiday: {{name}}"
-      }
+      },
+      "branch": {
+        "copyNeedsOne": "Choose a branch first — copying a month works on one branch at a time.",
+        "applyNeedsOne": "Choose a branch first — weekly patterns are applied to one branch at a time.",
+        "rederiveNeedsOne": "Choose a branch first — a month is derived again one branch at a time.",
+        "copyOnly": "Only {{branch}}: the days each person belonged to it last month are copied onto the days they belong to it this month.",
+        "applyOnly": "Only {{branch}}: the days each person belongs to it this month.",
+        "generateOnly": "Only the days these people belong to {{branch}}."
+      },
+      "generate": {
+        "leaveRule": "Approved leave is respected: a leave day is never made a rest day (an empty one gets the working shift, so the leave is counted against it) and a day already planned inside a leave is left as it is. Public holidays, retired shifts and days outside a person's employment are skipped.",
+        "bulkDone_one": "{{employees}} employee(s) rostered: {{count}} day written.",
+        "bulkDone_other": "{{employees}} employee(s) rostered: {{count}} days written.",
+        "rowsDone_one": "Rostered {{count}} day.",
+        "rowsDone_other": "Rostered {{count}} days."
+      },
+      "rederive": {
+        "button": "Re-derive month",
+        "hint": "Judge the month's completed days again against the roster as it stands — after a shift, a holiday or a setting changed. Approving the month does this by itself.",
+        "notStarted": "This month has no completed day yet — there is nothing to derive.",
+        "title": "Re-derive {{month}}",
+        "body": "The attendance of {{branch}} for {{month}} — every day from the 1st to yesterday that has a roster row or a record — is worked out again from the punches and the roster as it stands now.",
+        "note": "Days already paid and days entered by hand are left as they are. The leave taken in the month is priced again on the roster.",
+        "confirm": "Re-derive",
+        "running": "Re-deriving…",
+        "done_one": "{{count}} attendance day derived again.",
+        "done_other": "{{count}} attendance days derived again."
+      },
+      "leaveUnread": "Approved leave could not be read, so the grid does not show who is on leave. {{error}}"
     }
   },
   "payroll": {
