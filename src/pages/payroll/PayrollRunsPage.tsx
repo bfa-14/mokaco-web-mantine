@@ -91,6 +91,10 @@ export default function PayrollRunsPage() {
      below stays fully readable without the write trust — only the acts disappear. */
   const { hasPermission } = useAuth()
   const canRun = hasPermission(PERMISSION.PAYROLL_RUN)
+  /* Posting converted exit-permission time as leave is POST /api/exit-permissions/post-leave, which is
+     ATTENDANCE_MANAGE — not a payroll code (QA3 WEB-14). Offered on the code that endpoint checks, so the
+     button appears exactly where pressing it works. */
+  const canPostExitLeave = hasPermission(PERMISSION.ATTENDANCE_MANAGE)
   const [runs, setRuns] = useState<PayrollRunListItem[]>(EMPTY_RUNS)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -339,8 +343,8 @@ export default function PayrollRunsPage() {
           </ActionIcon>
           {/* A period-close chore rather than a run: nothing schedules it, and skipping it leaves
               converted exit time never deducted from anybody's leave balance. It writes the leave
-              ledger for a payroll period, so it belongs to whoever runs payroll. */}
-          {canRun && (
+              ledger for a payroll period; the endpoint asks for ATTENDANCE_MANAGE, so does the button. */}
+          {canPostExitLeave && (
             <Button
               variant="default"
               leftSection={<IconClock size={16} />}
@@ -357,7 +361,7 @@ export default function PayrollRunsPage() {
         </div>
       </div>
 
-      {closeOpen && (
+      {closeOpen && canPostExitLeave && (
         <div className="card" style={{ marginTop: 12 }}>
           <div className="card-title">Post exit-permission leave</div>
           <p className="hint" style={{ marginTop: 0 }}>
