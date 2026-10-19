@@ -1061,6 +1061,9 @@ export default function TiersCeilingsPage() {
               </Button>
             </div>
             <p className="hint">{t('payroll.tiers.taxHint')}</p>
+            {/* QA3 PAY-9: one tax table at a time — the server closes the current one the day before a
+                later-dated bracket starts, and payroll reads the table in force on the month's last day. */}
+            <p className="hint">{t('payroll.tiers.taxVersionHint')}</p>
 
             {/* ADVISORY. Never blocks a save — see tierWarnings. */}
             {warnings.length > 0 && (

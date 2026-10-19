@@ -100,6 +100,7 @@
   "nav": {
     "dashboard": "Dashboard",
     "myProfile": "My profile",
+    "myPayslips": "My payslips",
     "settings": "Settings",
     "requests": {
       "group": "Requests",
@@ -967,7 +968,7 @@
         "overtimeDetected": "Overtime detected",
         "overtimeDetectedTitle": "Detected from the punches. Attendance never pays this on its own.",
         "unpaidAbsenceDays": "Unpaid absence days",
-        "unpaidAbsenceDaysTitle": "Absences not covered by approved leave. This is the deduction.",
+        "unpaidAbsenceDaysTitle": "Absences and short days on rostered shifts that no approved leave covers, for the days already over: what the payslip deducts as short days.",
         "exitLeaveDays": "Exit leave days",
         "exitLeaveDaysTitle": "Time out during the day, converted to days off the leave balance."
       }
@@ -1438,8 +1439,8 @@
       "editScheme": "Edit scheme",
       "newVersion": "New version",
       "newVersionOf": "New version of {{scheme}}",
-      "newVersionTitle": "Create a new dated version of this scheme, prefilled from it. The existing row is left untouched.",
-      "newVersionHint": "This creates a NEW row. Set the date it takes effect from — the existing version stays exactly as it is, so months already paid still explain themselves.",
+      "newVersionTitle": "Create a new dated version of this scheme, prefilled from it. The current version ends the day before the new one starts.",
+      "newVersionHint": "This creates a NEW row. Set the date it takes effect from — the current version is closed the day before, automatically, and otherwise stays as it is, so months already paid still explain themselves. A date on or before the latest version is refused.",
       "noTiers": "No income tax brackets yet.",
       "noSchemes": "No NSSF schemes yet.",
       "saved": "Saved.",
@@ -1467,7 +1468,60 @@
       "bandHint": "What a basic salary may be at each rank. Enforced on every salary-component write, so a basic outside its tier band is refused when it is saved.",
       "bandTitle": "Basic salary band — {{tier}}",
       "bandBlankHint": "Leave a box blank for no bound on that side. Blank on both sides removes the band entirely.",
-      "bandSaved": "Salary band saved."
+      "bandSaved": "Salary band saved.",
+      "taxVersionHint": "Brackets that share a start date are one version of the table. A bracket dated after the current table starts a new version: the current one ends the day before, automatically. Payroll uses the version in force on the last day of the month."
+    },
+    "run": {
+      "staleTitle": "This run is out of date",
+      "staleBody_one": "What one payslip was computed from changed after the run was generated. Approving it is refused until the run is regenerated.",
+      "staleBody_other": "What {{count}} payslips were computed from changed after the run was generated. Approving it is refused until the run is regenerated.",
+      "staleRunWideOnly": "A run-wide input changed after the run was generated. Approving it is refused until the run is regenerated.",
+      "staleRunWide": "Run-wide inputs changed too: settings, NSSF or tax tables, component or leave types, holidays, roster approvals or rates.",
+      "staleMore": "and {{count}} more",
+      "staleRegenerate": "Regenerate the run",
+      "staleReaderHint": "Whoever prepares payroll can regenerate it.",
+      "source": {
+        "Employee": "employment or branch",
+        "Salary": "salary",
+        "Attendance": "attendance",
+        "Roster": "roster",
+        "Leave": "leave",
+        "Overtime": "overtime",
+        "Tips": "tips",
+        "Expenses": "expenses",
+        "Adjustments": "adjustments",
+        "Advances": "advances",
+        "Separation": "separation settlement",
+        "Payout": "leave paid on leaving",
+        "Missing": "not in the run yet",
+        "NotInRun": "no longer belongs in the run",
+        "Settings": "run-wide settings"
+      },
+      "awaitingOwner": "Approving and locking the run is the Owner’s act.",
+      "earlyTitle": "This is an early lock",
+      "earlyBody": "{{period}} runs until {{end}} and can be locked from {{next}}. Locking it now is the Owner’s choice: the days after {{cutoff}} are paid as scheduled, and absences, overtime, holiday work and tips dated after that day — or anything entered for the month later — will not be paid by this run.",
+      "earlyConfirm": "I am locking {{period}} early, knowing what it leaves out",
+      "approveEarly": "Lock early",
+      "ratesDraft": "Read again at every Generate, as of the period end, until the run is sent to review.",
+      "ratesFrozen": "Frozen since the run was sent to review."
+    },
+    "mine": {
+      "title": "My payslips",
+      "subtitle": "Your payslips of approved months. A month appears here once its payroll is approved and locked.",
+      "empty": "No approved payslip yet.",
+      "period": "Month",
+      "run": "Run",
+      "net": "Net pay",
+      "payment": "Payment",
+      "notPaid": "Not paid yet",
+      "paidBy": "Paid by {{method}} on {{date}}",
+      "primary": "Monthly",
+      "supplemental": "Off-cycle",
+      "nothing": "Nothing to pay",
+      "method": {
+        "Bank": "bank transfer",
+        "Cash": "cash"
+      }
     }
   },
   "access": {
@@ -1591,7 +1645,9 @@
         "Official": "Official",
         "Market": "Market",
         "NonOfficial": "Non official"
-      }
+      },
+      "precisionHint": "Up to 12 decimals, kept as typed — a rate below 1 is ordinary: LBP → USD at 89,500 is 0.000011173184.",
+      "inverse": "1 {{to}} = {{value}} {{from}}"
     },
     "currencies": {
       "title": "Currencies",
@@ -1741,7 +1797,26 @@
     },
     "salaryComponents": {
       "tierBand": "Tier {{tier}}: basic salary must be between {{min}} and {{max}} {{currency}}",
-      "noBound": "no bound"
+      "noBound": "no bound",
+      "intro": "A salary changes FROM a date: the value standing until then ends the day before, and the new one starts — so months already paid keep what they paid. A date inside a locked month is refused, with the earliest date that works. Ended rows are history and stay as they are.",
+      "add": "Add component",
+      "addTitle": "Add a salary component",
+      "change": "Change from a date",
+      "changeTitle": "Change {{name}} from a date",
+      "end": "End",
+      "endTitle": "End {{name}}",
+      "endHint": "The component stops after this day. It stays on file for the months it was paid.",
+      "lastDay": "Last day",
+      "startsOn": "Starts on",
+      "status": "Status",
+      "state": {
+        "current": "Current",
+        "scheduled": "Scheduled",
+        "ended": "Ended"
+      },
+      "saved": "Salary saved.",
+      "ended": "Component ended.",
+      "empty": "No salary components yet."
     },
     "reference": {
       "active": "Active",
@@ -1868,6 +1943,10 @@
       "unplacedTitle": "Not placed in the hierarchy",
       "unplaced_one": "This person has no “Reports to” set, so they do not appear in the tree above. Open them and set a manager on their employee form.",
       "unplaced_other": "These people have no “Reports to” set, so they do not appear in the tree above. Open each of them and set a manager on their employee form."
+    },
+    "componentTypes": {
+      "systemBadge": "System",
+      "systemHint": "Payroll writes this type on every payslip: it cannot be renamed, deactivated or deleted."
     }
   },
   "settings": {

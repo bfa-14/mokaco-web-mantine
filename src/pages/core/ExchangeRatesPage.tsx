@@ -16,6 +16,7 @@ import { t } from '../../i18n/t'
 import type { Currency, ExchangeRate } from '../../types/core'
 import { parseDecimal } from '../../components/numeric'
 import type { NumberInputValue } from '../../components/numeric'
+import { formatRate, inverseRate, RATE_DECIMALS } from './rateFormat'
 
 /**
  * The stored rate-type CODES. The label is resolved at render, so the list follows the language —
@@ -62,10 +63,8 @@ function formatDate(value: string): string {
   return value ? value.slice(0, 10) : ''
 }
 
-/** DX format="#,##0.####" — thousands separators, up to four decimals. */
-function formatRate(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 4 })
-}
+/* formatRate: thousands separators and up to 12 decimals — see rateFormat.ts (QA3 CON-9). Four decimals
+   printed an LBP -> USD rate of 1/89,500 as 0. */
 
 /* PORT NOTE: the DevExtreme DataGrid is TanStack Table + Mantine Table per RequestsGrid.tsx;
    SearchPanel, FilterRow and HeaderFilter are all present — search box, filter strip and
@@ -136,7 +135,7 @@ function ExchangeRatesGrid({
       columnHelper.accessor('rate', {
         header: 'Rate',
         cell: (info) => formatRate(info.getValue()),
-        meta: { filterText: formatRate },
+        meta: { filterText: (v: number) => formatRate(v) },
       }),
       // The column, not just the buttons — an "Actions" header over empty cells reads as broken.
       ...(canManage
@@ -605,9 +604,21 @@ export default function ExchangeRatesPage() {
             value={form.rate}
             onChange={(v) => setForm((f) => ({ ...f, rate: v }))}
             min={0}
-            decimalScale={4}
+            decimalScale={RATE_DECIMALS}
             disabled={saving}
           />
+          {/* 12 decimals since script 103 (QA3 CON-9): a rate below 1 is ordinary, and four decimals
+              stored LBP -> USD at 89,500 as 0. The other direction is shown so a slip of the eye is
+              caught before it is saved. */}
+          <p className="hint" style={{ marginTop: 6 }}>
+            {t('core.exchangeRates.precisionHint')}
+            {(() => {
+              const inv = inverseRate(parseDecimal(form.rate))
+              return inv != null && form.fromCurrency && form.toCurrency
+                ? <> {t('core.exchangeRates.inverse', { to: form.toCurrency, from: form.fromCurrency, value: formatRate(inv) })}</>
+                : null
+            })()}
+          </p>
         </div>
 
         {formError && (

@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { ActionIcon, Button, Group, Pagination, Select, Table, Textarea, TextInput } from '@mantine/core'
+import { ActionIcon, Button, Checkbox, Group, Pagination, Select, Table, Textarea, TextInput } from '@mantine/core'
+import { useTranslation } from 'react-i18next'
 import { Modal } from '../../components/dialogs'
 import { IconRefresh, IconSearch } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -13,13 +14,15 @@ import { gridFilterFn, GridFilterRow, optionsFrom } from '../../components/grid/
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
-import { adjustmentsService, payrollRunsService } from '../../services/payrollService'
-import type { PayrollAdjustment, PayrollRunDetail, PayslipRow } from '../../types/payroll'
+import { payrollRunsService } from '../../services/payrollService'
+import type { PayrollRunDetail, PayrollRunStaleness, PayslipRow } from '../../types/payroll'
 import { dateTime } from '../workflow/workflowFormat'
+import {
+  approveBody, canOfferApprove, dayAfter, earlyLockCutoff, isEarlyLock, summarizeStaleness,
+} from './payrollRunRules'
 import './payroll.css'
 
 const EMPTY_SLIPS: PayslipRow[] = []
-const NO_ADJUSTMENTS: PayrollAdjustment[] = []
 const fmt = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -41,23 +44,41 @@ export default function PayrollRunDetailPage() {
      PAYROLL_RUN; approving — which locks the month for ever — is PAYROLL_APPROVE. They are separate
      codes because they are separate acts: the person who prepares the figures is not always the
      person who signs them off, and this page is where that separation either holds or does not. */
-  const { hasPermission } = useAuth()
+  // `t` is the run's totals below; the translation function is `tr` on this page.
+  const { t: tr } = useTranslation()
+  const { hasPermission, user } = useAuth()
   const canRun = hasPermission(PERMISSION.PAYROLL_RUN)
-  const canApprove = hasPermission(PERMISSION.PAYROLL_APPROVE)
+  /* APPROVING IS THE OWNER'S (QA3 PAY-12 / WEB-15). PAYROLL_APPROVE reaches the endpoint — a General
+     Manager holds it to record payments — but usp_PayrollRun_Approve admits the Owner alone, so the
+     button is offered to the Owner and everybody else holding the code is told whose act it is. */
+  const holdsApprove = hasPermission(PERMISSION.PAYROLL_APPROVE)
+  const canApprove = canOfferApprove(user?.roles, holdsApprove)
 
   const [detail, setDetail] = useState<PayrollRunDetail | null>(null)
   const [slips, setSlips] = useState<PayslipRow[]>(EMPTY_SLIPS)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmApprove, setConfirmApprove] = useState(false)
+  /** The Owner ticked "I am locking early" — reset every time the dialog opens. */
+  const [earlyConfirmed, setEarlyConfirmed] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [warningsOnly, setWarningsOnly] = useState(false)
-  /** Adjustments aimed at this period. Fetched only while the run is still open — see below. */
-  const [adjustments, setAdjustments] = useState<PayrollAdjustment[]>(NO_ADJUSTMENTS)
+  /** What changed since the run was generated — the server's own comparison (see below). */
+  const [staleness, setStaleness] = useState<PayrollRunStaleness | null>(null)
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+
+  // A failed read must not take the page down: the banner is an ADVISORY — Approve asks the same
+  // question itself and refuses a stale run with the same names.
+  const refreshStaleness = useCallback(() => {
+    if (!runId) return
+    payrollRunsService
+      .staleness(runId)
+      .then(setStaleness)
+      .catch(() => setStaleness(null))
+  }, [runId])
 
   const refresh = useCallback(() => {
     if (!runId) return
@@ -67,12 +88,17 @@ export default function PayrollRunDetailPage() {
         setSlips(s)
       })
       .catch((e) => setError(getErrorMessage(e)))
-  }, [runId])
+    refreshStaleness()
+  }, [runId, refreshStaleness])
   useEffect(refresh, [refresh])
 
-  // LIVE: another user regenerating or approving this run changes every total on the page. The
-  // pending-adjustments banner re-derives from the same refetch, so it clears itself too.
-  useLive(['payroll'], refresh, useLiveEnabled('payroll'))
+  // LIVE: another user regenerating or approving this run changes every total on the page; the
+  // out-of-date banner re-reads with the same refetch, so it clears itself after a regenerate.
+  const liveOn = useLiveEnabled('payroll')
+  useLive(['payroll'], refresh, liveOn)
+  // ...and it follows what the payslips are computed FROM: a day recorded or decided, a request
+  // approved or taken back, a salary changed. Only the comparison is re-read, not the run.
+  useLive(['attendance', 'workflow', 'hr'], refreshStaleness, liveOn)
 
   const h = detail?.header ?? null
   const t = detail?.totals ?? null
@@ -102,57 +128,30 @@ export default function PayrollRunDetailPage() {
     [slips, warningsOnly],
   )
 
-  /* ── signed corrections that the payslips have not caught up with ──────────
+  /* ── WHAT CHANGED SINCE THE RUN WAS GENERATED (QA3 PAY-5 / REL-3) ───────────────────────────
    *
-   * A payroll adjustment is created by the Owner's signature, NOT by the run — so a correction can
-   * be approved at any moment, including the moment after this run was generated. Nothing breaks
-   * when that happens: the money is simply not in the payslips yet, and stays out of them until
-   * somebody regenerates. That silence is the problem this banner exists to end.
+   * A payslip is computed from many things that keep moving after Generate: a day recorded or decided,
+   * a leave approved or taken back, an advance, an expense, an adjustment signed, a salary changed, a
+   * setting or a tax table edited. The server keeps a fingerprint of everything each payslip was
+   * computed from and compares it with the data now — Approve refuses a run that no longer matches
+   * ("Regenerate the run"), and this banner says so, and names what moved, BEFORE anybody presses it.
+   * (It replaces the page's own guess from adjustment timestamps, which saw adjustments only.)
    *
-   * ONLY WHILE THE RUN IS OPEN. On an approved run the answer is a supplemental, and the lock
-   * banner already points at it; a second amber panel telling the user to regenerate a locked run
-   * would be advice they cannot take.
+   * Only while the run is open and generated: an approved run is history, a cancelled one is gone.
    */
-  const period = h?.periodYearMonth ?? null
-  const generatedAt = h?.generatedAt ?? null
   const isOpen = h?.status === 'Draft' || h?.status === 'Review'
+  const stale = useMemo(
+    () => summarizeStaleness(isOpen && h?.generatedAt ? staleness?.items : null),
+    [staleness, isOpen, h?.generatedAt],
+  )
 
-  useEffect(() => {
-    if (!period || !isOpen) return
-    let cancelled = false
-    adjustmentsService
-      .getForPeriod(period)
-      .then((rows) => { if (!cancelled) setAdjustments(rows) })
-      // A failed read must not take the page down: the banner is an ADVISORY, and its absence is
-      // the same as "nothing pending" from the user's point of view.
-      .catch(() => { if (!cancelled) setAdjustments(NO_ADJUSTMENTS) })
-    return () => { cancelled = true }
-    // generatedAt is a dependency on purpose: regenerating restamps it, which re-runs this fetch,
-    // which is how the banner clears itself after a rebuild rather than being cleared by hand.
-  }, [period, isOpen, generatedAt])
-
-  /**
-   * WHY THE TIMESTAMP, AND NOT appliedToPayslipId ALONE.
-   *
-   * `appliedToPayslipId` is stamped at APPROVAL, not at generation — so every adjustment in an
-   * open run has it null, including the ones already sitting in the payslips. It cannot tell the
-   * two apart. What can, without a new endpoint, is when the row was created: an adjustment created
-   * after the run was last generated is by definition not in that snapshot.
-   *
-   * Both sides are SYSUTCDATETIME() in SQL — PAYROLL_ADJUSTMENT.CreatedAt's default and the
-   * UPDATE that stamps GeneratedAt — so this compares one clock against itself. If either ever
-   * became a local-time call, this banner would start lying by the timezone offset.
-   *
-   * A run never generated has nothing in it, so everything unapplied is pending.
-   */
-  const pending = useMemo(() => {
-    if (!isOpen) return NO_ADJUSTMENTS
-    return adjustments.filter((a) => {
-      if (a.appliedToPayslipId) return false
-      if (!generatedAt) return true
-      return new Date(a.createdAt).getTime() > new Date(generatedAt).getTime()
-    })
-  }, [adjustments, isOpen, generatedAt])
+  /* ── THE EARLY LOCK (QA3 PAY-3) ─────────────────────────────────────────────────────────────────
+   * A primary is locked once its last day is over in Beirut. Before that the procedure refuses unless
+   * the Owner asks for an early lock — so the dialog says what an early lock leaves out (the days after
+   * the run's attendance cut-off are paid as scheduled; anything dated after it, or entered later, is not
+   * paid by this run) and sends the flag only once the Owner ticked that they mean it. */
+  const early = h != null && isEarlyLock(h, new Date())
+  const cutoff = earlyLockCutoff(staleness?.generatedUpTo, new Date())
 
   const columns = useMemo(
     () => [
@@ -289,6 +288,13 @@ export default function PayrollRunDetailPage() {
       {detail!.rates.length > 0 && (
         <div className="pr-card">
           <div className="pr-card-title">Frozen rates — every payslip in this run uses these</div>
+          {/* QA3 REL-11: a Draft re-reads its rates as of the period end at every Generate; from Review on
+              the snapshot is frozen. Say which, so the figures below are read for what they are. */}
+          {(h.status === 'Draft' || h.status === 'Review') && (
+            <div className="pr-muted">
+              {h.status === 'Draft' ? tr('payroll.run.ratesDraft') : tr('payroll.run.ratesFrozen')}
+            </div>
+          )}
           {detail!.rates.map((r) => (
             <div key={`${r.fromCurrency}${r.toCurrency}`}>
               1 {r.toCurrency} = {fmt(1 / r.rate)} {r.fromCurrency} · {r.rateType} · frozen as of{' '}
@@ -334,28 +340,39 @@ export default function PayrollRunDetailPage() {
       {error && <div className="wf-balance-warn">{error}</div>}
 
       {/* THE FACT IS SHOWN TO EVERYONE; THE FIX ONLY TO WHOEVER CAN APPLY IT. A reader without
-          PAYROLL_RUN still needs to know these payslips are missing signed adjustments — that is
-          exactly the kind of thing they are reading the run to find — so the sentence stays and only
-          the Regenerate link goes. */}
-      {pending.length > 0 && (
+          PAYROLL_RUN still needs to know these payslips no longer match their data — that is exactly
+          the kind of thing they are reading the run to find — so the sentence stays and only the
+          Regenerate button goes. */}
+      {stale.isStale && (
         <div className="wf-balance-warn">
-          {pending.length} approved adjustment(s) target {h.periodYearMonth} but are not in the
-          current payslips
+          <b>{tr('payroll.run.staleTitle')}</b>
+          <div>
+            {stale.peopleCount > 0
+              ? tr('payroll.run.staleBody', { count: stale.peopleCount })
+              : tr('payroll.run.staleRunWideOnly')}
+          </div>
+          {stale.people.length > 0 && (
+            <ul style={{ margin: '6px 0' }}>
+              {stale.people.map((p) => (
+                <li key={p.employeeId}>
+                  {p.name}: {p.sources.map((src) => tr(`payroll.run.source.${src}`)).join(', ')}
+                </li>
+              ))}
+              {stale.morePeople > 0 && <li>{tr('payroll.run.staleMore', { count: stale.morePeople })}</li>}
+            </ul>
+          )}
+          {stale.runWide && stale.peopleCount > 0 && <div>{tr('payroll.run.staleRunWide')}</div>}
           {canRun ? (
-            <>
-              {' '}—{' '}
-              <button
-                type="button"
-                className="pr-warn-link"
-                disabled={busy}
-                onClick={() => act(() => payrollRunsService.generate(runId), false)}
-              >
-                Regenerate
-              </button>{' '}
-              to include them.
-            </>
+            <Button
+              size="compact-sm"
+              mt={6}
+              disabled={busy}
+              onClick={() => act(() => payrollRunsService.generate(runId), false)}
+            >
+              {tr('payroll.run.staleRegenerate')}
+            </Button>
           ) : (
-            ' — regenerating the run would include them.'
+            <div className="pr-muted">{tr('payroll.run.staleReaderHint')}</div>
           )}
         </div>
       )}
@@ -405,7 +422,12 @@ export default function PayrollRunDetailPage() {
                 lock" on a month somebody may never approve is an invitation to go looking for the
                 permission to press it. */}
             {canApprove && (
-              <Button disabled={busy} onClick={() => setConfirmApprove(true)}>Approve & lock…</Button>
+              <Button disabled={busy} onClick={() => { setEarlyConfirmed(false); setConfirmApprove(true) }}>
+                Approve & lock…
+              </Button>
+            )}
+            {!canApprove && holdsApprove && (
+              <span className="pr-muted">{tr('payroll.run.awaitingOwner')}</span>
             )}
             {canRun && (
               <Button variant="subtle" disabled={busy} onClick={() => setCancelOpen(true)}>
@@ -522,10 +544,33 @@ export default function PayrollRunDetailPage() {
           reimbursed, advance balances are reduced, and adjustments are consumed. None of it can be
           undone; later corrections go to the next period.
         </p>
+        {early && (
+          <div className="wf-balance-warn">
+            <b>{tr('payroll.run.earlyTitle')}</b>
+            <div>
+              {tr('payroll.run.earlyBody', {
+                period: h.periodYearMonth,
+                end: h.periodEnd.slice(0, 10),
+                next: dayAfter(h.periodEnd),
+                cutoff,
+              })}
+            </div>
+            <Checkbox
+              mt={8}
+              checked={earlyConfirmed}
+              disabled={busy}
+              label={tr('payroll.run.earlyConfirm', { period: h.periodYearMonth })}
+              onChange={(e) => setEarlyConfirmed(e.currentTarget.checked)}
+            />
+          </div>
+        )}
         {error && <div className="wf-balance-warn">{error}</div>}
         <div className="pr-actions">
-          <Button disabled={busy} onClick={() => act(() => payrollRunsService.approve(runId))}>
-            {busy ? 'Approving…' : 'Approve & lock'}
+          <Button
+            disabled={busy || (early && !earlyConfirmed)}
+            onClick={() => act(() => payrollRunsService.approve(runId, approveBody(early, earlyConfirmed)))}
+          >
+            {busy ? 'Approving…' : early ? tr('payroll.run.approveEarly') : 'Approve & lock'}
           </Button>
           <Button variant="subtle" onClick={() => setConfirmApprove(false)}>Back</Button>
         </div>

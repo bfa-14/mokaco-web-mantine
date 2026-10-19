@@ -49,6 +49,7 @@ import WorkflowOversightPage from './pages/workflow/WorkflowOversightPage'
 import PayrollRunsPage from './pages/payroll/PayrollRunsPage'
 import PayrollRunDetailPage from './pages/payroll/PayrollRunDetailPage'
 import PayslipPage from './pages/payroll/PayslipPage'
+import MyPayslipsPage from './pages/payroll/MyPayslipsPage'
 import AdvancesPage from './pages/payroll/AdvancesPage'
 import AdjustmentsPage from './pages/payroll/AdjustmentsPage'
 import TiersCeilingsPage from './pages/payroll/TiersCeilingsPage'
@@ -220,8 +221,9 @@ export default function App() {
                       element={guard('/attendance/devices', <DevicesPage />)}
                     />
 
-                    {/* Payroll — PayrollController gates its whole class on PAYROLL_RUN, so every
-                        one of these needs it, deep links to a run or a payslip included. */}
+                    {/* Payroll — every read is PAYROLL_VIEW (QA3 PAY-12), the writes gate buttons. The
+                        payslip DOCUMENT is open: its employee reads it once the month is approved, and the
+                        server answers 403 for anybody else's (OPEN_ROUTES). */}
                     <Route path="/payroll" element={<Navigate to="/payroll/runs" replace />} />
                     <Route
                       path="/payroll/runs"
@@ -231,10 +233,7 @@ export default function App() {
                       path="/payroll/runs/:id"
                       element={guard('/payroll/runs/:id', <PayrollRunDetailPage />)}
                     />
-                    <Route
-                      path="/payroll/payslips/:id"
-                      element={guard('/payroll/payslips/:id', <PayslipPage />)}
-                    />
+                    <Route path="/payroll/payslips/:id" element={<PayslipPage />} />
                     <Route
                       path="/payroll/advances"
                       element={guard('/payroll/advances', <AdvancesPage />)}
@@ -319,6 +318,8 @@ export default function App() {
                     />
 
                     <Route path="/profile" element={<MyProfilePage />} />
+                    {/* Open on purpose (OPEN_ROUTES): everybody is paid, so everybody may look. */}
+                    <Route path="/my-payslips" element={<MyPayslipsPage />} />
                     {/* Open on purpose (OPEN_ROUTES): the Preferences tab — the language switch —
                         must reach everybody. The page renders No access for its system tabs. */}
                     <Route path="/settings" element={<SettingsPage />} />

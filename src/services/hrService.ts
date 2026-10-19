@@ -33,9 +33,6 @@ import type {
   OrgTreeNode,
   Position,
   ReportingLineEntry,
-  SalaryComponent,
-  SalaryComponentCreateRequest,
-  SalaryComponentUpdateRequest,
   EmployeeSalaryComponent,
   SalaryComponentSetRequest,
   SwapCounterparts,
@@ -383,31 +380,18 @@ export const approvalTiersService = {
     apiRequest<void>(`/api/hr/approval-tiers/${tierNo}`, { method: 'DELETE' }),
 }
 
-export const salaryComponentsService = {
-  getByEmployee: (employeeId: number) =>
-    apiRequest<SalaryComponent[]>(
-      `/api/salary-components/by-employee/${employeeId}`,
-    ),
-  create: (request: SalaryComponentCreateRequest) =>
-    apiRequest<{ salaryComponentId: number }>('/api/salary-components', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    }),
-  update: (id: number, request: SalaryComponentUpdateRequest) =>
-    apiRequest<void>(`/api/salary-components/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(request),
-    }),
-  remove: (id: number) =>
-    apiRequest<void>(`/api/salary-components/${id}`, { method: 'DELETE' }),
-}
+/*
+ * THE RAW SALARY-ROW WRITES ARE GONE (QA3 PAY-6 / REL-2). salaryComponentsService used to POST / PUT /
+ * DELETE /api/salary-components: insert, edit in place and hard-delete, with no locked-month check and
+ * the standing row never closed — a raise was paid on top of the old salary. The API has retired those
+ * routes; a salary changes only through salaryAdminService below.
+ */
 
 /**
- * SALARY ADMINISTRATION — the history-preserving path, and the one the Salaries page uses.
+ * SALARY ADMINISTRATION — the history-preserving path, and the one the employee's Salary tab uses.
  *
- * Distinct from {@link salaryComponentsService} above, which edits a row in place. These three
- * never rewrite history: `set` closes the standing row the day before and opens a new one, and
- * `end` closes a row on a date rather than erasing it.
+ * The ONLY way a salary changes. These never rewrite history: `set` closes the standing row the
+ * day before and opens a new one, and `end` closes a row on a date rather than erasing it.
  *
  * Both writes RETURN the employee's rows as they now stand, so a page can render the result of its
  * own change without a second fetch — and without a window where the screen and the truth differ.

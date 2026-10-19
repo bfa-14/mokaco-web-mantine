@@ -127,6 +127,47 @@ export interface PayrollRunEvent {
   detail: string | null
 }
 
+/**
+ * POST /api/payroll/runs/{id}/approve — the body is optional (QA3 PAY-3). `allowEarlyLock` is the Owner's
+ * explicit answer to "lock this month before its last day is over?"; without it the procedure refuses.
+ */
+export interface PayrollRunApproveRequest {
+  allowEarlyLock: boolean
+}
+
+/**
+ * What a payslip was computed from, by source (usp_PayrollRun_GetStaleness, script 103). 'Missing' = the
+ * employee belongs in the run now and has no payslip; 'NotInRun' = has a payslip and no longer belongs;
+ * 'Settings' = a run-wide input (settings, NSSF / tax tables, component or leave types, holidays, roster
+ * approvals, the run's rates) — its employee is null.
+ */
+export type PayrollRunStaleSource =
+  | 'Employee' | 'Salary' | 'Attendance' | 'Roster' | 'Leave' | 'Overtime' | 'Tips' | 'Expenses'
+  | 'Adjustments' | 'Advances' | 'Separation' | 'Payout' | 'Missing' | 'NotInRun' | 'Settings'
+
+export interface PayrollRunStaleInput {
+  employeeId: number | null
+  employeeName: string | null
+  source: PayrollRunStaleSource
+}
+
+/**
+ * GET /api/payroll/runs/{id}/staleness (QA3 PAY-5 / REL-3) — the comparison Approve makes before it locks,
+ * readable before anybody presses Approve. `items` is empty when nothing changed (and always for a run
+ * that is not open).
+ */
+export interface PayrollRunStaleness {
+  payrollRunId: number
+  status: PayrollRunStatus
+  runType: PayrollRunType
+  periodEnd: string
+  generatedAt: string | null
+  /** The last COMPLETED day the last generation counted; later days are paid as scheduled. */
+  generatedUpTo: string | null
+  lockedEarly: boolean | null
+  items: PayrollRunStaleInput[]
+}
+
 export interface PayrollRunCreated {
   payrollRunId: number
   periodYearMonth: string
