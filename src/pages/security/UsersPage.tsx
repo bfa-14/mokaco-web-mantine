@@ -17,6 +17,7 @@ import type {
   UserSignatureInfo,
 } from '../../types/security'
 import { SignatureThumb } from './SignatureThumb'
+import { dateTime } from '../workflow/workflowFormat'
 import { SignatureDialog } from './SignatureDialog'
 
 interface CreateFormState {
@@ -78,9 +79,10 @@ function notify(message: string, type: 'success' | 'error', ms: number) {
   notifications.show({ message, color: type === 'success' ? 'green' : 'red', autoClose: ms })
 }
 
-/** DevExtreme's dataType="datetime" rendering, by hand: locale string, blank for null. */
+/** DevExtreme's dataType="datetime" rendering, by hand: locale string, blank for null. The value is
+    UTC with no zone on the wire, which dateTime() reads as UTC (QA3 WEB-11). */
 function dateTimeCell(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : ''
+  return value ? dateTime(value) : ''
 }
 
 /* PORT NOTE: the grid's SearchPanel, FilterRow and HeaderFilter are all present — search box,

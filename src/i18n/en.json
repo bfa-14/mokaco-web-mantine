@@ -1561,6 +1561,24 @@
       "removed": "{{name}} removed.",
       "allHaveLogin": "Every employee has a login.",
       "empty": "No employees found."
+    },
+    "documents": {
+      "hint": "Files are stored on the server; type and size are detected automatically.",
+      "upload": "Upload Document",
+      "uploading": "Uploading…",
+      "uploaded": "\"{{name}}\" uploaded.",
+      "download": "Download",
+      "deleteTitle": "Confirm delete",
+      "deleteBody": "Delete <name>{{name}}</name>?",
+      "deleted": "Deleted.",
+      "empty": "No documents yet.",
+      "cols": {
+        "file": "File",
+        "type": "Type",
+        "size": "Size",
+        "uploaded": "Uploaded",
+        "actions": "Actions"
+      }
     }
   },
   "settings": {

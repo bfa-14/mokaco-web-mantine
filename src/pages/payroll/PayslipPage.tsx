@@ -6,6 +6,7 @@ import { IconPrinter } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
 import { payslipsService } from '../../services/payrollService'
 import type { PayslipDetail, PayslipLine } from '../../types/payroll'
+import { fmtLocalDate } from '../hr/hrFormat'
 import './payroll.css'
 
 const METHODS = ['Bank', 'Cash']
@@ -102,7 +103,7 @@ export default function PayslipPage() {
           </div>
           <div className="pr-doc-period">
             <div>Payslip · {p.periodYearMonth}</div>
-            {p.lockedAt && <div className="pr-muted">Approved &amp; locked {new Date(p.lockedAt).toLocaleDateString()}</div>}
+            {p.lockedAt && <div className="pr-muted">Approved &amp; locked {fmtLocalDate(p.lockedAt)}</div>}
           </div>
         </div>
 
@@ -161,7 +162,7 @@ export default function PayslipPage() {
 
         {p.paidAt ? (
           <div className="pr-paid">Paid by {p.paymentMethod}
-            {p.paymentReference ? <> · ref {p.paymentReference}</> : null} · {new Date(p.paidAt).toLocaleDateString()}</div>
+            {p.paymentReference ? <> · ref {p.paymentReference}</> : null} · {fmtLocalDate(p.paidAt)}</div>
         ) : p.runStatus === 'Approved' ? (
           <div className="pr-payment no-print">
             <div className="pr-card-title">Record payment</div>
