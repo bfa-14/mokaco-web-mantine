@@ -534,7 +534,8 @@
       "workingDays_one": "{{value}} of the balance",
       "workingDays_other": "{{value}} of the balance",
       "costNothing": "— working days only: of the {{calendar}} calendar day(s), {{rest}} rest day(s) and {{holidays}} public holiday(s) cost nothing.",
-      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays."
+      "noWorkingDay": "These dates contain no working day for this employee — only rest days and public holidays.",
+      "overBalancePending": "That is more than the {{days}} left of the {{type}} balance once the {{pending}} already asked for in requests still waiting are counted. The request will be refused unless the company allows a negative balance."
     },
     "tip": {
       "branchPlaceholder": "Which branch?",
@@ -1454,7 +1455,14 @@
       "colExpired": "Expired",
       "nothingToDo": "Nothing to do — every employee was already opened for {{year}}.",
       "prorated_one": "{{count}} employee was hired part way through the year, so their grant is proportional.",
-      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional."
+      "prorated_other": "{{count}} employees were hired part way through the year, so their grants are proportional.",
+      "undo": "Undo this year's opening",
+      "undoExplain": "Takes back what opening {{year}} wrote for every employee — the entitlement, the carry-over, the close of last year and any expiry that followed — so the year can be opened again after the grid or a hire date was corrected. Refused once leave of {{year}} was used in a period already paid.",
+      "undoConfirm": "Undo the opening",
+      "undoing": "Undoing…",
+      "undoDone_one": "The opening of {{year}} was taken back for {{count}} employee ({{movements}} ledger movements). Open the year again when the grid is right.",
+      "undoDone_other": "The opening of {{year}} was taken back for {{count}} employees ({{movements}} ledger movements). Open the year again when the grid is right.",
+      "undoNothing": "Nothing to undo — {{year}} was not opened for anybody yet."
     },
     "leavePolicy": {
       "fixedFromTiers": "Days come from this type's tiers — fixed entitlement does not apply.",
