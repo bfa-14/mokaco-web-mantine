@@ -26,7 +26,7 @@ import { PERMISSION } from '../../auth/routeAccess'
 import { leavePolicyService, leaveTypesService } from '../../services/hrService'
 import { fmtNumber } from './hrFormat'
 import type { NumberInputValue } from '../../components/numeric'
-import { parseRowCells } from '../../components/decimalInputs'
+import { parseBoundedDecimal, parseRowCells } from '../../components/decimalInputs'
 import type { LeavePolicy, LeaveType, LeaveYearOpenSummary, LeaveYearUndoSummary } from '../../types/hr'
 
 /**
@@ -55,8 +55,11 @@ interface TypeForm {
   requiresCertificate: boolean
   minServiceMonthsToUse: number
   noticePreferredDays: number
-  /** Null is a real value here — "this type has no fixed entitlement" — not an empty field. */
-  fixedEntitlementDays: number | null
+  /**
+   * Null (or a blank box) is a real value here — "this type has no fixed entitlement". Held as the box
+   * hands it over and converted once at save (trap 6: "1." must not empty the box, or 1.5 saves as 5).
+   */
+  fixedEntitlementDays: NumberInputValue | null
 }
 
 function toForm(t: LeaveType): TypeForm {
@@ -261,6 +264,11 @@ export default function LeavePolicyPage() {
       setFormError(t('hr.leavePolicy.nameRequired'))
       return
     }
+    const fixedDays = parseBoundedDecimal(fixedEntitlementDays, 0, 366)
+    if (fixedDays === 'invalid') {
+      setFormError(t('hr.leavePolicy.fixedInvalid'))
+      return
+    }
     setFormError(null)
     const payload = {
       name: form.name.trim(),
@@ -272,10 +280,10 @@ export default function LeavePolicyPage() {
       // The DERIVED figure, so a type that has grown tiers since its entitlement was set actually
       // loses that entitlement on the next save instead of keeping a figure the field no longer
       // shows and nothing consults.
-      fixedEntitlementDays,
+      fixedEntitlementDays: fixedDays,
       // Null here means "no fixed entitlement", NOT "leave alone" — say so explicitly, or the
       // preserve rule on the server would keep the old figure forever.
-      clearFixedEntitlement: fixedEntitlementDays == null,
+      clearFixedEntitlement: fixedDays == null,
     }
 
     setSaving(true)
@@ -512,9 +520,7 @@ export default function LeavePolicyPage() {
                     step={1}
                     placeholder={fixedEntitlementBlockedBy != null ? '' : 'None'}
                     disabled={locked || fixedEntitlementBlockedBy != null}
-                    onChange={(v) =>
-                      patch({ fixedEntitlementDays: typeof v === 'number' ? v : null })
-                    }
+                    onChange={(v) => patch({ fixedEntitlementDays: v })}
                   />
                   <div className="hint">
                     {fixedEntitlementBlockedBy === 'unpaid'

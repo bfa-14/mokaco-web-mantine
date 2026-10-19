@@ -1693,6 +1693,7 @@
     "leavePolicy": {
       "fixedFromTiers": "Days come from this type's tiers — fixed entitlement does not apply.",
       "fixedUnpaid": "Unpaid leave has no entitlement.",
+      "fixedInvalid": "Fixed entitlement: enter a number of days from 0 to 366, or leave it empty for none.",
       "nameRequired": "Give the leave type a name."
     },
     "leaveBalance": {
