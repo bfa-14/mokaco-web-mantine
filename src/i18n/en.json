@@ -1373,7 +1373,30 @@
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",
-      "rejectionEndsHint": "Off = the rejection is recorded as advice and the request continues"
+      "rejectionEndsHint": "Off = the rejection is recorded as advice and the request continues",
+      "title": "Roles",
+      "subtitle": "Roles group permissions. Assign them on the Role Permissions page.",
+      "new": "New Role",
+      "create": "Create Role",
+      "editTitle": "Edit Role",
+      "edit": "Edit role",
+      "name": "Role name",
+      "nameRequired": "Role name is required",
+      "created": "Role \"{{name}}\" created.",
+      "updated": "Role \"{{name}}\" updated.",
+      "expand": "Expand role",
+      "collapse": "Collapse role",
+      "systemLocked": "System roles cannot be renamed",
+      "noWorkflowSettings": "Workflow settings are unavailable for this role.",
+      "empty": "No roles found.",
+      "cols": {
+        "id": "ID",
+        "name": "Name",
+        "system": "System",
+        "created": "Created",
+        "modified": "Modified",
+        "actions": "Actions"
+      }
     },
     "profile": {
       "title": "My profile",
@@ -1404,6 +1427,37 @@
       "mismatch": "These two do not match.",
       "changing": "Changing…",
       "changed": "Password changed."
+    },
+    "users": {
+      "title": "Users",
+      "subtitle": "Manage HRMS user accounts.",
+      "new": "New User",
+      "create": "Create User",
+      "empty": "No users found.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "none": "None",
+      "activated": "{{name}} activated.",
+      "deactivated": "{{name}} deactivated.",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "created": "User \"{{name}}\" created.",
+      "rolesSaved": "Roles for \"{{name}}\" saved.",
+      "rolesHint": "Change which roles this user holds.",
+      "signatureHint": "Upload or change this user's signature image.",
+      "rolesPlaceholder": "Select roles…",
+      "rolesTitle": "Roles — {{name}}",
+      "rolesNotCarried": "The list did not carry this user's current roles, so the picker starts empty; what you save here becomes the full set.",
+      "saveRoles": "Save roles",
+      "cols": {
+        "id": "ID",
+        "employee": "Employee",
+        "roles": "Roles",
+        "active": "Active",
+        "lastLogin": "Last Login",
+        "signature": "Signature",
+        "actions": "Actions"
+      }
     }
   },
   "core": {
@@ -1423,6 +1477,27 @@
         "Market": "Market",
         "NonOfficial": "Non official"
       }
+    },
+    "currencies": {
+      "title": "Currencies",
+      "subtitle": "Currencies the system understands (money is always amount + currency).",
+      "new": "New",
+      "newTitle": "New Currency",
+      "editTitle": "Edit Currency",
+      "create": "Create",
+      "code": "Code",
+      "codeLabel": "Code (3 letters)",
+      "name": "Name",
+      "decimals": "Decimals",
+      "decimalPlaces": "Decimal places",
+      "empty": "No currencies found.",
+      "deleteConfirm": "Delete currency {{code}} ({{name}})? Its exchange rates are deleted with it.",
+      "deleted": "Deleted.",
+      "saved": "Saved.",
+      "created": "Created.",
+      "codeRequired": "Code is required",
+      "codeLength": "Code must be 3 letters",
+      "nameRequired": "Name is required"
     }
   },
   "hr": {
@@ -1610,6 +1685,56 @@
         "uploaded": "Uploaded",
         "actions": "Actions"
       }
+    },
+    "accounts": {
+      "title": "Employee accounts",
+      "subtitle": "Which login each employee signs in with.",
+      "help": "The workflow resolves approvers by their login. An employee with no account cannot raise a request, and a branch manager with no active account cannot approve — so every branch-manager step for their branch is skipped. Linking an existing account fixes that. To CREATE an account, use the Users page; this screen only connects existing ones to people.",
+      "brokenManagers_one": "{{count}} branch manager has no usable login. Approvals needing a branch manager will be skipped for their branch until you link an active account or set a different manager.",
+      "brokenManagers_other": "{{count}} branch managers have no usable login. Approvals needing a branch manager will be skipped for their branches until you link an active account or set a different manager.",
+      "missingLogin_one": "{{count}} employee still has no login and cannot raise requests.",
+      "missingLogin_other": "{{count}} employees still have no login and cannot raise requests.",
+      "waiting_one": "{{count}} request was waiting on this person and can no longer be signed by them.",
+      "waiting_other": "{{count}} requests were waiting on this person and can no longer be signed by them.",
+      "linked": "{{name}} now signs in as {{username}}.",
+      "unlinked": "{{name}} is no longer linked to a login.",
+      "viewOnly": "View only",
+      "changeAccount": "Change account",
+      "linkAccount": "Link account",
+      "unlink": "Unlink",
+      "empty": "No active employees.",
+      "changeTitle": "Change account · {{name}}",
+      "linkTitle": "Link account · {{name}}",
+      "unlinkTitle": "Unlink account · {{name}}",
+      "changeHint": "This changes which login {{name}} signs in with. Requests they raised in the past are not affected.",
+      "noUnlinked": "No unlinked accounts.",
+      "noUnlinkedHint": "Every account is already linked to someone. Create one first.",
+      "goToUsers": "Go to Users",
+      "account": "Account",
+      "disabledOption": "{{name}} — disabled",
+      "searchAccounts": "Search accounts…",
+      "onlyUnlinked": "Only accounts not yet linked to anyone are listed, so you cannot pick one that is already taken.",
+      "unlinkBody": "<name>{{name}}</name> will no longer be able to sign in or raise requests. Requests they already raised are not affected.",
+      "managesBranch": "They manage {{branch}}. Branch-manager approvals for that branch will be skipped until you link them again or set a different manager.",
+      "unlinking": "Unlinking…",
+      "unlinkAccount": "Unlink account",
+      "notLinked": "Not linked",
+      "accountDisabled": "{{username}} — account disabled"
+    },
+    "orgChart": {
+      "title": "Org chart",
+      "subtitle": "Who reports to whom, across the company.",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "help": "Each person sits under their manager. A line-manager approval step climbs this tree from the requester. Click anyone to open their record; to change a reporting line, edit them and set their “Reports to”.",
+      "open": "Open {{name}}",
+      "showReports": "Show who reports to {{name}}",
+      "hideReports": "Hide who reports to {{name}}",
+      "empty": "No employees to chart yet.",
+      "emptyHint": "Add employees and set who they report to, and the tree will build itself.",
+      "unplacedTitle": "Not placed in the hierarchy",
+      "unplaced_one": "This person has no “Reports to” set, so they do not appear in the tree above. Open them and set a manager on their employee form.",
+      "unplaced_other": "These people have no “Reports to” set, so they do not appear in the tree above. Open each of them and set a manager on their employee form."
     }
   },
   "settings": {

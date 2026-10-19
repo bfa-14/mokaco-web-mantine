@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getExpandedRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, ExpandedState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, Select, Table, TextInput } from '@mantine/core'
@@ -53,6 +54,7 @@ const ROLE_WIDTHS: Record<string, number | undefined> = {
 const PAGE_SIZES = ['10', '25', '50']
 
 export default function RolesPage() {
+  const { t } = useTranslation()
   const [roles, setRoles] = useState<Role[]>([])
   // Workflow-behaviour data, keyed by roleId. signature-requirements covers every role (approver +
   // signature flags); rejection-behaviour covers only approver roles, so a missing entry is the
@@ -129,7 +131,7 @@ export default function RolesPage() {
     const trimmed = name.trim()
     // The RequiredRule's work, done by hand now the Validator is gone.
     if (!trimmed) {
-      setFormError('Role name is required')
+      setFormError(t('security.roles.nameRequired'))
       return
     }
     setFormError(null)
@@ -137,10 +139,10 @@ export default function RolesPage() {
     try {
       if (editingRole) {
         await rolesService.updateRole(editingRole.roleId, trimmed)
-        notify(`Role "${trimmed}" updated.`, 'success', 2500)
+        notify(t('security.roles.updated', { name: trimmed }), 'success', 2500)
       } else {
         await rolesService.createRole(trimmed)
-        notify(`Role "${trimmed}" created.`, 'success', 2500)
+        notify(t('security.roles.created', { name: trimmed }), 'success', 2500)
       }
       setPopupVisible(false)
       await loadRoles()
@@ -161,7 +163,7 @@ export default function RolesPage() {
           <ActionIcon
             variant="subtle"
             size="sm"
-            aria-label={info.row.getIsExpanded() ? 'Collapse role' : 'Expand role'}
+            aria-label={info.row.getIsExpanded() ? t('security.roles.collapse') : t('security.roles.expand')}
             onClick={info.row.getToggleExpandedHandler()}
           >
             {info.row.getIsExpanded() ? (
@@ -172,33 +174,36 @@ export default function RolesPage() {
           </ActionIcon>
         ),
       }),
-      columnHelper.accessor('roleId', { header: 'ID' }),
-      columnHelper.accessor('name', { header: 'Name' }),
+      columnHelper.accessor('roleId', { header: t('security.roles.cols.id') }),
+      columnHelper.accessor('name', { header: t('security.roles.cols.name') }),
       // A user-defined role prints an EMPTY cell here, so only 'System' is on offer — picking it
       // is the one useful narrowing, and the cleared filter is "all roles".
       columnHelper.accessor('isSystem', {
-        header: 'System',
+        header: t('security.roles.cols.system'),
         cell: (info) =>
           info.row.original.isSystem ? (
-            <span className="badge badge--muted">System</span>
+            <span className="badge badge--muted">{t('security.roles.cols.system')}</span>
           ) : (
             ''
           ),
-        meta: { filterText: (v) => (v ? 'System' : ''), filterOptions: ['System'] },
+        meta: {
+          filterText: (v) => (v ? t('security.roles.cols.system') : ''),
+          filterOptions: [t('security.roles.cols.system')],
+        },
       }),
       columnHelper.accessor('createdAt', {
-        header: 'Created',
+        header: t('security.roles.cols.created'),
         cell: (info) => dateTimeCell(info.getValue()),
         meta: { filterText: dateTimeCell },
       }),
       columnHelper.accessor('modifiedAt', {
-        header: 'Modified',
+        header: t('security.roles.cols.modified'),
         cell: (info) => dateTimeCell(info.getValue()),
         meta: { filterText: dateTimeCell },
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: t('security.roles.cols.actions'),
         cell: (info) => {
           const role = info.row.original
           return (
@@ -207,18 +212,16 @@ export default function RolesPage() {
               size="compact-sm"
               leftSection={<IconPencil size={14} />}
               disabled={role.isSystem}
-              title={
-                role.isSystem ? 'System roles cannot be renamed' : 'Edit role'
-              }
+              title={role.isSystem ? t('security.roles.systemLocked') : t('security.roles.edit')}
               onClick={() => openEdit(role)}
             >
-              Edit
+              {t('common.edit')}
             </Button>
           )
         },
       }),
     ],
-    [openEdit],
+    [openEdit, t],
   )
 
   const table = useReactTable({
@@ -255,7 +258,7 @@ export default function RolesPage() {
     if (!sig) {
       return (
         <p className="hint" style={{ margin: 0 }}>
-          Workflow settings are unavailable for this role.
+          {t('security.roles.noWorkflowSettings')}
         </p>
       )
     }
@@ -273,23 +276,21 @@ export default function RolesPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Roles</h1>
-          <p className="page-subtitle">
-            Roles group permissions. Assign them on the Role Permissions page.
-          </p>
+          <h1 className="page-title">{t('security.roles.title')}</h1>
+          <p className="page-subtitle">{t('security.roles.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={18} />
           </ActionIcon>
           <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-            New Role
+            {t('security.roles.new')}
           </Button>
         </div>
       </div>
@@ -310,7 +311,7 @@ export default function RolesPage() {
             <TextInput
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search"
+              placeholder={t('common.search')}
               leftSection={<IconSearch size={14} />}
               w={240}
               size="xs"
@@ -344,7 +345,7 @@ export default function RolesPage() {
                 <Table.Tr>
                   <Table.Td colSpan={columns.length}>
                     <div className="empty-hint" style={{ padding: 16 }}>
-                      No roles found.
+                      {t('security.roles.empty')}
                     </div>
                   </Table.Td>
                 </Table.Tr>
@@ -375,8 +376,11 @@ export default function RolesPage() {
 
           <Group justify="space-between" mt="xs">
             <span className="hint" style={{ margin: 0 }}>
-              {total === 0 ? 0 : pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, total)} of {total}
+              {t('common.pageInfo', {
+                from: total === 0 ? 0 : pageIndex * pageSize + 1,
+                to: Math.min((pageIndex + 1) * pageSize, total),
+                total,
+              })}
             </span>
             <Group gap="xs">
               <Select
@@ -400,13 +404,13 @@ export default function RolesPage() {
       <Modal
         opened={popupVisible}
         onClose={() => setPopupVisible(false)}
-        title={editingRole ? 'Edit Role' : 'New Role'}
+        title={editingRole ? t('security.roles.editTitle') : t('security.roles.new')}
         size={400}
         centered
       >
         <div className="form-field">
           <label className="form-label" htmlFor="role-name">
-            Role name
+            {t('security.roles.name')}
           </label>
           <TextInput
             id="role-name"
@@ -428,10 +432,10 @@ export default function RolesPage() {
             onClick={() => setPopupVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? 'Saving…' : editingRole ? 'Save' : 'Create Role'}
+            {saving ? t('common.saving') : editingRole ? t('common.save') : t('security.roles.create')}
           </Button>
         </div>
       </Modal>
