@@ -18,12 +18,12 @@ import type { RoomCatalog } from '../../types/booking'
 import {
   dayOfWeek,
   hhmm,
-  minutesOf,
   money,
   today,
   weekdayName,
   withSeconds,
 } from './bookingShared'
+import { addClock, closeMinOf, formSpan } from './bookingTimes'
 
 /**
  * Take a booking by hand — the manual half of the same procedure the website posts to.
@@ -34,11 +34,16 @@ import {
  * simple (rate × hours, plus add-ons, deposit is a percentage) — but where they ever disagree, the
  * server wins, and the confirmation notification quotes what came back rather than what was shown.
  *
+ * THE NIGHT RUNS PAST MIDNIGHT (QA3 BKG-2): an end at or before the start is the next morning, up to
+ * 06:00 — 22:00 → 01:00 is a three-hour booking, as the API reads it — and a start after midnight is
+ * the NEXT date's (the calendar fills the date in when such a slot is clicked).
+ *
  * OPENING HOURS ARE OFFERED, NOT ENFORCED. The day's open/close are pushed into the time inputs as
- * min/max and named in a hint, because a form that lets you type 03:00 and then refuses is worse
- * than one that steers. The actual refusal is still the server's — the room could be closed, the
- * slot taken a second ago, or the length outside the room's min/max — and it arrives as a sentence
- * this dialog shows verbatim.
+ * min/max (only when the room closes the same day: 07:00–01:00 is no range a time input can hold) and
+ * named in a hint, because a form that lets you type 03:00 and then refuses is worse than one that
+ * steers. The actual refusal is still the server's — the room could be closed, the slot taken a second
+ * ago, or the length outside the room's min/max — and it arrives as a sentence this dialog shows
+ * verbatim.
  *
  * ADD-ONS ARE A Checkbox.Group, NOT ONE HANDLER PER BOX. Mantine hands the group's onChange the full
  * list of checked values, so there is no event object to read late. The first version read
@@ -102,7 +107,7 @@ export function NewBookingModal({
     setRoomId(room)
     setBookDate(initialDate ?? today())
     setStartTime(initialStart ?? '09:00')
-    setEndTime(initialEnd ?? (initialStart ? shiftHour(initialStart) : '10:00'))
+    setEndTime(initialEnd ?? (initialStart ? addClock(initialStart, 60) : '10:00'))
     setPersons(catalog.rooms.find((r) => r.roomId === room)?.minPersons ?? 1)
     setGuestName('')
     setGuestPhone('')
@@ -128,8 +133,15 @@ export function NewBookingModal({
     [catalog.addons, roomId],
   )
 
-  /** Duration in hours. Negative or zero is a real state here — the form guards on it below. */
-  const hours = (minutesOf(endTime) - minutesOf(startTime)) / 60
+  /** The span the times mean — 22:00 → 01:00 is 1320–1500 — or null when they mean none. */
+  const span = formSpan(startTime, endTime)
+
+  /** Duration in hours; zero when the times mean no span — the form guards on it below. */
+  const hours = span ? (span.end - span.start) / 60 : 0
+
+  /** Does the chosen day close after midnight? Then the time inputs carry no min/max. */
+  const closesNextMorning =
+    !!dayHours && !dayHours.isClosed && closeMinOf(dayHours.closeTime) >= 1440
 
   /** The preview. See the class remark: an echo of the server's sum, not the source of it. */
   const preview = useMemo(() => {
@@ -283,8 +295,8 @@ export function NewBookingModal({
               id="bk-new-start"
               type="time"
               value={startTime}
-              min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
-              max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
+              min={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.openTime) : undefined}
+              max={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.closeTime) : undefined}
               onChange={(e) => setStartTime(e.currentTarget.value)}
             />
           </div>
@@ -297,8 +309,8 @@ export function NewBookingModal({
               id="bk-new-end"
               type="time"
               value={endTime}
-              min={dayHours && !dayHours.isClosed ? hhmm(dayHours.openTime) : undefined}
-              max={dayHours && !dayHours.isClosed ? hhmm(dayHours.closeTime) : undefined}
+              min={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.openTime) : undefined}
+              max={dayHours && !dayHours.isClosed && !closesNextMorning ? hhmm(dayHours.closeTime) : undefined}
               onChange={(e) => setEndTime(e.currentTarget.value)}
             />
           </div>
@@ -308,7 +320,7 @@ export function NewBookingModal({
                 nullable does not narrow it, so the compiler still needs to see the check here. */}
             {dayHours && !dayHours.isClosed ? (
               <div className="hint">
-                {t('booking.new.hoursHint', {
+                {t(closesNextMorning ? 'booking.new.hoursHintNextMorning' : 'booking.new.hoursHint', {
                   day: weekdayName(bookDate),
                   open: hhmm(dayHours.openTime),
                   close: hhmm(dayHours.closeTime),
@@ -319,8 +331,16 @@ export function NewBookingModal({
                 {t('booking.new.closedDay', { day: weekdayName(bookDate) })}
               </div>
             )}
-            {hours <= 0 && (
+            {!span && (
               <div className="hint">{t('booking.new.endAfterStart')}</div>
+            )}
+            {span && span.end > 1440 && (
+              <div className="hint">
+                {t('booking.new.nextMorning', {
+                  end: hhmm(endTime),
+                  hours: (span.end - span.start) / 60,
+                })}
+              </div>
             )}
           </div>
 
@@ -432,14 +452,6 @@ export function NewBookingModal({
       </FormErrorBoundary>
     </Modal>
   )
-}
-
-/** 'HH:mm' one hour later, clamped to 23:59 so a 23:30 slot still produces a valid end. */
-function shiftHour(value: string): string {
-  const total = Math.min(23 * 60 + 59, minutesOf(value) + 60)
-  const hours = Math.floor(total / 60)
-  const minutes = total % 60
-  return `${`${hours}`.padStart(2, '0')}:${`${minutes}`.padStart(2, '0')}`
 }
 
 /** Money rounding, matching the procedure's ROUND(x, 2) so the preview does not drift by a cent. */
