@@ -73,7 +73,7 @@ export interface CreateUserRequest {
 
 /** A role — GET /api/roles (mirrors backend Role). */
 /**
- * An account as a pick-list entry — GET /api/users/names (signed-in, no permission): active accounts
+ * An account as a pick-list entry — GET /api/users/names (WORKFLOW_CONFIGURE, the chain builder's): active accounts
  * only, with nothing about how they are used. The chain builder's "which user" box (QA3).
  */
 export interface UserPickItem {
@@ -82,7 +82,7 @@ export interface UserPickItem {
   employeeName: string | null
 }
 
-/** A role as a pick-list entry — GET /api/roles/names (signed-in, no permission). */
+/** A role as a pick-list entry — GET /api/roles/names (WORKFLOW_CONFIGURE, the chain builder's). */
 export interface RolePickItem {
   roleId: number
   name: string

@@ -21,8 +21,8 @@ export const usersService = {
   },
 
   /**
-   * The ACTIVE accounts as a pick-list (id, username, employee name) — signed-in users only, NOT
-   * USER_MANAGE. For pickers on pages whose holders need not manage users (the chain builder).
+   * The ACTIVE accounts as a pick-list (id, username, employee name) — WORKFLOW_CONFIGURE, NOT
+   * USER_MANAGE: the chain builder's picker, whose holders need not manage users.
    */
   names(): Promise<UserPickItem[]> {
     return apiRequest<UserPickItem[]>('/api/users/names')
@@ -68,7 +68,7 @@ export const rolesService = {
     return apiRequest<Role[]>('/api/roles')
   },
 
-  /** Every role as a pick-list (id, name) — signed-in users only, NOT ROLE_MANAGE (the chain builder). */
+  /** Every role as a pick-list (id, name) — WORKFLOW_CONFIGURE, NOT ROLE_MANAGE (the chain builder). */
   names(): Promise<RolePickItem[]> {
     return apiRequest<RolePickItem[]>('/api/roles/names')
   },
