@@ -264,10 +264,13 @@ export default function ChainBuilderPage() {
    * head, first. Previously this was a fixed three-entry constant naming tiers 2 and 3, so a
    * renamed tier, a new one, or the fourth a company actually uses could never be chosen here.
    */
-  const { options: tierOptions, populationLabel } = useApprovalTiers()
+  const { options: tierOptions, populationLabel, tiers } = useApprovalTiers()
+  // Not the lowest tier: a chain for it and every more senior tier is everybody - that is the default chain, and the
+  // server refuses it (docs/107_qa3_tier_chains.sql, QA3 LEAD-2).
+  const lowestTier = tiers.length > 0 ? Math.max(...tiers.map((tier) => tier.tierNo)) : null
   const appliesToOptions = [
     { value: String(MIN_TIER_EVERYONE), label: t('workflow.tiers.everyoneDefault') },
-    ...tierOptions,
+    ...tierOptions.filter((option) => Number(option.value) !== lowestTier),
   ]
   /** The API's refusal, shown verbatim beside the control that just reverted. */
   const [tierError, setTierError] = useState<string | null>(null)
@@ -338,9 +341,13 @@ export default function ChainBuilderPage() {
     setCopyAudienceNote(null)
     try {
       // Captured BEFORE the reload clears the selection — it is the source's audience, and the
-      // source is about to stop being selected.
-      const sourceAppliesTo = copySource?.appliesTo ?? null
-      const draftAppliesTo = populationLabel(shownTier === MIN_TIER_EVERYONE ? null : shownTier)
+      // source is about to stop being selected. Compared by TIER and worded here: the server's
+      // appliesTo still speaks the first model ("Management+"), so comparing words said "the
+      // audience did not come along" even between two chains for the same tier (QA3 LEAD-2).
+      const sourceTier = copySource ? (copySource.minRequesterTier ?? null) : undefined
+      const draftTier = shownTier === MIN_TIER_EVERYONE ? null : shownTier
+      const sourceAppliesTo = sourceTier === undefined ? null : populationLabel(sourceTier)
+      const draftAppliesTo = populationLabel(draftTier)
 
       const result = await chainsService.copyStepsFrom(defId, copySourceId, replaceExisting)
       await load()
@@ -348,7 +355,7 @@ export default function ChainBuilderPage() {
 
       // APPLIES-TO IS NEVER COPIED. When the two differ, say so once, plainly — the steps arriving
       // unchanged makes it very easy to assume the audience arrived with them.
-      if (sourceAppliesTo && sourceAppliesTo !== draftAppliesTo) {
+      if (sourceTier !== undefined && sourceTier !== draftTier) {
         setCopyAudienceNote(
           `Copied from a chain for ${sourceAppliesTo}. This draft applies to ${draftAppliesTo} — ` +
             'the steps came along, the audience did not.',
