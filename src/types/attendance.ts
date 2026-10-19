@@ -636,6 +636,21 @@ export interface QuarantineMapResult {
   daysAlreadyPaid: number
 }
 
+/**
+ * POST /api/attendance/device-quarantine/dismiss (QA3): "this PIN belongs to nobody". The waiting punches are set
+ * aside with the reason - kept (the terminal's next copy stays a duplicate), no longer waiting; mapping the PIN later
+ * takes them back.
+ */
+export interface QuarantineDismissRequest {
+  deviceId: number
+  enrollPin: string
+  note: string
+}
+
+export interface QuarantineDismissResult {
+  punchesDismissed: number
+}
+
 /** null = undecided (the minutes are covered in pay meanwhile) | Excused | Deducted | Corrected. */
 export type AnomalyDecision = 'Excused' | 'Deducted' | 'Corrected'
 
