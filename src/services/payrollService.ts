@@ -3,11 +3,15 @@ import { apiRequest } from '../api/client'
 import type {
   AttendanceReadiness, EmployeePayslip, MyPayslip, NssfRate, NssfRateUpsertRequest,
   PayrollAdjustment, PayrollAdjustmentBulkRequest, PayrollAdjustmentBulkResult, PayrollComponentType,
-  PayrollRunCreateRequest, PayrollRunDetail, PayrollRunListItem, PayslipDetail, PayslipLineLookup,
-  PayslipRow, SalaryAdvance, StatutoryReportRow, TaxBracket, TaxBracketUpsertRequest,
+  PayrollRunApproveRequest, PayrollRunCreateRequest, PayrollRunDetail, PayrollRunListItem, PayrollRunStaleness,
+  PayslipDetail, PayslipLineLookup, PayslipRow, SalaryAdvance, StatutoryReportRow, TaxBracket,
+  TaxBracketUpsertRequest,
 } from '../types/payroll'
 
-/** Payroll runs — the month lifecycle. All endpoints require PAYROLL_MANAGE. */
+/**
+ * Payroll runs — the month lifecycle. Every read is PAYROLL_VIEW; create / generate / review / cancel are
+ * PAYROLL_RUN; approve is PAYROLL_APPROVE and then the Owner alone (QA3 PAY-12).
+ */
 export const payrollRunsService = {
   getList: () => apiRequest<PayrollRunListItem[]>('/api/payroll/runs'),
   get: (id: number) => apiRequest<PayrollRunDetail>(`/api/payroll/runs/${id}`),
@@ -24,8 +28,20 @@ export const payrollRunsService = {
       `/api/payroll/runs/${id}/generate`, { method: 'POST' }),
   sendToReview: (id: number) =>
     apiRequest<{ status: string }>(`/api/payroll/runs/${id}/send-to-review`, { method: 'POST' }),
-  approve: (id: number) =>
-    apiRequest<{ status: string; lockedAt: string }>(`/api/payroll/runs/${id}/approve`, { method: 'POST' }),
+  /**
+   * Approves and locks — the Owner's act (the procedure admits the Owner alone). `allowEarlyLock` is true
+   * only for an EARLY LOCK the Owner confirmed (QA3 PAY-3): without it a primary whose last day is not
+   * over is refused. The body is always sent, so the flag never depends on how an empty POST is read.
+   */
+  approve: (id: number, body: PayrollRunApproveRequest = { allowEarlyLock: false }) =>
+    apiRequest<{ status: string; lockedAt: string }>(`/api/payroll/runs/${id}/approve`, {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+  /**
+   * What changed since the run was generated (QA3 PAY-5 / REL-3) — the comparison Approve makes before it
+   * locks: each payslip's inputs and the run-wide ones against the data now. Empty items = up to date.
+   */
+  staleness: (id: number) => apiRequest<PayrollRunStaleness>(`/api/payroll/runs/${id}/staleness`),
   cancel: (id: number, reason: string) =>
     apiRequest<{ status: string }>(`/api/payroll/runs/${id}/cancel`, {
       method: 'POST', body: JSON.stringify({ reason }),
@@ -40,7 +56,7 @@ export const payrollRunsService = {
 
 export const payslipsService = {
   /**
-   * One payslip. Readable by a PAYROLL_RUN holder, OR by the employee it is about once the run is
+   * One payslip. Readable by a PAYROLL_VIEW holder, OR by the employee it is about once the run is
    * approved — so this is safe to call from "My payslips" without a permission check first. A 403
    * is the honest answer for somebody else's slip and should be shown, not swallowed.
    */
@@ -55,7 +71,8 @@ export const payslipsService = {
 
   /**
    * "Was this request paid?" Resolves to null on a 404, which is the ordinary "not yet" answer —
-   * callers render their badge only when this is non-null.
+   * callers render their badge only when this is non-null. A PAYROLL_VIEW holder may ask about any
+   * line; anybody else gets an answer only about their own payslip of an approved run (QA3 WEB-15).
    */
   lineLookup: (sourceType: string, sourceId: number) =>
     apiRequest<PayslipLineLookup>(
