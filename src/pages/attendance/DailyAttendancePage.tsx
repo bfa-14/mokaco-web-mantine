@@ -18,6 +18,8 @@ import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { ManualEntryForm } from './ManualEntryForm'
 import { getErrorMessage } from '../../api/errorMessage'
+import type { NumberInputValue } from '../../components/numeric'
+import { parseBoundedDecimal } from '../../components/decimalInputs'
 import {
   attendanceService,
   correctionsService,
@@ -506,14 +508,24 @@ function AdjustDayForm({
   onDone: () => Promise<void>
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   const [workedMinutes, setWorkedMinutes] = useState<number | null>(null)
-  const [dayFraction, setDayFraction] = useState<number | null>(null)
+  /* TRAP 6 (QA3 WEB-5): the box's value AS RECEIVED. Mantine passes "0." as a string while a
+     decimal is typed; writing null back for it emptied the box, so 0.5 was saved as 5, clamped to
+     1 — a whole day paid. Read ONCE, at submit, through parseBoundedDecimal. */
+  const [dayFractionRaw, setDayFractionRaw] = useState<NumberInputValue>('')
+  const [fractionError, setFractionError] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   /* PORT NOTE: DevExtreme RequiredRule → the same check and message, run in submit(). */
   const [noteError, setNoteError] = useState<string | null>(null)
 
   async function submit() {
+    const dayFraction = parseBoundedDecimal(dayFractionRaw, 0, 1)
+    if (dayFraction === 'invalid') {
+      setFractionError(t('attendance.daily.fractionInvalid'))
+      return
+    }
     if (!note.trim()) {
       setNoteError("A reason is required — this changes somebody's pay.")
       return
@@ -568,13 +580,17 @@ function AdjustDayForm({
         </label>
         <NumberInput
           id="adjust-fraction"
-          value={dayFraction ?? ''}
+          value={dayFractionRaw}
           min={0}
           max={1}
           step={0.05}
           disabled={saving}
+          error={fractionError}
           placeholder={`Currently ${formatDayFraction(detail.dayFraction)}`}
-          onChange={(v) => setDayFraction(typeof v === 'number' ? v : null)}
+          onChange={(v) => {
+            setDayFractionRaw(v)
+            setFractionError(null)
+          }}
         />
       </div>
 

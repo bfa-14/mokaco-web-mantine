@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, Pagination, Select, Switch, Table, TextInput } from '@mantine/core'
@@ -56,6 +57,7 @@ const WIDTHS: Record<string, number | undefined> = {
 const PAGE_SIZES = ['15', '30', '50']
 
 export default function EmployeeAccountsPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('USER_MANAGE')
   const navigate = useNavigate()
@@ -122,7 +124,7 @@ export default function EmployeeAccountsPage() {
       const result = await employeesService.linkUser(linkTarget.employeeId, pickedUserId)
       // The account may be disabled — the proc says so in Warning; never swallow it.
       if (result.warning) notify(result.warning, 'warning', 6000)
-      else notify(`${result.fullName} now signs in as ${result.username}.`, 'success', 3000)
+      else notify(t('hr.accounts.linked', { name: result.fullName, username: result.username }), 'success', 3000)
       setLinkTarget(null)
       setPickedUserId(null)
       await load()
@@ -140,15 +142,11 @@ export default function EmployeeAccountsPage() {
     try {
       const result = await employeesService.unlinkUser(unlinkTarget.employeeId)
       if (result.requestsLeftWaiting > 0) {
-        notify(
-          `${result.requestsLeftWaiting} request${result.requestsLeftWaiting === 1 ? ' was' : 's were'} waiting on this person and can no longer be signed by them.`,
-          'warning',
-          6000,
-        )
+        notify(t('hr.accounts.waiting', { count: result.requestsLeftWaiting }), 'warning', 6000)
       } else if (result.warning) {
         notify(result.warning, 'warning', 6000)
       } else {
-        notify(`${unlinkTarget.fullName} is no longer linked to a login.`, 'success', 3000)
+        notify(t('hr.accounts.unlinked', { name: unlinkTarget.fullName }), 'success', 3000)
       }
       setUnlinkTarget(null)
       await load()
@@ -161,11 +159,11 @@ export default function EmployeeAccountsPage() {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('fullName', { header: 'Employee' }),
-      columnHelper.accessor('branchName', { header: 'Branch' }),
+      columnHelper.accessor('fullName', { header: t('security.users.cols.employee') }),
+      columnHelper.accessor('branchName', { header: t('common.branch') }),
       columnHelper.accessor((r) => r.positionName ?? '', {
         id: 'positionName',
-        header: 'Position',
+        header: t('common.position'),
         cell: (info) => {
           const r = info.row.original
           return r.positionName ?? <span className="badge badge--muted">—</span>
@@ -177,15 +175,15 @@ export default function EmployeeAccountsPage() {
       // tick-box above the grid is this column's filter, and it is a page-level control.
       columnHelper.display({
         id: 'login',
-        header: 'Login',
+        header: t('hr.employees.cols.login'),
         cell: (info) => <LoginStateCell row={info.row.original} />,
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: t('hr.employees.cols.actions'),
         cell: (info) => {
           const r = info.row.original
-          if (!canManage) return <span className="badge badge--muted">View only</span>
+          if (!canManage) return <span className="badge badge--muted">{t('hr.accounts.viewOnly')}</span>
           return (
             <div className="grid-actions">
               <Button
@@ -197,7 +195,7 @@ export default function EmployeeAccountsPage() {
                   setPickedUserId(null)
                 }}
               >
-                {r.hasLogin ? 'Change account' : 'Link account'}
+                {r.hasLogin ? t('hr.accounts.changeAccount') : t('hr.accounts.linkAccount')}
               </Button>
               {r.hasLogin && (
                 <Button
@@ -206,7 +204,7 @@ export default function EmployeeAccountsPage() {
                   size="compact-sm"
                   onClick={() => setUnlinkTarget(r)}
                 >
-                  Unlink
+                  {t('hr.accounts.unlink')}
                 </Button>
               )}
             </div>
@@ -214,7 +212,7 @@ export default function EmployeeAccountsPage() {
         },
       }),
     ],
-    [canManage],
+    [canManage, t],
   )
 
   const table = useReactTable({
@@ -258,8 +256,8 @@ export default function EmployeeAccountsPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Employee accounts</h1>
-          <p className="page-subtitle">Which login each employee signs in with.</p>
+          <h1 className="page-title">{t('hr.accounts.title')}</h1>
+          <p className="page-subtitle">{t('hr.accounts.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           <span
@@ -275,13 +273,13 @@ export default function EmployeeAccountsPage() {
               checked={onlyMissing}
               onChange={(e) => setOnlyMissing(e.currentTarget.checked)}
             />
-            Show only employees without a login
+            {t('hr.employees.onlyMissing')}
           </span>
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={16} />
@@ -289,20 +287,12 @@ export default function EmployeeAccountsPage() {
         </div>
       </div>
 
-      <PageHelp>
-        The workflow resolves approvers by their login. An employee with no account cannot raise a
-        request, and a branch manager with no active account cannot approve — so every branch-manager
-        step for their branch is skipped. Linking an existing account fixes that. To CREATE an
-        account, use the Users page; this screen only connects existing ones to people.
-      </PageHelp>
+      <PageHelp>{t('hr.accounts.help')}</PageHelp>
 
       {/* The loudest thing on the page: managers whose approvals are silently skipping. */}
       {brokenManagers.length > 0 && (
         <div className="alert alert--error" role="alert" style={{ fontWeight: 600 }}>
-          {brokenManagers.length} branch manager
-          {brokenManagers.length === 1 ? '' : 's'} have no usable login. Approvals needing a branch
-          manager will be skipped for their branch{brokenManagers.length === 1 ? '' : 'es'} until you
-          link an active account or set a different manager.
+          {t('hr.accounts.brokenManagers', { count: brokenManagers.length })}
         </div>
       )}
 
@@ -322,7 +312,7 @@ export default function EmployeeAccountsPage() {
             <TextInput
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search"
+              placeholder={t('common.search')}
               leftSection={<IconSearch size={14} />}
               w={240}
               size="xs"
@@ -357,7 +347,7 @@ export default function EmployeeAccountsPage() {
                 <Table.Tr>
                   <Table.Td colSpan={columns.length}>
                     <div className="empty-hint" style={{ padding: 16 }}>
-                      {onlyMissing ? 'Every employee has a login.' : 'No active employees.'}
+                      {onlyMissing ? t('hr.employees.allHaveLogin') : t('hr.accounts.empty')}
                     </div>
                   </Table.Td>
                 </Table.Tr>
@@ -380,8 +370,11 @@ export default function EmployeeAccountsPage() {
 
           <Group justify="space-between" mt="xs">
             <span className="hint" style={{ margin: 0 }}>
-              {total === 0 ? 0 : pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, total)} of {total}
+              {t('common.pageInfo', {
+                from: total === 0 ? 0 : pageIndex * pageSize + 1,
+                to: Math.min((pageIndex + 1) * pageSize, total),
+                total,
+              })}
             </span>
             <Group gap="xs">
               <Select
@@ -404,8 +397,7 @@ export default function EmployeeAccountsPage() {
 
       {!loading && !onlyMissing && missingLoginCount > 0 && (
         <p className="hint" style={{ marginTop: 12 }}>
-          {missingLoginCount} employee{missingLoginCount === 1 ? '' : 's'} still{' '}
-          {missingLoginCount === 1 ? 'has' : 'have'} no login and cannot raise requests.
+          {t('hr.accounts.missingLogin', { count: missingLoginCount })}
         </p>
       )}
 
@@ -421,51 +413,47 @@ export default function EmployeeAccountsPage() {
           }}
           title={
             linkTarget.hasLogin
-              ? `Change account · ${linkTarget.fullName}`
-              : `Link account · ${linkTarget.fullName}`
+              ? t('hr.accounts.changeTitle', { name: linkTarget.fullName })
+              : t('hr.accounts.linkTitle', { name: linkTarget.fullName })
           }
           size={460}
           centered
         >
           {linkTarget.hasLogin && (
             <p className="hint" style={{ marginTop: 0 }}>
-              This changes which login {linkTarget.fullName} signs in with. Requests they raised in
-              the past are not affected.
+              {t('hr.accounts.changeHint', { name: linkTarget.fullName })}
             </p>
           )}
 
           {unlinked.length === 0 ? (
             <div className="empty-hint">
-              <div className="empty-hint-main">No unlinked accounts.</div>
-              Every account is already linked to someone. Create one first.
+              <div className="empty-hint-main">{t('hr.accounts.noUnlinked')}</div>
+              {t('hr.accounts.noUnlinkedHint')}
               <div style={{ marginTop: 12 }}>
                 <Button
                   leftSection={<IconUser size={16} />}
                   onClick={() => navigate('/security/users')}
                 >
-                  Go to Users
+                  {t('hr.accounts.goToUsers')}
                 </Button>
               </div>
             </div>
           ) : (
             <>
               <div className="form-field">
-                <label className="form-label">Account</label>
+                <label className="form-label">{t('hr.accounts.account')}</label>
                 <Select
                   data={unlinked.map((u) => ({
                     value: String(u.userId),
-                    label: `${u.username}${u.isActive ? '' : ' — disabled'}`,
+                    label: u.isActive ? u.username : t('hr.accounts.disabledOption', { name: u.username }),
                   }))}
                   value={pickedUserId != null ? String(pickedUserId) : null}
                   searchable
-                  placeholder="Search accounts…"
+                  placeholder={t('hr.accounts.searchAccounts')}
                   disabled={busy}
                   onChange={(v) => setPickedUserId(v != null ? Number(v) : null)}
                 />
-                <div className="hint">
-                  Only accounts not yet linked to anyone are listed, so you cannot pick one that is
-                  already taken.
-                </div>
+                <div className="hint">{t('hr.accounts.onlyUnlinked')}</div>
               </div>
               <div className="form-actions">
                 <Button
@@ -476,13 +464,17 @@ export default function EmployeeAccountsPage() {
                   }}
                   disabled={busy}
                 >
-                  Back
+                  {t('common.back')}
                 </Button>
                 <Button
                   onClick={() => void submitLink()}
                   disabled={busy || pickedUserId == null}
                 >
-                  {busy ? 'Saving…' : linkTarget.hasLogin ? 'Change account' : 'Link account'}
+                  {busy
+                    ? t('common.saving')
+                    : linkTarget.hasLogin
+                      ? t('hr.accounts.changeAccount')
+                      : t('hr.accounts.linkAccount')}
                 </Button>
               </div>
             </>
@@ -495,26 +487,28 @@ export default function EmployeeAccountsPage() {
         <Modal
           opened
           onClose={() => setUnlinkTarget(null)}
-          title={`Unlink account · ${unlinkTarget.fullName}`}
+          title={t('hr.accounts.unlinkTitle', { name: unlinkTarget.fullName })}
           size={460}
           centered
         >
           <p style={{ marginTop: 0 }}>
-            <strong>{unlinkTarget.fullName}</strong> will no longer be able to sign in or raise
-            requests. Requests they already raised are not affected.
+            <Trans
+              i18nKey="hr.accounts.unlinkBody"
+              values={{ name: unlinkTarget.fullName }}
+              components={{ name: <strong /> }}
+            />
           </p>
           {unlinkTarget.isBranchManager && (
             <p style={{ color: '#c53030', fontWeight: 600 }}>
-              They manage {unlinkTarget.branchName}. Branch-manager approvals for that branch will be
-              skipped until you link them again or set a different manager.
+              {t('hr.accounts.managesBranch', { branch: unlinkTarget.branchName })}
             </p>
           )}
           <div className="form-actions">
             <Button variant="default" onClick={() => setUnlinkTarget(null)} disabled={busy}>
-              Back
+              {t('common.back')}
             </Button>
             <Button color="red" onClick={() => void submitUnlink()} disabled={busy}>
-              {busy ? 'Unlinking…' : 'Unlink account'}
+              {busy ? t('hr.accounts.unlinking') : t('hr.accounts.unlinkAccount')}
             </Button>
           </div>
         </Modal>
@@ -525,17 +519,18 @@ export default function EmployeeAccountsPage() {
 
 /** The three login states, visually distinct. A broken branch manager shows the API's warning in red. */
 function LoginStateCell({ row }: { row: EmployeeLoginStatus }) {
+  const { t } = useTranslation()
   if (row.warning != null) {
     // Branch manager with no usable login — the loud case. Show the proc's exact words.
     return <span style={{ color: '#c53030', fontWeight: 600 }}>{row.warning}</span>
   }
   if (!row.hasLogin) {
-    return <span className="badge badge--muted">Not linked</span>
+    return <span className="badge badge--muted">{t('hr.accounts.notLinked')}</span>
   }
   if (row.userIsActive === false) {
     return (
       <span style={{ color: '#b7791f', fontWeight: 600 }}>
-        {row.username} — account disabled
+        {t('hr.accounts.accountDisabled', { username: row.username })}
       </span>
     )
   }

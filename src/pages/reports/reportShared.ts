@@ -2,6 +2,8 @@
  * Small shared bits for the report pages. Kept as pure functions/constants (no components) so it
  * can sit beside the component-bearing ReportShell without tangling Fast Refresh.
  */
+import { t } from '../../i18n/t'
+import { currentLocale } from '../../i18n'
 
 /**
  * All three reports are read-only and gated on ONE code of their own.
@@ -48,7 +50,7 @@ export function today(): string {
 
 /** An API date/timestamp as a plain date: '2026-06-03T00:00:00' → '2026-06-03'. */
 export function reportDate(value: string | null | undefined): string {
-  if (!value) return '—'
+  if (!value) return t('common.dash')
   return value.slice(0, 10)
 }
 
@@ -56,16 +58,30 @@ export function reportDate(value: string | null | undefined): string {
 export function reportDateTime(value: string): string {
   const parsed = new Date(value.endsWith('Z') ? value : `${value}Z`)
   if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleString()
+  return parsed.toLocaleString(currentLocale())
 }
 
-/** Minutes as 'Nh Nm' — reports show hours, because a manager reads a timesheet in hours, not minutes. */
+/**
+ * Minutes as 'Nh Nm' — reports show hours, because a manager reads a timesheet in hours, not minutes.
+ * The units are the app's own (common.hoursMinutes …), so an Arabic sheet reads «س» and «د».
+ */
 export function reportMinutes(minutes: number | null | undefined): string {
-  if (minutes == null) return '—'
+  if (minutes == null) return t('common.dash')
   if (minutes === 0) return '0'
   const hours = Math.floor(minutes / 60)
   const mins = minutes % 60
-  if (hours === 0) return `${mins}m`
-  if (mins === 0) return `${hours}h`
-  return `${hours}h ${mins}m`
+  if (hours === 0) return t('common.minutesOnly', { minutes: mins })
+  if (mins === 0) return t('common.hoursOnly', { hours })
+  return t('common.hoursMinutes', { hours, minutes: mins })
+}
+
+/**
+ * What the report procedures put in the header's branch when no branch was chosen
+ * (docs/report_procedures.sql) — their words, so the page shows the reader's instead.
+ */
+const SERVER_ALL_BRANCHES = 'All branches'
+
+/** The header's branch as the reader should see it: a branch's own name, or "All branches" translated. */
+export function reportBranchName(name: string): string {
+  return name === SERVER_ALL_BRANCHES ? t('common.report.allBranches') : name
 }

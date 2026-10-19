@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button, Select } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
@@ -11,8 +12,8 @@ import type {
   MonthlyAttendanceHeader,
   MonthlyAttendanceRow,
 } from '../../types/reports'
-import { ReportShell, ReportDocHead } from './ReportShell'
-import { lastMonths, REPORT_VIEW, reportMinutes } from './reportShared'
+import { ReportShell, ReportDocHead, ReportNoAccess } from './ReportShell'
+import { lastMonths, REPORT_VIEW, reportBranchName, reportMinutes } from './reportShared'
 
 /** The columns whose values are worth summing at the foot of the sheet. */
 function totalsOf(rows: MonthlyAttendanceRow[]) {
@@ -46,6 +47,7 @@ function totalsOf(rows: MonthlyAttendanceRow[]) {
  * signing off the run.
  */
 export default function MonthlyAttendanceReportPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canView = hasPermission(REPORT_VIEW)
 
@@ -99,24 +101,7 @@ export default function MonthlyAttendanceReportPage() {
   }, [period, branchId])
 
   if (!canView) {
-    return (
-      <div>
-        <div className="page-head">
-          <div>
-            <h1 className="page-title">Monthly Attendance Summary</h1>
-          </div>
-        </div>
-        <div className="card">
-          <div className="empty-hint">
-            <div className="empty-hint-main">
-              You do not have access to attendance reports.
-            </div>
-            Reports need the &lsquo;view attendance&rsquo; permission. Ask whoever
-            administers the system.
-          </div>
-        </div>
-      </div>
-    )
+    return <ReportNoAccess title={t('attendance.reports.monthly.title')} />
   }
 
   const totals = totalsOf(rows)
@@ -125,15 +110,13 @@ export default function MonthlyAttendanceReportPage() {
     <div>
       <div className="page-head report-no-print">
         <div>
-          <h1 className="page-title">Monthly Attendance Summary</h1>
-          <p className="page-subtitle">
-            The sheet to review before running payroll.
-          </p>
+          <h1 className="page-title">{t('attendance.reports.monthly.title')}</h1>
+          <p className="page-subtitle">{t('attendance.reports.monthly.subtitle')}</p>
         </div>
       </div>
 
       <ReportShell
-        help="One row per employee for the month, with every figure payroll turns into a pay line. Review it before running a payroll period; the number to watch is unpaid absence days. Overtime here is detected, not automatically paid."
+        help={t('attendance.reports.monthly.help')}
         landscape
         canPrint={header !== null}
         loading={loading}
@@ -143,7 +126,7 @@ export default function MonthlyAttendanceReportPage() {
         filters={
           <>
             <div className="report-filter">
-              <span className="report-filter-label">Period</span>
+              <span className="report-filter-label">{t('common.period')}</span>
               <Select
                 data={months}
                 value={period}
@@ -153,11 +136,11 @@ export default function MonthlyAttendanceReportPage() {
               />
             </div>
             <div className="report-filter">
-              <span className="report-filter-label">Branch</span>
+              <span className="report-filter-label">{t('common.branch')}</span>
               <Select
                 data={branches.map((b) => ({ value: String(b.branchId), label: b.name }))}
                 value={branchId != null ? String(branchId) : null}
-                placeholder="All branches"
+                placeholder={t('common.report.allBranches')}
                 clearable
                 w={200}
                 onChange={(v) => setBranchId(v != null ? Number(v) : null)}
@@ -168,7 +151,7 @@ export default function MonthlyAttendanceReportPage() {
               leftSection={<IconSearch size={16} />}
               onClick={() => void generate()}
             >
-              Generate
+              {t('common.report.generate')}
             </Button>
           </>
         }
@@ -176,31 +159,31 @@ export default function MonthlyAttendanceReportPage() {
         {header && (
           <>
             <ReportDocHead
-              title={header.reportTitle}
+              title={t('attendance.reports.monthly.title')}
               generatedUtc={header.generatedUtc}
               meta={[
-                { label: 'Period', value: header.period },
-                { label: 'Branch', value: header.branchName },
+                { label: t('common.period'), value: header.period },
+                { label: t('common.branch'), value: reportBranchName(header.branchName) },
               ]}
             />
             <table className="report-table">
               <thead>
                 <tr>
-                  <th>Employee</th>
-                  <th>Branch</th>
-                  <th>Department</th>
-                  <th className="num">Days worked</th>
-                  <th className="num">Full days</th>
-                  <th className="num">Present</th>
-                  <th className="num">Absent</th>
-                  <th className="num">Leave</th>
-                  <th className="num">Rest</th>
-                  <th className="num">Late</th>
-                  <th className="num">Overtime</th>
-                  <th className="num">Worked hrs</th>
-                  <th className="num">Exit-leave days</th>
-                  <th className="num">Appr. leave days</th>
-                  <th className="num">Unpaid absence</th>
+                  <th>{t('common.report.employee')}</th>
+                  <th>{t('common.branch')}</th>
+                  <th>{t('common.department')}</th>
+                  <th className="num">{t('attendance.reports.col.daysWorked')}</th>
+                  <th className="num">{t('attendance.reports.col.fullDays')}</th>
+                  <th className="num">{t('attendance.reports.col.present')}</th>
+                  <th className="num">{t('attendance.reports.col.absent')}</th>
+                  <th className="num">{t('attendance.reports.col.leave')}</th>
+                  <th className="num">{t('attendance.reports.col.rest')}</th>
+                  <th className="num">{t('attendance.reports.col.late')}</th>
+                  <th className="num">{t('attendance.reports.col.overtime')}</th>
+                  <th className="num">{t('attendance.reports.col.workedHours')}</th>
+                  <th className="num">{t('attendance.reports.col.exitLeaveDays')}</th>
+                  <th className="num">{t('attendance.reports.col.approvedLeaveDays')}</th>
+                  <th className="num">{t('attendance.reports.col.unpaidAbsence')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -234,7 +217,7 @@ export default function MonthlyAttendanceReportPage() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={3}>Totals — {rows.length} employees</td>
+                  <td colSpan={3}>{t('attendance.reports.monthly.totals', { count: rows.length })}</td>
                   <td className="num">{totals.daysWorked.toFixed(2)}</td>
                   <td className="num" />
                   <td className="num">{totals.presentDays}</td>

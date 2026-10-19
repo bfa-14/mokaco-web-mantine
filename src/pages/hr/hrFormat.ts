@@ -45,7 +45,29 @@ export function fmtBytes(bytes: MaybeNumber): string {
   return `${n} B`
 }
 
-/** An API timestamp as a local date+time. Missing reads as empty, never "Invalid Date". */
-export function fmtDateTime(v: string | null | undefined): string {
-  return v ? new Date(v).toLocaleString() : ''
+/**
+ * An API timestamp the SERVER stamped (SYSUTCDATETIME) as the moment it is.
+ *
+ * It arrives as '2026-10-19T21:30:00' — UTC, but with no zone on the wire — and `new Date()` reads
+ * a zoneless date-time as LOCAL time, so it was shown three hours early in Beirut (QA3 WEB-11). A
+ * zoneless date-time is therefore read as UTC; one that carries a zone ('Z', '+03:00') is taken as it
+ * is. Null for a missing or unreadable value, never an "Invalid Date".
+ */
+export function parseUtcStamp(v: string | null | undefined): Date | null {
+  if (!v) return null
+  const zoneless = v.includes('T') && !/(Z|[+-]\d{2}:?\d{2})$/i.test(v)
+  const d = new Date(zoneless ? `${v}Z` : v)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+/** An API timestamp (UTC) as a local date+time. Missing reads as empty, never "Invalid Date". */
+export function fmtDateTime(v: string | null | undefined, locale?: string): string {
+  const d = parseUtcStamp(v)
+  return d ? d.toLocaleString(locale) : ''
+}
+
+/** An API timestamp (UTC) as the local DATE it fell on — 23:30 UTC is already tomorrow in Beirut. */
+export function fmtLocalDate(v: string | null | undefined, locale?: string): string {
+  const d = parseUtcStamp(v)
+  return d ? d.toLocaleDateString(locale) : ''
 }

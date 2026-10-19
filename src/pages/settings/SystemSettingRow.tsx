@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { SettingRow } from './SettingsCard'
 import { boolValue, isOn } from './settingValues'
 import { SHOW_PAGE_HELP_KEY, type Setting } from '../../types/settings'
+import { t as translate } from '../../i18n/t'
 
 /**
  * The data-driven settings — one core.SETTING row, rendered as one row of a card.
@@ -53,7 +54,8 @@ const SECTION_TABS: Record<string, SettingTab> = {
 }
 
 /**
- * Extra guidance for the keys we know about today.
+ * Extra guidance for the keys we know about today. THE TITLE of each is in the dictionaries, under
+ * settings.rowTitles.<Key> (en + ar) — see titleOf; this map keeps what a dictionary cannot hold.
  *
  * This map is an ENHANCEMENT, not a gate. A setting that is not listed here still renders — under
  * Advanced, using its own Description from the database as the explanation — which is what makes
@@ -63,7 +65,6 @@ const SECTION_TABS: Record<string, SettingTab> = {
 const KNOWN: Record<
   string,
   {
-    title: string
     min?: number
     max?: number
     step?: number
@@ -77,24 +78,21 @@ const KNOWN: Record<
   }
 > = {
   StandardWorkDayHours: {
-    title: 'Standard work day',
     min: 1,
     max: 24,
     step: 0.5,
   },
-  ExitLeaveBasis: { title: 'Exit leave basis' },
+  ExitLeaveBasis: {},
   /* THE TOLERANCE. A punch this many minutes or more past the shift start (or before its end) is
      an anomaly for HR to decide; inside it, nothing is flagged. A shift's own Grace overrides it
      when set. The row itself comes from core.SETTING (Section = Attendance, DataType = int); this
      entry only supplies the title and stops a typo like 600 from flagging nobody ever. */
   AttendanceToleranceMinutes: {
-    title: 'Attendance tolerance (minutes)',
     min: 0,
     max: 240,
     step: 1,
   },
   FullDayThreshold: {
-    title: 'Full day threshold',
     min: 0,
     max: 1,
     step: 0.05,
@@ -103,38 +101,36 @@ const KNOWN: Record<
      Arrives from core.SETTING (Section = Payroll, DataType = decimal) and files itself under
      Advanced by its section; this entry only names it and stops a negative from being typed. */
   TaxFamilyDeductionAnnualUsd: {
-    title: 'Family tax deduction (annual, USD)',
     min: 0,
     step: 1,
   },
   /* QA2 (scripts 82–86). The rows come from core.SETTING — Section 'Leave' and 'Payroll', each its own tab —
      with their descriptions; these entries only give the titles a person would say and keep a typo from
      paying a holiday at 20x or carrying over minus three days. */
-  HolidayWorkRate: { title: 'Holiday work rate (× the day rate)', min: 1, max: 5, step: 0.25 },
-  LeavePayoutOnTermination: { title: 'Pay the leave balance on termination' },
-  LeaveCountsRestDays: { title: 'Leave counts rest days and holidays' },
-  LeaveAllowNegativeBalance: { title: 'Allow a negative leave balance' },
-  LeaveCarryOverMaxDays: { title: 'Carry-over cap (days; blank = no cap)', min: 0, max: 365, step: 0.5 },
-  LeaveCarryOverExpiresOn: { title: 'Carried-over days expire on (MM-DD; blank = never)' },
+  HolidayWorkRate: { min: 1, max: 5, step: 0.25 },
+  LeavePayoutOnTermination: {},
+  LeaveCountsRestDays: {},
+  LeaveAllowNegativeBalance: {},
+  LeaveCarryOverMaxDays: { min: 0, max: 365, step: 0.5 },
+  LeaveCarryOverExpiresOn: {},
   // A per-person choice about the reader's own screen. Its PLACEMENT is core.SETTING's to state —
   // the row's Section is 'Preferences' — and this entry now only supplies the friendlier title.
-  [SHOW_PAGE_HELP_KEY]: { title: 'Show page help' },
+  [SHOW_PAGE_HELP_KEY]: {},
 
   /* THE MAIL SERVER. Titled by hand for the one thing a derived title cannot do: say "SMTP" and
      "URL" in capitals. The keys read Smtp*, so humanise() can only ever produce "Smtp host" —
      and these seven sit together under their own heading, where short labels read as one form to
      fill in rather than seven unrelated values that happen to share a prefix. */
-  SmtpHost: { title: 'Mail server' },
-  SmtpPort: { title: 'Port', min: 1, max: 65535, step: 1 },
-  SmtpUser: { title: 'User name' },
-  SmtpPassword: { title: 'Password' },
-  SmtpFromEmail: { title: 'From address' },
-  SmtpFromName: { title: 'From name' },
+  SmtpHost: {},
+  SmtpPort: { min: 1, max: 65535, step: 1 },
+  SmtpUser: {},
+  SmtpPassword: {},
+  SmtpFromEmail: {},
+  SmtpFromName: {},
   // The one setting on this page that turns a BACKGROUND BEHAVIOUR on and off rather than naming a
   // value, so it is the one that gets a switch and a sentence: "Port" needs no explanation, "email
   // on a closed request" set to false does.
   NotifyOnRequestClosed: {
-    title: 'Email on a closed request',
     switchLabel: 'settings.notifications.notifyOnRequestClosed',
   },
 
@@ -142,13 +138,12 @@ const KNOWN: Record<
      ever produce "Whats app api url". They arrive under the same Notifications heading, from the
      same core.SETTING rows, with no routing written here. */
   WhatsAppEnabled: {
-    title: 'WhatsApp messages',
     switchLabel: 'settings.notifications.whatsAppEnabled',
   },
-  WhatsAppApiUrl: { title: 'Cloud API URL' },
-  WhatsAppPhoneNumberId: { title: 'Sending number id' },
-  WhatsAppAccessToken: { title: 'Access token' },
-  WhatsAppTemplateName: { title: 'Template name' },
+  WhatsAppApiUrl: {},
+  WhatsAppPhoneNumberId: {},
+  WhatsAppAccessToken: {},
+  WhatsAppTemplateName: {},
 }
 
 /**
@@ -228,8 +223,9 @@ function humanise(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()
 }
 
+/** The title a reader sees: the dictionary's (settings.rowTitles.<Key>), else the key made readable. */
 export function titleOf(setting: Setting): string {
-  return KNOWN[setting.settingKey]?.title ?? humanise(setting.settingKey)
+  return translate(`settings.rowTitles.${setting.settingKey}`, { defaultValue: humanise(setting.settingKey) })
 }
 
 /**
@@ -253,32 +249,36 @@ export function describeValue(
   if (key === 'StandardWorkDayHours') {
     const hours = Math.floor(numeric)
     const mins = Math.round((numeric - hours) * 60)
-    const label = mins === 0 ? `${hours}h` : `${hours}h ${mins}m`
-    return `A ${label} day. A 2-hour exit permission costs ${(2 / numeric).toFixed(2)} of a leave day.`
+    const label = mins === 0
+      ? translate('common.hoursOnly', { hours })
+      : translate('common.hoursMinutes', { hours, minutes: mins })
+    return translate('settings.rows.explain.standardDay', { label, cost: (2 / numeric).toFixed(2) })
   }
 
   if (key === 'AttendanceToleranceMinutes') {
     const n = Math.round(numeric)
-    if (n <= 0) return 'Zero: every minute past the shift start or before its end becomes an anomaly for HR to decide.'
+    if (n <= 0) return translate('settings.rows.explain.toleranceZero')
     // Worked on a 07:00–15:00 example so the number is seen as a clock time, not an abstraction.
     const clock = (minutesOfDay: number) =>
       `${String(Math.floor(minutesOfDay / 60)).padStart(2, '0')}:${String(minutesOfDay % 60).padStart(2, '0')}`
-    return `On a 07:00–15:00 shift: punching in at ${clock(7 * 60 + n)} or later, or out at ${clock(15 * 60 - n)} or earlier, becomes an anomaly for HR to decide. A shift with its own Grace uses that instead.`
+    return translate('settings.rows.explain.tolerance', { lateIn: clock(7 * 60 + n), earlyOut: clock(15 * 60 - n) })
   }
 
   if (key === 'FullDayThreshold') {
     const percent = Math.round(numeric * 100)
-    const base = `This is a fraction of the day, not a percentage: ${numeric.toFixed(2)} means ${percent}%.`
+    const base = translate('settings.rows.explain.fraction', { value: numeric.toFixed(2), percent })
     if (!standardHours) return base
 
     const requiredHours = numeric * standardHours
     const h = Math.floor(requiredHours)
     const m = Math.round((requiredHours - h) * 60)
-    const label = m === 0 ? `${h}h` : `${h}h ${m}m`
+    const label = m === 0
+      ? translate('common.hoursOnly', { hours: h })
+      : translate('common.hoursMinutes', { hours: h, minutes: m })
 
     return numeric >= 1
-      ? `${base} The whole ${standardHours}h day must be worked before it counts as full.`
-      : `${base} With a ${standardHours}h standard day, working ${label} is enough to count as a full day.`
+      ? `${base} ${translate('settings.rows.explain.fractionWhole', { hours: standardHours })}`
+      : `${base} ${translate('settings.rows.explain.fractionPart', { hours: standardHours, label })}`
   }
 
   return null
@@ -363,7 +363,7 @@ export function SystemSettingRow({
       id={inputId}
       checked={isOn(draft)}
       onChange={(e) => onDraftChange(boolValue(setting.settingValue, e.currentTarget.checked))}
-      label={isOn(draft) ? 'On' : 'Off'}
+      label={isOn(draft) ? t('settings.rows.on') : t('settings.rows.off')}
       disabled={saving}
     />
   ) : choices ? (
@@ -379,8 +379,10 @@ export function SystemSettingRow({
   ) : isNumber ? (
     <NumberInput
       id={inputId}
-      value={draft === '' ? '' : Number(draft)}
-      onChange={(v) => onDraftChange(v == null || v === '' ? '' : String(v))}
+      // THE DRAFT AS TYPED (trap 6): binding Number(draft) turned "0." back into 0 on every keystroke,
+      // so 0.9 could not be typed into Full day threshold. The string is what is saved anyway.
+      value={draft}
+      onChange={(v) => onDraftChange(v == null ? '' : String(v))}
       w={220}
       disabled={saving}
       min={known?.min}
@@ -411,14 +413,14 @@ export function SystemSettingRow({
       meta={
         <>
           <code>{setting.settingKey}</code>
-          {setting.modifiedAt && <> · Last changed {setting.modifiedAt.slice(0, 10)}</>}
+          {setting.modifiedAt && <> · {t('settings.rows.lastChanged', { date: setting.modifiedAt.slice(0, 10) })}</>}
         </>
       }
       control={
         <>
           {control}
           <Button onClick={onSave} disabled={saving || !dirty}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </>
       }
