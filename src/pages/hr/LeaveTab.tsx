@@ -18,6 +18,7 @@ import { canOpen, PERMISSION } from '../../auth/routeAccess'
 import { isActiveRow } from '../../types/hr'
 import type { LeaveBalance, LeaveLedgerEntry, LeaveType, LeaveYearBalance } from '../../types/hr'
 import { parseDecimal } from '../../components/numeric'
+import { isDeletableLedgerRow } from './leaveLedgerRows'
 import type { NumberInputValue } from '../../components/numeric'
 
 /** The movement an out-of-band balance correction is filed as — see AdjustBalanceModal. */
@@ -668,17 +669,19 @@ export function LeaveTab({ employeeId }: { employeeId: number }) {
       id: 'actions',
       header: 'Actions',
       size: 90,
-      cell: (c) => (
-        <ActionIcon
-          variant="subtle"
-          color="red"
-          title="Delete"
-          aria-label="Delete"
-          onClick={() => void handleDelete(c.row.original)}
-        >
-          <IconTrash size={16} />
-        </ActionIcon>
-      ),
+      /* Only a manual adjustment can be deleted; every other row is kept right by what wrote it (QA3 LEV-9). */
+      cell: (c) =>
+        isDeletableLedgerRow(c.row.original) ? (
+          <ActionIcon
+            variant="subtle"
+            color="red"
+            title="Delete"
+            aria-label="Delete"
+            onClick={() => void handleDelete(c.row.original)}
+          >
+            <IconTrash size={16} />
+          </ActionIcon>
+        ) : null,
     }),
   ]
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button, Select } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
@@ -19,6 +20,7 @@ import { REPORT_VIEW, lastMonths } from './reportShared'
  * reader must not skim past.
  */
 export default function LeaveBalanceReportPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canView = hasPermission(REPORT_VIEW)
 
@@ -133,7 +135,7 @@ export default function LeaveBalanceReportPage() {
       </div>
 
       <ReportShell
-        help="One row per employee per leave type, as of the end of the chosen period. Remaining is accrued plus carried over, minus used — the column to read. A negative remaining means somebody has taken more than they had."
+        help="One row per employee per leave type, as of the end of the chosen period. Remaining is accrued plus carried over, minus used, plus adjusted (corrections, the year-end close, expired carry-over) — the column to read. A negative remaining means somebody has taken more than they had."
         canPrint={header !== null}
         loading={loading}
         error={error}
@@ -206,6 +208,8 @@ export default function LeaveBalanceReportPage() {
                   <th className="num">Accrued</th>
                   <th className="num">Carried over</th>
                   <th className="num">Used</th>
+                  {/* QA3 LEV-14: the fifth figure, so every row adds up on paper */}
+                  <th className="num">{t('hr.leaveBalance.adjusted')}</th>
                   <th className="num">Remaining</th>
                 </tr>
               </thead>
@@ -229,6 +233,7 @@ export default function LeaveBalanceReportPage() {
                       <td className="num">{r.accrued.toFixed(2)}</td>
                       <td className="num">{r.carriedOver.toFixed(2)}</td>
                       <td className="num">{r.used.toFixed(2)}</td>
+                      <td className="num">{(r.adjusted ?? 0).toFixed(2)}</td>
                       <td
                         className={
                           r.remaining < 0

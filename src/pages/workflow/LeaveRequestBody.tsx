@@ -7,6 +7,7 @@ import { isActiveRow } from '../../types/hr'
 import type { LeaveRelationEntitlement, LeaveType } from '../../types/hr'
 import type { LeaveBalanceSummary, LeaveWorkingDays } from '../../types/workflow'
 import { balanceDaysText, dayCountText, inclusiveDays } from './newRequestShared'
+import { overBalance } from './leaveOverBalance'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
 import { referenceName } from '../../i18n/referenceName'
@@ -141,8 +142,15 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
           ? t('body.leave.noWorkingDay')
           : null
 
-  /** More days asked for than are left. Amber, and only amber: the approver decides. */
-  const overBalance = balance != null && days != null && days > balance.currentBalance
+  /* More days asked for than are left -- counted as the SERVER counts them (QA3): the balance less what requests still
+     waiting were already promised, and only for a type whose balance it enforces. The preview carries both figures; the
+     balance line stands in until it answers. */
+  const over = overBalance({
+    days,
+    balance: preview ? preview.balance : (balance?.currentBalance ?? null),
+    pendingDays: preview?.pendingDays,
+    balanceEnforced: preview?.balanceEnforced,
+  })
 
   const typeLabel = (lt: LeaveType): string =>
     lt.isPaid ? referenceName(lt) : t('body.leave.unpaidSuffix', { name: referenceName(lt) })
@@ -286,12 +294,18 @@ export function useLeaveRequestForm(employeeId: number | null, saving: boolean):
         </div>
       )}
 
-      {overBalance && balance && (
+      {leaveTypeId != null && over.over && over.available != null && (
         <div className="wf-balance-warn" role="status">
-          {t('body.leave.overBalance', {
-            type: balance.leaveTypeName,
-            days: balanceDaysText(balance.currentBalance),
-          })}
+          {over.pending > 0
+            ? t('body.leave.overBalancePending', {
+                type: balance?.leaveTypeName ?? leaveTypeName ?? '',
+                days: balanceDaysText(over.available),
+                pending: balanceDaysText(over.pending),
+              })
+            : t('body.leave.overBalance', {
+                type: balance?.leaveTypeName ?? leaveTypeName ?? '',
+                days: balanceDaysText(over.available),
+              })}
         </div>
       )}
 
