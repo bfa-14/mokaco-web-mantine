@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, FileInput, Loader } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -20,6 +21,7 @@ const MAX_BYTES = 1024 * 1024
  * name and a timestamp instead of a picture. Nothing here may present its absence as a problem.
  */
 function MySignaturePanel() {
+  const { t } = useTranslation()
   const [info, setInfo] = useState<MySignature | null>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -85,7 +87,7 @@ function MySignaturePanel() {
   async function upload(file: File) {
     if (file.size > MAX_BYTES) {
       notifications.show({
-        message: `That file is ${fileSize(file.size)}. The limit is 1 MB.`,
+        message: t('security.profile.tooBig', { size: fileSize(file.size) }),
         color: 'red',
         autoClose: 5000,
       })
@@ -98,7 +100,7 @@ function MySignaturePanel() {
       // SAVE reported — no reliance on a second read to have moved on, and no hard refresh.
       const saved = await meService.uploadSignature(file)
       await load(saved.updatedAt)
-      notifications.show({ message: 'Signature saved.', color: 'green', autoClose: 2500 })
+      notifications.show({ message: t('security.profile.saved'), color: 'green', autoClose: 2500 })
     } catch (err) {
       // The server checks the type from the file's own bytes; its refusal names the real reason.
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 6000 })
@@ -114,7 +116,7 @@ function MySignaturePanel() {
       await meService.removeSignature()
       await load()
       notifications.show({
-        message: 'Signature removed. You can still sign with your password.',
+        message: t('security.profile.removed'),
         color: 'green',
         autoClose: 3500,
       })
@@ -127,7 +129,7 @@ function MySignaturePanel() {
 
   return (
     <div className="card">
-      <div className="card-title">Your signature</div>
+      <div className="card-title">{t('security.profile.signatureTitle')}</div>
 
       {loading ? (
         <div className="page-loading">
@@ -137,20 +139,19 @@ function MySignaturePanel() {
         <>
           {url ? (
             <div className="wf-my-sig" style={{ display: 'inline-flex' }}>
-              <img className="wf-sig-img" src={url} alt="Your signature" />
+              <img className="wf-sig-img" src={url} alt={t('security.profile.signatureTitle')} />
             </div>
           ) : (
             <p className="hint" style={{ marginTop: 0 }}>
-              No signature image on file. You can still sign decisions with your password — the
-              record will show your name and the time instead of an image.
+              {t('security.profile.none')}
             </p>
           )}
 
           {info?.hasSignature && (
             <div className="hint">
-              {info.fileName ?? 'Signature'}
+              {info.fileName ?? t('security.profile.signature')}
               {info.byteSize != null ? ` · ${fileSize(info.byteSize)}` : ''}
-              {info.updatedAt ? ` · updated ${dateTime(info.updatedAt)}` : ''}
+              {info.updatedAt ? ` · ${t('security.profile.updated', { when: dateTime(info.updatedAt) })}` : ''}
             </div>
           )}
 
@@ -159,8 +160,8 @@ function MySignaturePanel() {
               value={pendingFile}
               accept="image/png,image/jpeg"
               disabled={busy}
-              placeholder="Choose an image…"
-              aria-label="Signature image"
+              placeholder={t('security.profile.choose')}
+              aria-label={t('security.profile.image')}
               w={240}
               clearable={false}
               onChange={(file) => {
@@ -175,12 +176,12 @@ function MySignaturePanel() {
                 onClick={() => void remove()}
                 disabled={busy}
               >
-                {busy ? 'Working…' : 'Remove'}
+                {busy ? t('security.profile.working') : t('security.profile.remove')}
               </Button>
             )}
           </div>
           <p className="hint" style={{ marginBottom: 0 }}>
-            PNG or JPEG, up to 1 MB.
+            {t('security.profile.formats')}
           </p>
         </>
       )}
@@ -190,19 +191,17 @@ function MySignaturePanel() {
 
 /** The signed-in user's own profile — what they can set about themselves, needing no permission. */
 export default function MyProfilePage() {
+  const { t } = useTranslation()
   return (
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">My profile</h1>
-          <p className="page-subtitle">Settings that are yours alone.</p>
+          <h1 className="page-title">{t('security.profile.title')}</h1>
+          <p className="page-subtitle">{t('security.profile.subtitle')}</p>
         </div>
       </div>
 
-      <PageHelp>
-        Your signature image appears beside decisions you sign. It is a convention, not a
-        credential — what actually signs a decision is your password.
-      </PageHelp>
+      <PageHelp>{t('security.profile.help')}</PageHelp>
 
       <MySignaturePanel />
 

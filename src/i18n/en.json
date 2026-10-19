@@ -752,7 +752,8 @@
       "Present": "Present",
       "Absent": "Absent",
       "RestDay": "Rest day",
-      "Leave": "Leave"
+      "Leave": "Leave",
+      "Holiday": "Holiday"
     },
     "weekdayInitial": {
       "0": "S",
@@ -1373,6 +1374,36 @@
     "roles": {
       "rejectionEnds": "Rejection ends the request",
       "rejectionEndsHint": "Off = the rejection is recorded as advice and the request continues"
+    },
+    "profile": {
+      "title": "My profile",
+      "subtitle": "Settings that are yours alone.",
+      "help": "Your signature image appears beside decisions you sign. It is a convention, not a credential — what actually signs a decision is your password.",
+      "signatureTitle": "Your signature",
+      "signature": "Signature",
+      "image": "Signature image",
+      "none": "No signature image on file. You can still sign decisions with your password — the record will show your name and the time instead of an image.",
+      "updated": "updated {{when}}",
+      "choose": "Choose an image…",
+      "working": "Working…",
+      "remove": "Remove",
+      "formats": "PNG or JPEG, up to 1 MB.",
+      "tooBig": "That file is {{size}}. The limit is 1 MB.",
+      "saved": "Signature saved.",
+      "removed": "Signature removed. You can still sign with your password."
+    },
+    "password": {
+      "title": "Change password",
+      "hint": "You will stay signed in on this device. Any other device stays signed in too, until its session expires.",
+      "current": "Current password",
+      "new": "New password",
+      "confirm": "Confirm new password",
+      "showHide": "Show or hide: {{field}}",
+      "tooShort_one": "Use at least {{count}} character.",
+      "tooShort_other": "Use at least {{count}} characters.",
+      "mismatch": "These two do not match.",
+      "changing": "Changing…",
+      "changed": "Password changed."
     }
   },
   "core": {
@@ -1622,7 +1653,68 @@
         "Approved": "Approved"
       }
     },
-    "systemDenied": "You don't have permission to view or change the system settings — the values that decide what a working day is, and therefore what people are paid. Ask an administrator if one of them needs to change. Your own preferences above are still yours."
+    "systemDenied": "You don't have permission to view or change the system settings — the values that decide what a working day is, and therefore what people are paid. Ask an administrator if one of them needs to change. Your own preferences above are still yours.",
+    "danger": {
+      "title": "Danger zone",
+      "doneLead": "<strong>All data has been deleted.</strong> This is what was kept:",
+      "kept": "Kept",
+      "rows": "Rows",
+      "sessionsCleared": "Every session was cleared, including yours. Sign in again to continue.",
+      "goToSignIn": "Go to sign in",
+      "intro": "Deletes every request, attendance record and employee. Users, roles, chains, branches and leave policy remain.",
+      "arm": "Arm system reset",
+      "armHint": "Disarms itself after every reset.",
+      "armUnreadable": "The arming setting could not be read, so the reset cannot be armed from here.",
+      "open": "Delete all data…",
+      "dialogTitle": "Delete all data?",
+      "dialogDeletes": "This deletes every request, attendance record and employee.",
+      "dialogRemains": "Users, roles, chains, branches and leave policy remain.",
+      "typePhrase": "Type <strong>{{phrase}}</strong> to continue.",
+      "typeAria": "Type {{phrase}} to confirm",
+      "notArmedHelp": "Close this and switch on <strong>{{arm}}</strong> above, then try again.",
+      "deleting": "Deleting…",
+      "confirm": "Delete everything"
+    },
+    "rows": {
+      "on": "On",
+      "off": "Off",
+      "lastChanged": "Last changed {{date}}",
+      "saved": "{{title}} saved.",
+      "explain": {
+        "standardDay": "A {{label}} day. A 2-hour exit permission costs {{cost}} of a leave day.",
+        "toleranceZero": "Zero: every minute past the shift start or before its end becomes an anomaly for HR to decide.",
+        "tolerance": "On a 07:00–15:00 shift: punching in at {{lateIn}} or later, or out at {{earlyOut}} or earlier, becomes an anomaly for HR to decide. A shift with its own Grace uses that instead.",
+        "fraction": "This is a fraction of the day, not a percentage: {{value}} means {{percent}}%.",
+        "fractionWhole": "The whole {{hours}}h day must be worked before it counts as full.",
+        "fractionPart": "With a {{hours}}h standard day, working {{label}} is enough to count as a full day."
+      }
+    },
+    "rowTitles": {
+      "StandardWorkDayHours": "Standard work day",
+      "ExitLeaveBasis": "Exit leave basis",
+      "AttendanceToleranceMinutes": "Attendance tolerance (minutes)",
+      "FullDayThreshold": "Full day threshold",
+      "TaxFamilyDeductionAnnualUsd": "Family tax deduction (annual, USD)",
+      "HolidayWorkRate": "Holiday work rate (× the day rate)",
+      "LeavePayoutOnTermination": "Pay the leave balance on termination",
+      "LeaveCountsRestDays": "Leave counts rest days and holidays",
+      "LeaveAllowNegativeBalance": "Allow a negative leave balance",
+      "LeaveCarryOverMaxDays": "Carry-over cap (days; blank = no cap)",
+      "LeaveCarryOverExpiresOn": "Carried-over days expire on (MM-DD; blank = never)",
+      "ShowPageHelp": "Show page help",
+      "SmtpHost": "Mail server",
+      "SmtpPort": "Port",
+      "SmtpUser": "User name",
+      "SmtpPassword": "Password",
+      "SmtpFromEmail": "From address",
+      "SmtpFromName": "From name",
+      "NotifyOnRequestClosed": "Email on a closed request",
+      "WhatsAppEnabled": "WhatsApp messages",
+      "WhatsAppApiUrl": "Cloud API URL",
+      "WhatsAppPhoneNumberId": "Sending number id",
+      "WhatsAppAccessToken": "Access token",
+      "WhatsAppTemplateName": "Template name"
+    }
   },
   "booking": {
     "noAccess": "You do not have access to bookings.",

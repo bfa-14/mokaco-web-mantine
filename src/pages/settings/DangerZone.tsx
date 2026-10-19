@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import { Button, Switch, TextInput } from '@mantine/core'
 import { Modal } from '../../components/dialogs'
 import { notifications } from '@mantine/notifications'
@@ -36,6 +37,7 @@ export function DangerZone({
   onArmedChanged: () => Promise<void> | void
 }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { hasPermission, logout } = useAuth()
 
   const [arming, setArming] = useState(false)
@@ -131,7 +133,7 @@ export function DangerZone({
   return (
     <div className="danger-zone">
       <div className="danger-zone-head">
-        <h2 className="danger-zone-title">Danger zone</h2>
+        <h2 className="danger-zone-title">{t('settings.danger.title')}</h2>
       </div>
 
       {summary ? (
@@ -139,13 +141,13 @@ export function DangerZone({
            nothing left to reset, and the session it was done from is already invalid. */
         <>
           <p className="danger-zone-text">
-            <strong>All data has been deleted.</strong> This is what was kept:
+            <Trans i18nKey="settings.danger.doneLead" components={{ strong: <strong /> }} />
           </p>
           <table className="danger-summary">
             <thead>
               <tr>
-                <th>Kept</th>
-                <th className="danger-summary-count">Rows</th>
+                <th>{t('settings.danger.kept')}</th>
+                <th className="danger-summary-count">{t('settings.danger.rows')}</th>
               </tr>
             </thead>
             <tbody>
@@ -164,35 +166,26 @@ export function DangerZone({
               })}
             </tbody>
           </table>
-          <p className="danger-zone-text">
-            Every session was cleared, including yours. Sign in again to continue.
-          </p>
+          <p className="danger-zone-text">{t('settings.danger.sessionsCleared')}</p>
           <Button color="red" onClick={() => void goToLogin()}>
-            Go to sign in
+            {t('settings.danger.goToSignIn')}
           </Button>
         </>
       ) : (
         <>
-          <p className="danger-zone-text">
-            Deletes every request, attendance record and employee. Users, roles, chains, branches
-            and leave policy remain.
-          </p>
+          <p className="danger-zone-text">{t('settings.danger.intro')}</p>
 
           <div className="danger-zone-arm">
             {/* Mantine's Switch carries its own label element, so the text rides on the control
                 rather than on a wrapping <label> as before — same click target, same reading. */}
             <Switch
-              label="Arm system reset"
+              label={t('settings.danger.arm')}
               checked={armed}
               disabled={arming || !armedSetting}
               onChange={(e) => void setArmed(e.currentTarget.checked)}
             />
-            <div className="hint">Disarms itself after every reset.</div>
-            {!armedSetting && (
-              <div className="hint">
-                The arming setting could not be read, so the reset cannot be armed from here.
-              </div>
-            )}
+            <div className="hint">{t('settings.danger.armHint')}</div>
+            {!armedSetting && <div className="hint">{t('settings.danger.armUnreadable')}</div>}
           </div>
 
           <Button
@@ -205,7 +198,7 @@ export function DangerZone({
               setDialogOpen(true)
             }}
           >
-            Delete all data…
+            {t('settings.danger.open')}
           </Button>
           {/* The button stays ENABLED while disarmed on purpose: the refusal explains the toggle far
               better than a dead button does, and it costs nothing — the server changes nothing. */}
@@ -216,18 +209,20 @@ export function DangerZone({
         <Modal
           opened
           onClose={() => setDialogOpen(false)}
-          title="Delete all data?"
+          title={t('settings.danger.dialogTitle')}
           size={520}
           centered
           // The original Popup only closed from its X button — a shading click did nothing.
           closeOnClickOutside={false}
         >
-          <p style={{ marginTop: 0 }}>
-            This deletes every request, attendance record and employee.
-          </p>
-          <p>Users, roles, chains, branches and leave policy remain.</p>
+          <p style={{ marginTop: 0 }}>{t('settings.danger.dialogDeletes')}</p>
+          <p>{t('settings.danger.dialogRemains')}</p>
           <p>
-            Type <strong>{RESET_CONFIRM_PHRASE}</strong> to continue.
+            <Trans
+              i18nKey="settings.danger.typePhrase"
+              values={{ phrase: RESET_CONFIRM_PHRASE }}
+              components={{ strong: <strong /> }}
+            />
           </p>
 
           <TextInput
@@ -235,7 +230,7 @@ export function DangerZone({
             onChange={(e) => setPhrase(e.currentTarget.value)}
             placeholder={RESET_CONFIRM_PHRASE}
             disabled={busy}
-            aria-label={`Type ${RESET_CONFIRM_PHRASE} to confirm`}
+            aria-label={t('settings.danger.typeAria', { phrase: RESET_CONFIRM_PHRASE })}
             autoComplete="off"
           />
 
@@ -245,7 +240,11 @@ export function DangerZone({
               {/* The not-armed refusal names the setting; point at where that switch actually is. */}
               {error.includes('not armed') && (
                 <div style={{ marginTop: 6 }}>
-                  Close this and switch on <strong>Arm system reset</strong> above, then try again.
+                  <Trans
+                    i18nKey="settings.danger.notArmedHelp"
+                    values={{ arm: t('settings.danger.arm') }}
+                    components={{ strong: <strong /> }}
+                  />
                 </div>
               )}
             </div>
@@ -253,7 +252,7 @@ export function DangerZone({
 
           <div className="form-actions">
             <Button variant="default" onClick={() => setDialogOpen(false)} disabled={busy}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               color="red"
@@ -262,7 +261,7 @@ export function DangerZone({
               disabled={busy || !phraseMatches}
               onClick={() => void reset()}
             >
-              {busy ? 'Deleting…' : 'Delete everything'}
+              {busy ? t('settings.danger.deleting') : t('settings.danger.confirm')}
             </Button>
           </div>
         </Modal>

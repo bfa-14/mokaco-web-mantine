@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, PasswordInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -37,6 +38,7 @@ function PasswordField({
   error?: string | null
   onChange: (value: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="form-field">
       <label className="form-label" htmlFor={id}>
@@ -48,7 +50,7 @@ function PasswordField({
         value={value}
         disabled={disabled}
         visibilityToggleButtonProps={{
-          'aria-label': `Show or hide ${label.toLowerCase()}`,
+          'aria-label': t('security.password.showHide', { field: label }),
         }}
         onChange={(e) => onChange(e.currentTarget.value)}
       />
@@ -71,6 +73,7 @@ function PasswordField({
  * with the fields cleared behind them.
  */
 export function ChangePasswordCard() {
+  const { t } = useTranslation()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -92,7 +95,7 @@ export function ChangePasswordCard() {
     setError(null)
     try {
       await meService.changePassword(current, next)
-      notifications.show({ message: 'Password changed.', color: 'green', autoClose: 2500 })
+      notifications.show({ message: t('security.password.changed'), color: 'green', autoClose: 2500 })
       setCurrent('')
       setNext('')
       setConfirm('')
@@ -106,10 +109,9 @@ export function ChangePasswordCard() {
 
   return (
     <div className="card">
-      <div className="card-title">Change password</div>
+      <div className="card-title">{t('security.password.title')}</div>
       <p className="hint" style={{ marginBottom: 16 }}>
-        You will stay signed in on this device. Any other device stays signed in too, until its
-        session expires.
+        {t('security.password.hint')}
       </p>
 
       {error && (
@@ -120,7 +122,7 @@ export function ChangePasswordCard() {
 
       <PasswordField
         id="pw-current"
-        label="Current password"
+        label={t('security.password.current')}
         value={current}
         autoComplete="current-password"
         disabled={saving}
@@ -129,27 +131,27 @@ export function ChangePasswordCard() {
 
       <PasswordField
         id="pw-new"
-        label="New password"
+        label={t('security.password.new')}
         value={next}
         autoComplete="new-password"
         disabled={saving}
-        error={tooShort ? `Use at least ${MIN_LENGTH} characters.` : null}
+        error={tooShort ? t('security.password.tooShort', { count: MIN_LENGTH }) : null}
         onChange={setNext}
       />
 
       <PasswordField
         id="pw-confirm"
-        label="Confirm new password"
+        label={t('security.password.confirm')}
         value={confirm}
         autoComplete="new-password"
         disabled={saving}
-        error={mismatch ? 'These two do not match.' : null}
+        error={mismatch ? t('security.password.mismatch') : null}
         onChange={setConfirm}
       />
 
       <div className="form-actions">
         <Button onClick={() => void submit()} disabled={!canSubmit}>
-          {saving ? 'Changing…' : 'Change password'}
+          {saving ? t('security.password.changing') : t('security.password.title')}
         </Button>
       </div>
     </div>
