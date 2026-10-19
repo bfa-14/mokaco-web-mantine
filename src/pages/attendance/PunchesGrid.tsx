@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import {
@@ -137,15 +137,23 @@ export function PunchesGrid({
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
+  /* ONLY THE LATEST REQUEST MAY LAND (QA3 WEB-17). Changing the day while a slow answer for the
+     previous one is in flight, or a live signal firing during a load, used to let the OLDER answer
+     arrive last and overwrite the grid with another day's punches. Each load takes a number; an
+     answer that is no longer the latest is dropped, as RequestsHubPage does. */
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     setLoading(true)
     try {
-      setPunches(await importService.getPunches(date))
+      const rows = await importService.getPunches(date)
+      if (seq !== loadSeq.current) return
+      setPunches(rows)
       setError(null)
     } catch (err) {
-      setError(getErrorMessage(err))
+      if (seq === loadSeq.current) setError(getErrorMessage(err))
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [date])
 

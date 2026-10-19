@@ -25,6 +25,7 @@ import {
   IconPinFilled,
   IconPlus,
   IconRefresh,
+  IconRefreshDot,
   IconSettings,
 } from '@tabler/icons-react'
 import { rosterService, shiftsService } from '../../services/attendanceService'
@@ -48,19 +49,20 @@ import type {
   ShiftPatternUpsertRequest,
 } from '../../types/attendance'
 import type { Holiday } from '../../types/core'
-import type { Branch, EmployeeListItem, LeaveDay } from '../../types/hr'
+import type { Branch, EmployeeListItem } from '../../types/hr'
 import {
   currentPeriod,
   daysInPeriod,
-  formatDate,
   formatDayLabel,
   isWeekend,
   periodLabel,
   periodRange,
   previousPeriod,
+  toDateString,
   weekdayInitial,
 } from './attendanceFormat'
 import { useApprovedLeaveDays } from './useApprovedLeaveDays'
+import { gapsOfBranch, oneBranchOf, rederiveBlocked } from './rosterBranch'
 import { RosterApprovalBanner } from './RosterApprovalBanner'
 import type { RosterEditState } from './RosterApprovalBanner'
 import { chevronBack, chevronForward } from '../../i18n/physical'
@@ -333,54 +335,6 @@ interface PatternRow {
  * The sentence that has to appear under every "Overwrite existing" tick box. Overwriting is
  * the one action on this page that can silently destroy work HR already did by hand.
  */
-/**
- * What a generation is about to do to people's approved leave, BEFORE it runs.
- *
- * The user is told, and then allowed to proceed — deliberately. Silently skipping the days would
- * be the same screen either way, and somebody who genuinely wants to roster over a cancelled
- * holiday would have no way to tell whether the system had understood them. Naming the days is
- * what makes it a decision rather than a surprise.
- */
-function LeavePreflight({
-  days,
-  employeeName,
-  error,
-}: {
-  days: LeaveDay[]
-  employeeName: (employeeId: number) => string
-  error: string | null
-}) {
-  // Leave could not be read. Say so loudly: proceeding might roster somebody over their holiday,
-  // and pretending the check passed would be the one genuinely dishonest option here.
-  if (error) {
-    return (
-      <div className="alert alert--error" role="alert">
-        Approved leave could not be checked, so this may schedule somebody over their
-        holiday. {error}
-      </div>
-    )
-  }
-
-  if (days.length === 0) return null
-
-  return (
-    <div className="card" style={{ marginBottom: 14, borderInlineStart: '4px solid #2e7d4f' }}>
-      <div className="empty-hint-main">
-        {days.length} of these days fall on approved leave and will be left as leave, not
-        scheduled.
-      </div>
-      <ul className="hint" style={{ margin: '6px 0 0', paddingInlineStart: 18 }}>
-        {days.map((day) => (
-          <li key={`${day.employeeId}|${day.date}`}>
-            {employeeName(day.employeeId)} — {formatDate(day.date)}
-            {day.daysOnLeave !== 1 && ` (${day.daysOnLeave} days booked on this date)`}
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
 function OverwriteField({
   value,
   onChange,
@@ -476,11 +430,11 @@ export default function RosterPage() {
     }
     return allEmployees.filter((e) => e.branch === branchName || rostered.has(e.employeeId))
   }, [allEmployees, assignments, branches, branchFilter, period, draft.cells])
-  const gaps = useMemo(() => {
-    if (branchFilter == null) return allGaps
-    const visible = new Set(employees.map((e) => e.employeeId))
-    return allGaps.filter((g) => visible.has(g.employeeId))
-  }, [allGaps, employees, branchFilter])
+  /* QA3 (ROS-8): the server answers for the branch on screen, by the branch of the DAY; each gap says its branch. */
+  const gaps = useMemo(
+    () => gapsOfBranch(allGaps, branchFilter, new Set(employees.map((e) => e.employeeId))),
+    [allGaps, employees, branchFilter],
+  )
   const [error, setError] = useState<string | null>(null)
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -527,6 +481,7 @@ export default function RosterPage() {
   const [copyOverwrite, setCopyOverwrite] = useState(false)
   const [applyVisible, setApplyVisible] = useState(false)
   const [applyOverwrite, setApplyOverwrite] = useState(false)
+  const [rederiveVisible, setRederiveVisible] = useState(false)
   const [patternsVisible, setPatternsVisible] = useState(false)
   const [patternEmployeeId, setPatternEmployeeId] = useState<number | null>(
     null,
@@ -538,19 +493,20 @@ export default function RosterPage() {
   const days = useMemo(() => daysInPeriod(period), [period])
 
   /**
-   * Who is on approved leave this month.
-   *
-   * Deliberately fetched through a hook rather than inline: leave has no proper home yet
-   * (workflow.LEAVE_REQUEST does not exist), so the roster asks the QUESTION and lets one file own
-   * the answer. See useApprovedLeaveDays.
+   * Who is on approved leave this month: the approved leave requests, day by day, of the branch on
+   * screen by the branch of the day (QA3 ROS-4 / LEV-5). The roster asks the QUESTION and lets one
+   * file own the answer. See useApprovedLeaveDays.
    *
    * Read over the WINDOW (whole Monday–Sunday weeks around the month), not the month: the 6·5 strip
-   * judges the first and last weeks too, and a leave day there is what excuses a short week. Every
-   * dialog below still filters to the month (leaveRange) before it names or rewrites a day.
+   * judges the first and last weeks too, and a leave day there is what excuses a short week.
+   *
+   * The generators themselves keep a leave day off the rest days (QA3, rule D5: a leave day is never
+   * a rest day; an empty one gets a working shift, a day already planned inside a leave is kept), so
+   * the page no longer rewrites anything after a generation.
    */
   const leaveRange = useMemo(() => periodRange(period), [period])
   const windowRange = useMemo(() => rosterWindow(leaveRange.from, leaveRange.to), [leaveRange])
-  const leave = useApprovedLeaveDays(windowRange.from, windowRange.to)
+  const leave = useApprovedLeaveDays(windowRange.from, windowRange.to, branchFilter)
 
   /* ── AUTO-ROSTER (docs/AUTO_ROSTER.md §5) ── */
 
@@ -565,11 +521,10 @@ export default function RosterPage() {
     pins: Map<string, RosterCellInfo> | null
   } | null>(null)
 
-  /* THE BRANCH THE AUTO-ROSTER PLANS. It plans one branch-month, so "All branches" has none — unless
+  /* THE BRANCH THE AUTO-ROSTER PLANS — and the one "Copy previous month", "Apply weekly patterns" and
+     "Re-derive month" work on (QA3 ROS-3). Each is one branch-month, so "All branches" has none — unless
      there is only one active branch, when the filter is not even offered and "all" IS that branch. */
-  const activeBranches = useMemo(() => branches.filter((b) => b.isActive), [branches])
-  const autoBranchId =
-    branchFilter ?? (activeBranches.length === 1 ? activeBranches[0].branchId : null)
+  const autoBranchId = oneBranchOf(branchFilter, branches)
   const autoBranchName = branches.find((b) => b.branchId === autoBranchId)?.name ?? ''
 
   /* The branch-month's auto-roster setup: the drawer opens on it, and outside a preview the footer
@@ -621,17 +576,6 @@ export default function RosterPage() {
     }
     return map
   }, [holidays, autoBranchId])
-
-  /**
-   * The same question again, for the Generate dialog's OWN range — which the user can set outside
-   * the month on screen (a new hire starting mid-June, covered into July). Asking the month's hook
-   * would silently under-report leave for exactly the days it was not fetched for, and a pre-flight
-   * that under-reports is worse than none: it tells the user their holiday is safe when it is not.
-   */
-  const generateLeave = useApprovedLeaveDays(
-    generateForm.fromDate,
-    generateForm.toDate,
-  )
 
   /** Employee-day → what they were supposed to work. A missing key is a HOLE, not a rest day. */
   const lookup = useMemo(() => {
@@ -723,7 +667,7 @@ export default function RosterPage() {
           employeesService.getAll(),
           shiftsService.getAll(),
           rosterService.get(span.from, span.to, undefined, branchFilter ?? undefined),
-          rosterService.getGaps(from, to),
+          rosterService.getGaps(from, to, branchFilter),
         ])
       setEmployees(employeeList)
       setShifts(shiftList)
@@ -750,7 +694,7 @@ export default function RosterPage() {
             employeesService.getAll(),
             shiftsService.getAll(),
             rosterService.get(span.from, span.to, undefined, branchFilter ?? undefined),
-            rosterService.getGaps(from, to),
+            rosterService.getGaps(from, to, branchFilter),
           ])
         if (!cancelled) {
           setEmployees(employeeList)
@@ -1006,72 +950,6 @@ export default function RosterPage() {
     clearSelection()
   }
 
-  /* ------------------------------------------------------------------------ *
-   * LEAVE-AWARE GENERATION — A CLIENT-SIDE WORKAROUND. REMOVE WHEN SQL CATCHES UP.
-   *
-   * The stored generators (usp_ShiftAssignment_GenerateRange_Bulk / _CopyPeriod /
-   * _ApplyPattern) know nothing about leave: they will happily put a working shift on
-   * somebody's approved holiday. Teaching them is a schema-contract change, so until then
-   * the page does it as a POST-STEP — generate first, then rewrite the leave days to rest.
-   *
-   * WHAT THIS COSTS, said plainly: it is not atomic. Between the generator returning and the
-   * overwrite finishing, those days ARE rostered as working. Nothing reads the roster in that
-   * window except a human refreshing the page, so the risk is cosmetic rather than payroll-
-   * affecting — but it is real, and it is why this belongs in SQL.
-   *
-   * TO REMOVE: delete leaveDaysAffecting() and overwriteLeaveDays(), delete the three
-   * `await overwriteLeaveDays(...)` calls in submitGenerate/submitCopy/submitApply, and drop
-   * the pre-flight <LeavePreflight> from the three dialogs. Nothing else knows about this.
-   * ------------------------------------------------------------------------ */
-
-  /**
-   * The leave days a generation is about to run over — the exact set the post-step will rewrite,
-   * so what the pre-flight promises and what happens cannot drift apart.
-   */
-  function leaveDaysAffecting(
-    source: LeaveDay[],
-    employeeIds: number[] | null,
-    fromDate: string,
-    toDate: string,
-    weekdayMask?: boolean[],
-  ): LeaveDay[] {
-    return source.filter((day) => {
-      const date = day.date.slice(0, 10)
-      if (date < fromDate || date > toDate) return false
-      if (employeeIds !== null && !employeeIds.includes(day.employeeId)) return false
-
-      // A generator only touches the weekdays it was asked for; days outside the mask are written
-      // as rest anyway, so they are not a conflict worth reporting.
-      if (weekdayMask) {
-        // getDay(): 0 = Sunday. The mask is Monday-first, matching the API's '1111100'.
-        const dow = new Date(`${date}T00:00:00`).getDay()
-        const mondayFirst = dow === 0 ? 6 : dow - 1
-        if (!weekdayMask[mondayFirst]) return false
-      }
-
-      return true
-    })
-  }
-
-  /**
-   * Rewrites each leave day to a rest day, so a generation cannot leave somebody rostered to work
-   * their holiday. Uses the ordinary per-day endpoint — no special path, nothing the roster cannot
-   * already do by hand.
-   */
-  async function overwriteLeaveDays(affected: LeaveDay[]): Promise<number> {
-    for (const day of affected) {
-      await rosterService.setDay({
-        employeeId: day.employeeId,
-        workDate: day.date.slice(0, 10),
-        // A leave day is an assignment with NO shift. It is not an empty day — the roster still
-        // has to state that this person was not expected to work.
-        shiftId: null,
-        isRestDay: true,
-      })
-    }
-    return affected.length
-  }
-
   function openGenerate(employeeIds: number[] = []) {
     const range = periodRange(period)
     setGenerateForm({
@@ -1109,31 +987,24 @@ export default function RosterPage() {
         shiftId: generateForm.shiftId,
         weekdays: generateForm.weekdays.map((on) => (on ? '1' : '0')).join(''),
         overwrite: generateForm.overwrite,
+        // QA3 (ROS-14): under a branch filter, only the days these people belong to the branch on screen
+        branchId: branchFilter,
       })
 
-      // Post-step: the SQL generator does not know about leave, so it has just rostered any
-      // holiday in this range as a working day. Put those back. See the block comment above.
-      const rewritten = await overwriteLeaveDays(
-        leaveDaysAffecting(
-          generateLeave.days,
-          generateForm.employeeIds,
-          generateForm.fromDate,
-          generateForm.toDate,
-          generateForm.weekdays,
-        ),
-      )
-
       notifications.show({
+        // QA3 (ROS-13): the days actually written, when the API says (an older one counted only the people)
         message:
-          `${outcome.employeesProcessed} employee(s) rostered.` +
-          (rewritten > 0
-            ? ` ${rewritten} approved-leave day(s) were left as leave, not scheduled.`
-            : ''),
+          outcome.rowsInserted != null
+            ? t('attendance.roster.generate.bulkDone', {
+                employees: outcome.employeesProcessed,
+                count: outcome.rowsInserted,
+              })
+            : `${outcome.employeesProcessed} employee(s) rostered.`,
         color: 'green',
         autoClose: 3500,
       })
       setGenerateVisible(false)
-      await Promise.all([load(), leave.reload()])
+      await load()
     } catch (err) {
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
     } finally {
@@ -1142,6 +1013,8 @@ export default function RosterPage() {
   }
 
   async function submitCopy() {
+    // QA3 (ROS-3): one branch-month — the button is off under "All branches"
+    if (autoBranchId == null) return
     setSaving(true)
     try {
       const outcome = await rosterService.copyPeriod({
@@ -1149,24 +1022,16 @@ export default function RosterPage() {
         targetYearMonth: period,
         employeeId: null,
         overwrite: copyOverwrite,
+        branchId: autoBranchId,
       })
 
-      // Post-step: SQL does not know about leave. See the block comment above overwriteLeaveDays.
-      const rewritten = await overwriteLeaveDays(
-        leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to),
-      )
-
       notifications.show({
-        message:
-          `Rostered ${outcome.rowsInserted} day(s).` +
-          (rewritten > 0
-            ? ` ${rewritten} approved-leave day(s) were left as leave, not scheduled.`
-            : ''),
+        message: t('attendance.roster.generate.rowsDone', { count: outcome.rowsInserted }),
         color: 'green',
         autoClose: 3500,
       })
       setCopyVisible(false)
-      await Promise.all([load(), leave.reload()])
+      await load()
     } catch (err) {
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
     } finally {
@@ -1175,30 +1040,48 @@ export default function RosterPage() {
   }
 
   async function submitApplyPatterns() {
+    // QA3 (ROS-3): one branch-month — the button is off under "All branches"
+    if (autoBranchId == null) return
     setSaving(true)
     try {
       const outcome = await rosterService.applyPattern({
         yearMonth: period,
         employeeId: null,
         overwrite: applyOverwrite,
+        branchId: autoBranchId,
       })
 
-      // Post-step: SQL does not know about leave. See the block comment above overwriteLeaveDays.
-      const rewritten = await overwriteLeaveDays(
-        leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to),
-      )
-
       notifications.show({
-        message:
-          `Rostered ${outcome.rowsInserted} day(s).` +
-          (rewritten > 0
-            ? ` ${rewritten} approved-leave day(s) were left as leave, not scheduled.`
-            : ''),
+        message: t('attendance.roster.generate.rowsDone', { count: outcome.rowsInserted }),
         color: 'green',
         autoClose: 3500,
       })
       setApplyVisible(false)
-      await Promise.all([load(), leave.reload()])
+      await load()
+    } catch (err) {
+      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
+   * QA3 (REL-16): "Re-derive month" — the branch-month's completed days derived again against the
+   * roster as it stands (after a shift, holiday or setting changed). Approving the month does this by
+   * itself; paid days and days entered by hand are left as they are.
+   */
+  async function submitRederive() {
+    if (autoBranchId == null) return
+    setSaving(true)
+    try {
+      const outcome = await rosterService.rederiveMonth({ branchId: autoBranchId, yearMonth: period })
+      notifications.show({
+        message: t('attendance.roster.rederive.done', { count: outcome.daysRederived }),
+        color: 'green',
+        autoClose: 3500,
+      })
+      setRederiveVisible(false)
+      await load()
     } catch (err) {
       notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 4000 })
     } finally {
@@ -1353,8 +1236,8 @@ export default function RosterPage() {
    * with no row on a public holiday is a holiday off, which is a known day.
    *
    * LEAVE AS THE PLANNER READS IT (D5): a rest row on ANY leave day, half included, is not a rest
-   * day; only a FULL-day leave takes the person off duty. The approved ledger says how much of a
-   * day is leave. A draft day of origin 'leave' is a leave the ledger may not hold (Pending,
+   * day; only a FULL-day leave takes the person off duty. The approved leave requests say how much of
+   * a day is leave. A draft day of origin 'leave' is a leave not approved yet (Pending,
    * OnHold) and may be a half day, so it is known as leave but not as a full day — which is why the
    * footer takes its on-duty count from the preview while a draft is open.
    */
@@ -1485,6 +1368,9 @@ export default function RosterPage() {
     return () => observer.disconnect()
   }, [])
 
+  /** QA3 (REL-16): why "Re-derive month" is off — no branch chosen, or no completed day in the month yet. */
+  const rederiveReason = rederiveBlocked(autoBranchId, period, toDateString(new Date()))
+
   /** Why the auto-roster button is off, when it is. Read-only means a request is open on the month. */
   const autoBlockedReason =
     autoBranchId == null
@@ -1563,6 +1449,11 @@ export default function RosterPage() {
           {error}
         </div>
       )}
+      {leave.error && (
+        <div className="alert alert--warning" role="status">
+          {t('attendance.roster.leaveUnread', { error: leave.error })}
+        </div>
+      )}
 
       <div className="filter-bar">
         <ActionIcon
@@ -1616,18 +1507,33 @@ export default function RosterPage() {
             {/* PRIMARY. A weekly pattern is the stable, recurring truth — "Rami works Mon–Fri
                 Morning" — so expanding it produces a clean month. It is the accent-coloured,
                 first-listed default because it is the right answer nearly every time. */}
-            <Button
-              leftSection={<IconCalendarEvent size={16} />}
-              onClick={() => {
-                setApplyOverwrite(false)
-                setApplyVisible(true)
-              }}
-              // The generators below write rows straight away; under an open draft they would move the
-              // rows the draft was planned against, and its save would be refused.
-              disabled={draft.active}
+            {/* QA3 (ROS-3): one branch-month at a time — off under "All branches", with the reason. */}
+            <Tooltip
+              label={
+                draft.active
+                  ? t('attendance.roster.auto.disabled.draftOpen')
+                  : t('attendance.roster.branch.applyNeedsOne')
+              }
+              disabled={!draft.active && autoBranchId != null}
+              withArrow
+              multiline
+              w={280}
             >
-              Apply weekly patterns
-            </Button>
+              <span>
+                <Button
+                  leftSection={<IconCalendarEvent size={16} />}
+                  onClick={() => {
+                    setApplyOverwrite(false)
+                    setApplyVisible(true)
+                  }}
+                  // The generators below write rows straight away; under an open draft they would move the
+                  // rows the draft was planned against, and its save would be refused.
+                  disabled={draft.active || autoBranchId == null}
+                >
+                  Apply weekly patterns
+                </Button>
+              </span>
+            </Tooltip>
             {/* The 6/5 rotation for one branch-month: previewed on the grid, saved in one call. A
                 secondary button — expanding the weekly patterns stays the default. */}
             <Tooltip
@@ -1662,17 +1568,31 @@ export default function RosterPage() {
                 DEMOTED from the default because copying a month copies that month's NOISE too:
                 the swaps, the corrections, the one-off days off that applied to June and have no
                 business in July. A pattern carries the schedule; a copy carries the history. */}
-            <Button
-              variant="default"
-              leftSection={<IconCopy size={16} />}
-              onClick={() => {
-                setCopyOverwrite(false)
-                setCopyVisible(true)
-              }}
-              disabled={draft.active}
+            <Tooltip
+              label={
+                draft.active
+                  ? t('attendance.roster.auto.disabled.draftOpen')
+                  : t('attendance.roster.branch.copyNeedsOne')
+              }
+              disabled={!draft.active && autoBranchId != null}
+              withArrow
+              multiline
+              w={280}
             >
-              Copy previous month
-            </Button>
+              <span>
+                <Button
+                  variant="default"
+                  leftSection={<IconCopy size={16} />}
+                  onClick={() => {
+                    setCopyOverwrite(false)
+                    setCopyVisible(true)
+                  }}
+                  disabled={draft.active || autoBranchId == null}
+                >
+                  Copy previous month
+                </Button>
+              </span>
+            </Tooltip>
             {/* The editor for the thing the primary action expands. */}
             <Button
               variant="default"
@@ -1681,6 +1601,32 @@ export default function RosterPage() {
             >
               Weekly patterns…
             </Button>
+            {/* QA3 (REL-16): the month's completed days derived again against the roster as it stands. */}
+            <Tooltip
+              label={
+                draft.active
+                  ? t('attendance.roster.auto.disabled.draftOpen')
+                  : rederiveReason === 'branch'
+                    ? t('attendance.roster.branch.rederiveNeedsOne')
+                    : rederiveReason === 'notStarted'
+                      ? t('attendance.roster.rederive.notStarted')
+                      : t('attendance.roster.rederive.hint')
+              }
+              withArrow
+              multiline
+              w={300}
+            >
+              <span>
+                <Button
+                  variant="subtle"
+                  leftSection={<IconRefreshDot size={16} />}
+                  onClick={() => setRederiveVisible(true)}
+                  disabled={draft.active || rederiveReason != null}
+                >
+                  {t('attendance.roster.rederive.button')}
+                </Button>
+              </span>
+            </Tooltip>
           </div>
         )}
       </div>
@@ -2372,17 +2318,11 @@ export default function RosterPage() {
           </div>
         </div>
 
-        <LeavePreflight
-          days={leaveDaysAffecting(
-            generateLeave.days,
-            generateForm.employeeIds,
-            generateForm.fromDate,
-            generateForm.toDate,
-            generateForm.weekdays,
-          )}
-          employeeName={employeeName}
-          error={generateLeave.error}
-        />
+        <p className="hint">
+          {branchFilter != null &&
+            `${t('attendance.roster.branch.generateOnly', { branch: autoBranchName })} `}
+          {t('attendance.roster.generate.leaveRule')}
+        </p>
 
         <OverwriteField
           value={generateForm.overwrite}
@@ -2428,11 +2368,10 @@ export default function RosterPage() {
           </p>
         </div>
 
-        <LeavePreflight
-          days={leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to)}
-          employeeName={employeeName}
-          error={leave.error}
-        />
+        <p className="hint">
+          <strong>{t('attendance.roster.branch.copyOnly', { branch: autoBranchName })}</strong>{' '}
+          {t('attendance.roster.generate.leaveRule')}
+        </p>
 
         <OverwriteField
           value={copyOverwrite}
@@ -2473,11 +2412,10 @@ export default function RosterPage() {
           </p>
         </div>
 
-        <LeavePreflight
-          days={leaveDaysAffecting(leave.days, null, leaveRange.from, leaveRange.to)}
-          employeeName={employeeName}
-          error={leave.error}
-        />
+        <p className="hint">
+          <strong>{t('attendance.roster.branch.applyOnly', { branch: autoBranchName })}</strong>{' '}
+          {t('attendance.roster.generate.leaveRule')}
+        </p>
 
         <OverwriteField
           value={applyOverwrite}
@@ -2495,6 +2433,36 @@ export default function RosterPage() {
           </Button>
           <Button onClick={() => void submitApplyPatterns()} disabled={saving}>
             {saving ? 'Applying…' : 'Apply patterns'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        opened={rederiveVisible}
+        onClose={() => setRederiveVisible(false)}
+        title={t('attendance.roster.rederive.title', { month: periodLabel(period) })}
+        size={480}
+        centered
+      >
+        <div className="form-field">
+          <p style={{ margin: 0 }}>
+            {t('attendance.roster.rederive.body', { branch: autoBranchName, month: periodLabel(period) })}
+          </p>
+          <p className="hint" style={{ marginBottom: 0 }}>
+            {t('attendance.roster.rederive.note')}
+          </p>
+        </div>
+
+        <div className="form-actions">
+          <Button
+            variant="default"
+            onClick={() => setRederiveVisible(false)}
+            disabled={saving}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => void submitRederive()} disabled={saving}>
+            {saving ? t('attendance.roster.rederive.running') : t('attendance.roster.rederive.confirm')}
           </Button>
         </div>
       </Modal>

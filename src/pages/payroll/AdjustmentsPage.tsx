@@ -1,5 +1,5 @@
 /* src/pages/payroll/AdjustmentsPage.tsx */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
@@ -106,10 +106,20 @@ export default function AdjustmentsPage() {
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
+  /* ONLY THE LATEST REQUEST MAY LAND (QA3 WEB-17): stepping through periods quickly let a slow answer
+     for an earlier month arrive last and list its rows under the month now chosen. */
+  const refreshSeq = useRef(0)
   const refresh = useCallback(() => {
+    const seq = ++refreshSeq.current
     adjustmentsService.getForPeriod(period)
-      .then(setRows)
-      .catch((e) => setError(getErrorMessage(e)))
+      .then((r) => {
+        if (seq !== refreshSeq.current) return
+        setRows(r)
+        setError(null)
+      })
+      .catch((e) => {
+        if (seq === refreshSeq.current) setError(getErrorMessage(e))
+      })
   }, [period])
   useEffect(refresh, [refresh])
 

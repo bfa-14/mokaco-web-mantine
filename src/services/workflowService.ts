@@ -971,9 +971,9 @@ export const meService = {
    * Changes the caller's own password. There is NO user id to send: the account is read from the
    * token on the server, so this request cannot be pointed at anybody else.
    *
-   * The session survives it. A successful change returns 204 and nothing is re-issued or cleared —
-   * the access token states who the caller is, not what their password is, so it stays true. Do not
-   * add a logout here; the server does not expect one.
+   * A successful change returns 204 and ENDS EVERY SESSION of the account, the caller's included
+   * (QA3 SEC-5): the next call with this tab's token is refused. ChangePasswordCard says so and
+   * signs the tab out itself; nothing here re-issues or clears anything.
    *
    * A wrong current password comes back as a 400 whose message is written for the user to read.
    * Show it verbatim rather than substituting a friendlier one — the server's wording is the only

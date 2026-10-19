@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, Loader } from '@mantine/core'
 import { IconPrinter } from '@tabler/icons-react'
 import { PageHelp } from '../../components/PageHelp'
@@ -39,6 +40,7 @@ export function ReportShell({
   /** The printable document: the header block and the table. */
   children: ReactNode
 }) {
+  const { t } = useTranslation()
   return (
     <div>
       {/* Everything from here to the print root is app chrome — it is gone on paper. */}
@@ -51,13 +53,9 @@ export function ReportShell({
             leftSection={<IconPrinter size={16} />}
             onClick={onPrint}
             disabled={!canPrint || loading}
-            title={
-              canPrint
-                ? 'Print just the report — no menus, no buttons.'
-                : 'Generate the report first.'
-            }
+            title={canPrint ? t('common.report.printHint') : t('common.report.generateFirst')}
           >
-            Print
+            {t('common.report.print')}
           </Button>
         </div>
       </div>
@@ -75,15 +73,15 @@ export function ReportShell({
       ) : !canPrint ? (
         <div className="card report-no-print">
           <div className="empty-hint">
-            <div className="empty-hint-main">Choose your options and press Generate.</div>
-            The report will appear here, ready to print.
+            <div className="empty-hint-main">{t('common.report.chooseTitle')}</div>
+            {t('common.report.chooseHint')}
           </div>
         </div>
       ) : isEmpty ? (
         <div className="card report-no-print">
           <div className="empty-hint">
-            <div className="empty-hint-main">No data for this selection.</div>
-            Nothing was recorded for these options. Try a different period or branch.
+            <div className="empty-hint-main">{t('common.report.noDataTitle')}</div>
+            {t('common.report.noDataHint')}
           </div>
         </div>
       ) : (
@@ -102,6 +100,30 @@ export function ReportShell({
   )
 }
 
+/**
+ * What a report page shows to someone without REPORT_VIEW: the page title and why there is nothing
+ * under it. The permission is named as the Roles page names it — the three reports have had their
+ * own code since REPORT_VIEW split them from attendance, which this text used to predate.
+ */
+export function ReportNoAccess({ title }: { title: string }) {
+  const { t } = useTranslation()
+  return (
+    <div>
+      <div className="page-head">
+        <div>
+          <h1 className="page-title">{title}</h1>
+        </div>
+      </div>
+      <div className="card">
+        <div className="empty-hint">
+          <div className="empty-hint-main">{t('common.report.noAccess')}</div>
+          {t('common.report.noAccessHint')}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** The document's title block: title, the run's parameters, and when it was generated. */
 export function ReportDocHead({
   title,
@@ -113,6 +135,7 @@ export function ReportDocHead({
   meta: { label: string; value: string }[]
   generatedUtc: string
 }) {
+  const { t } = useTranslation()
   return (
     <div className="report-doc-head">
       <h1 className="report-title">{title}</h1>
@@ -123,7 +146,7 @@ export function ReportDocHead({
           </span>
         ))}
         <span>
-          Generated on <strong>{reportDateTime(generatedUtc)}</strong>
+          {t('common.report.generatedOn')} <strong>{reportDateTime(generatedUtc)}</strong>
         </span>
       </div>
     </div>

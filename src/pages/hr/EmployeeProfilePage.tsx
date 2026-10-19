@@ -13,6 +13,7 @@ import { BranchHistoryTab } from './BranchHistoryTab'
 import type { EmployeeProfile } from '../../types/hr'
 import { chevronBack } from '../../i18n/physical'
 import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
 
 /**
  * The direction-aware "back" chevron. chevronBack() still speaks DevExtreme's icon vocabulary
@@ -43,6 +44,9 @@ export default function EmployeeProfilePage() {
   const { hasPermission } = useAuth()
   // Salaries are HR's and payroll's (QA3): the API answers 403 to anyone else, so the tab is not offered.
   const canSeeSalary = hasPermission('EMP_VIEW_ALL') || hasPermission('PAYROLL_VIEW')
+  // EMP_VIEW opens the profile; editing it is EMP_EDIT, which the API checks (QA3 WEB-14) — so no
+  // Edit button that could only end in a 403.
+  const canEdit = hasPermission(PERMISSION.EMP_EDIT)
 
   const [profile, setProfile] = useState<EmployeeProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -134,9 +138,11 @@ export default function EmployeeProfilePage() {
           <span className={terminated ? 'badge badge--off' : 'badge badge--on'}>
             {terminated ? 'Terminated' : 'Active'}
           </span>
-          <Button leftSection={<IconPencil size={16} />} onClick={() => setEditVisible(true)}>
-            Edit
-          </Button>
+          {canEdit && (
+            <Button leftSection={<IconPencil size={16} />} onClick={() => setEditVisible(true)}>
+              {t('common.edit')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -210,15 +216,17 @@ export default function EmployeeProfilePage() {
         </Tabs.Panel>
       </Tabs>
 
-      <EmployeeFormPopup
-        visible={editVisible}
-        employee={profile}
-        onClose={() => setEditVisible(false)}
-        onSaved={() => {
-          setSavedCount((n) => n + 1)
-          void reload()
-        }}
-      />
+      {canEdit && (
+        <EmployeeFormPopup
+          visible={editVisible}
+          employee={profile}
+          onClose={() => setEditVisible(false)}
+          onSaved={() => {
+            setSavedCount((n) => n + 1)
+            void reload()
+          }}
+        />
+      )}
     </div>
   )
 }

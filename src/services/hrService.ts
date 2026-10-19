@@ -21,7 +21,6 @@ import type {
   EmployeeUnlinkResult,
   EmployeeUpdateRequest,
   LeaveBalance,
-  LeaveDay,
   LeaveLedgerEntry,
   LeaveLedgerPostRequest,
   LeavePolicy,
@@ -36,6 +35,7 @@ import type {
   ReportingLineEntry,
   EmployeeSalaryComponent,
   SalaryComponentSetRequest,
+  SwapCounterparts,
 } from '../types/hr'
 
 /** All HR endpoints: read requires EMP_VIEW, write requires EMP_EDIT. */
@@ -297,9 +297,9 @@ export const employeesService = {
     }),
 
   /**
-   * Sets the employee's approval tier (1 staff / 2 management / 3 executive) — which published chain
-   * their requests follow. Its own endpoint, not part of the update body, because it is a workflow
-   * decision with its own validation. Returns the employee's new tier standing.
+   * Sets the employee's approval tier — any tier of the dictionary, 1 being the head — which picks
+   * the published chain their requests follow. Its own endpoint, not part of the update body, because
+   * it is a workflow decision with its own validation. Returns the employee's new tier standing.
    */
   setApprovalTier: (employeeId: number, approvalTier: number) =>
     apiRequest<{ employeeId: number; fullName: string; approvalTier: number }>(
@@ -321,6 +321,13 @@ export const employeesService = {
   /** The employee's chain of command, bottom-up (lvl 0 = themselves). Shown under the "Reports to" field. */
   getReportingLine: (employeeId: number) =>
     apiRequest<ReportingLineEntry[]>(`/api/employees/${employeeId}/reporting-line`),
+
+  /**
+   * Who this employee can swap a rostered day with (QA3 WEB-2) — signed-in only, scoped by the
+   * procedure. Replaces filtering getAll(), which is branch-scoped and so empty for staff.
+   */
+  getSwapCounterparts: (employeeId: number) =>
+    apiRequest<SwapCounterparts>(`/api/employees/${employeeId}/swap-counterparts`),
 
   /** The whole org tree, pre-sorted depth-first — for the org-chart page. */
   getOrgTree: () => apiRequest<OrgTreeNode[]>('/api/employees/org-tree'),
@@ -461,17 +468,6 @@ export const leaveLedgerService = {
     apiRequest<LeaveLedgerEntry[]>(
       `/api/leave-ledger/by-employee/${employeeId}` +
         (period ? `?period=${encodeURIComponent(period)}` : ''),
-    ),
-  /**
-   * Everybody's approved leave days in a range, one row per employee-day.
-   *
-   * The roster uses this to avoid scheduling a shift on somebody's leave day. Kept as its own
-   * endpoint rather than a loop over getByEmployee, which would be a round trip per person per
-   * month just to draw a calendar.
-   */
-  getLeaveDays: (from: string, to: string) =>
-    apiRequest<LeaveDay[]>(
-      `/api/leave/days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     ),
   getBalance: (employeeId: number, period?: string) =>
     apiRequest<LeaveBalance[]>(

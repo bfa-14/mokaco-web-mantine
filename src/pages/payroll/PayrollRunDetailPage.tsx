@@ -16,6 +16,7 @@ import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { payrollRunsService } from '../../services/payrollService'
 import type { PayrollRunDetail, PayrollRunStaleness, PayslipRow } from '../../types/payroll'
+import { dateTime } from '../workflow/workflowFormat'
 import {
   approveBody, canOfferApprove, dayAfter, earlyLockCutoff, isEarlyLock, summarizeStaleness,
 } from './payrollRunRules'
@@ -257,7 +258,7 @@ export default function PayrollRunDetailPage() {
             </span>
             {'  '}· primary {h.primaryCurrency}
             {h.runType === 'Supplemental' && <> · Supplemental (off-cycle)</>}
-            {h.generatedAt && <> · generated {new Date(h.generatedAt).toLocaleString()}</>}
+            {h.generatedAt && <> · generated {dateTime(h.generatedAt)}</>}
           </p>
         </div>
         <div className="page-head-actions">
@@ -269,7 +270,7 @@ export default function PayrollRunDetailPage() {
 
       {h.status === 'Approved' && (
         <div className="pr-lock-banner">
-          Locked {h.lockedAt ? new Date(h.lockedAt).toLocaleString() : ''} by {h.approvedBy}. Nothing
+          Locked {h.lockedAt ? dateTime(h.lockedAt) : ''} by {h.approvedBy}. Nothing
           in this run can change. Corrections go to the next period as adjustments.{' '}
           {/* An adjustment is a request now, so this goes to the chain, not to a form. The period
               and the run being corrected are no longer prefilled — the request form defaults to the

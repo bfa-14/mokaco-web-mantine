@@ -154,7 +154,7 @@ export default function SettingsPage() {
       })
 
       notifications.show({
-        message: `${titleOf(setting)} saved.`,
+        message: t('settings.rows.saved', { title: titleOf(setting) }),
         color: 'green',
         autoClose: 2500,
       })

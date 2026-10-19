@@ -34,6 +34,12 @@ export function fetchCurrentUser(): Promise<User> {
 /**
  * Logs out via POST /api/auth/logout (best effort) and always clears the
  * locally stored tokens.
+ *
+ * `skipRefresh`: signing out never turns into a token refresh. A 401 here means the server has
+ * already ended this session — a password change ends every session of the account, this one
+ * included (QA3 SEC-5) — and the refresh path would answer it with a full-page redirect to the
+ * login page, before the caller could say why. The refresh would gain nothing anyway: a rotated
+ * token is a new live one, and the old one is what this call names.
  */
 export async function logout(): Promise<void> {
   const refreshToken = tokenStorage.getRefreshToken()
@@ -42,6 +48,7 @@ export async function logout(): Promise<void> {
       await apiRequest('/api/auth/logout', {
         method: 'POST',
         body: JSON.stringify({ refreshToken }),
+        skipRefresh: true,
       })
     }
   } catch {

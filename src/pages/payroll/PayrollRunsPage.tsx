@@ -18,6 +18,7 @@ import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { payrollRunsService } from '../../services/payrollService'
 import { exitPermissionsService } from '../../services/workflowService'
+import { dateTime } from '../workflow/workflowFormat'
 import { leaveTypesService } from '../../services/hrService'
 import type { AttendanceReadiness, PayrollRunListItem, PayrollRunType } from '../../types/payroll'
 import type { LeaveType } from '../../types/hr'
@@ -296,12 +297,13 @@ export default function PayrollRunsPage() {
       columnHelper.accessor('lockedAt', {
         header: 'Locked',
         size: 150,
+        // UTC on the wire with no zone: dateTime() reads it as UTC (QA3 WEB-11).
         cell: (info) => {
           const v = info.getValue()
-          return v ? new Date(v).toLocaleString() : ''
+          return v ? dateTime(v) : ''
         },
         meta: { filterText: (v) =>
-          v ? new Date(v).toLocaleString() : '' },
+          v ? dateTime(v) : '' },
       }),
     ],
     // `grid` only feeds the Status dropdown's option list.

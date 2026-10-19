@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Group, Loader, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
@@ -50,6 +51,7 @@ function CurrenciesGrid({
   onEdit: (row: Currency) => void
   onDelete: (row: Currency) => void
 }) {
+  const { t } = useTranslation()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -57,15 +59,15 @@ function CurrenciesGrid({
   // Every column here renders its raw value, so none needs a formatted match.
   const columns = useMemo(
     () => [
-      columnHelper.accessor('currencyCode', { header: 'Code' }),
-      columnHelper.accessor('name', { header: 'Name' }),
-      columnHelper.accessor('decimalPlaces', { header: 'Decimals' }),
+      columnHelper.accessor('currencyCode', { header: t('core.currencies.code') }),
+      columnHelper.accessor('name', { header: t('core.currencies.name') }),
+      columnHelper.accessor('decimalPlaces', { header: t('core.currencies.decimals') }),
       // The column, not just the button — an "Actions" header over empty cells reads as broken.
       ...(canManage
         ? [
             columnHelper.display({
               id: 'actions',
-              header: 'Actions',
+              header: t('core.exchangeRates.actions'),
               cell: (info) => (
                 <div className="grid-actions">
                   <Button
@@ -74,7 +76,7 @@ function CurrenciesGrid({
                     leftSection={<IconPencil size={14} />}
                     onClick={() => onEdit(info.row.original)}
                   >
-                    Edit
+                    {t('common.edit')}
                   </Button>
                   <Button
                     variant="subtle"
@@ -83,7 +85,7 @@ function CurrenciesGrid({
                     leftSection={<IconTrash size={14} />}
                     onClick={() => onDelete(info.row.original)}
                   >
-                    Delete
+                    {t('common.delete')}
                   </Button>
                 </div>
               ),
@@ -91,7 +93,7 @@ function CurrenciesGrid({
           ]
         : []),
     ],
-    [onEdit, onDelete, canManage],
+    [onEdit, onDelete, canManage, t],
   )
 
   const table = useReactTable({
@@ -125,7 +127,7 @@ function CurrenciesGrid({
         <TextInput
           value={globalFilter}
           onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-          placeholder="Search"
+          placeholder={t('common.search')}
           leftSection={<IconSearch size={14} />}
           w={240}
           size="xs"
@@ -159,7 +161,7 @@ function CurrenciesGrid({
             <Table.Tr>
               <Table.Td colSpan={columns.length}>
                 <div className="empty-hint" style={{ padding: 16 }}>
-                  No currencies found.
+                  {t('core.currencies.empty')}
                 </div>
               </Table.Td>
             </Table.Tr>
@@ -179,8 +181,11 @@ function CurrenciesGrid({
 
       <Group justify="space-between" mt="xs">
         <span className="hint" style={{ margin: 0 }}>
-          {total === 0 ? 0 : pageIndex * pageSize + 1}–{Math.min((pageIndex + 1) * pageSize, total)}{' '}
-          of {total}
+          {t('common.pageInfo', {
+            from: total === 0 ? 0 : pageIndex * pageSize + 1,
+            to: Math.min((pageIndex + 1) * pageSize, total),
+            total,
+          })}
         </span>
         <Group gap="xs">
           <Select
@@ -203,6 +208,7 @@ function CurrenciesGrid({
 }
 
 export default function CurrenciesPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canManage = hasPermission(PERMISSION.CORE_MANAGE)
   const [rows, setRows] = useState<Currency[]>([])
@@ -276,10 +282,10 @@ export default function CurrenciesPage() {
 
   /** Only an unused currency can go: the API refuses a used one and says where it is used. */
   async function remove(row: Currency) {
-    if (!window.confirm(`Delete currency ${row.currencyCode} (${row.name})? Its exchange rates are deleted with it.`)) return
+    if (!window.confirm(t('core.currencies.deleteConfirm', { code: row.currencyCode, name: row.name }))) return
     try {
       await currenciesService.remove(row.currencyCode)
-      notify('Deleted.', 'success', 2000)
+      notify(t('core.currencies.deleted'), 'success', 2000)
       await reload()
     } catch (err) {
       notify(getErrorMessage(err), 'error', 8000)
@@ -290,15 +296,15 @@ export default function CurrenciesPage() {
     // The Validators' work, done by hand now they are gone — same messages, same order.
     const code = currencyCode.trim()
     if (!code) {
-      setFormError('Code is required')
+      setFormError(t('core.currencies.codeRequired'))
       return
     }
     if (code.length !== 3) {
-      setFormError('Code must be 3 letters')
+      setFormError(t('core.currencies.codeLength'))
       return
     }
     if (!name.trim()) {
-      setFormError('Name is required')
+      setFormError(t('core.currencies.nameRequired'))
       return
     }
     setFormError(null)
@@ -309,7 +315,7 @@ export default function CurrenciesPage() {
         name: name.trim(),
         decimalPlaces,
       })
-      notify(isEdit ? 'Saved.' : 'Created.', 'success', 2000)
+      notify(isEdit ? t('core.currencies.saved') : t('core.currencies.created'), 'success', 2000)
       setPopupVisible(false)
       await reload()
     } catch (err) {
@@ -323,24 +329,22 @@ export default function CurrenciesPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Currencies</h1>
-          <p className="page-subtitle">
-            Currencies the system understands (money is always amount + currency).
-          </p>
+          <h1 className="page-title">{t('core.currencies.title')}</h1>
+          <p className="page-subtitle">{t('core.currencies.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={16} />
           </ActionIcon>
           {canManage && (
             <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-              New
+              {t('core.currencies.new')}
             </Button>
           )}
         </div>
@@ -363,13 +367,13 @@ export default function CurrenciesPage() {
       <Modal
         opened={popupVisible}
         onClose={() => setPopupVisible(false)}
-        title={isEdit ? 'Edit Currency' : 'New Currency'}
+        title={isEdit ? t('core.currencies.editTitle') : t('core.currencies.newTitle')}
         size={400}
         centered
       >
         <div className="form-field">
           <label className="form-label" htmlFor="cur-code">
-            Code (3 letters)
+            {t('core.currencies.codeLabel')}
           </label>
           <TextInput
             id="cur-code"
@@ -383,7 +387,7 @@ export default function CurrenciesPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="cur-name">
-            Name
+            {t('core.currencies.name')}
           </label>
           <TextInput
             id="cur-name"
@@ -395,7 +399,7 @@ export default function CurrenciesPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="cur-decimals">
-            Decimal places
+            {t('core.currencies.decimalPlaces')}
           </label>
           <NumberInput
             id="cur-decimals"
@@ -419,10 +423,10 @@ export default function CurrenciesPage() {
             onClick={() => setPopupVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? 'Saving…' : isEdit ? 'Save' : 'Create'}
+            {saving ? t('common.saving') : isEdit ? t('common.save') : t('core.currencies.create')}
           </Button>
         </div>
       </Modal>

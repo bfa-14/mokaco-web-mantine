@@ -5,14 +5,15 @@ import { IconCalendar } from '@tabler/icons-react'
 import { shiftSwapsService } from '../../services/workflowService'
 import { rosterService } from '../../services/attendanceService'
 import { employeesService } from '../../services/hrService'
-import type { EmployeeListItem } from '../../types/hr'
+import type { SwapCounterpart } from '../../types/hr'
 import { employeeLabel } from '../../types/hr'
+import { getErrorMessage } from '../../api/errorMessage'
 import type { ShiftAssignment } from '../../types/attendance'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
 
 /** Module-level, so an empty counterpart list keeps ONE identity across renders. */
-const NO_EMPLOYEES: EmployeeListItem[] = []
+const NO_EMPLOYEES: SwapCounterpart[] = []
 
 function todayYMD(): string {
   const now = new Date()
@@ -35,11 +36,22 @@ function assignmentHint(a: ShiftAssignment | null | undefined): string | null {
 /**
  * The SHIFT SWAP form body — two people in the same role trade one rostered day each.
  * CONSENT IS ASSERTED, NOT COLLECTED: the checkbox is a hard gate here and the procedure refuses
- * without it. SAME ROLE is display-filtered here; the procedure re-checks PositionId and rules.
- * Roster hints follow the tagged-fetch pattern. (Unchanged.)
+ * without it.
+ *
+ * WHO CAN BE ASKED COMES FROM THE DATABASE (QA3 WEB-2): GET /api/employees/{id}/swap-counterparts —
+ * the active colleagues of the requester's branch in the same position. The list used to be the
+ * employee list filtered here, and that list is branch-scoped (script 87): for a barista it held only
+ * themselves, so nobody could ever be asked. The create procedure still re-checks every rule.
+ * Fetches are tagged with the employee they answer, so a slow answer for a previous choice of
+ * requester can never be shown for the current one; roster hints follow the same pattern.
  */
 export function useShiftSwapForm(employeeId: number | null, saving: boolean): RequestFormBody {
-  const [employees, setEmployees] = useState<EmployeeListItem[]>([])
+  const [partners, setPartners] = useState<{
+    employeeId: number
+    requester: SwapCounterpart | null
+    counterparts: SwapCounterpart[]
+    error: string | null
+  } | null>(null)
   const [counterpartId, setCounterpartId] = useState<number | null>(null)
   const [requesterDate, setRequesterDate] = useState<string | null>(null) // yyyy-MM-dd
   const [counterpartDate, setCounterpartDate] = useState<string | null>(null) // yyyy-MM-dd
@@ -48,43 +60,36 @@ export function useShiftSwapForm(employeeId: number | null, saving: boolean): Re
   const [cptFetched, setCptFetched] = useState<{ key: string; row: ShiftAssignment | null } | null>(null)
 
   useEffect(() => {
+    if (!employeeId) return
     let cancelled = false
     employeesService
-      .getAll()
-      .then((e) => {
-        if (!cancelled) setEmployees(e)
+      .getSwapCounterparts(employeeId)
+      .then((r) => {
+        if (!cancelled)
+          setPartners({ employeeId, requester: r.requester, counterparts: r.counterparts, error: null })
       })
-      .catch(() => {
-        /* no list: the counterpart dropdown stays empty and missing() names it */
+      .catch((err) => {
+        // A refusal (not somebody this caller raises requests for) is a sentence worth showing.
+        if (!cancelled)
+          setPartners({ employeeId, requester: null, counterparts: NO_EMPLOYEES, error: getErrorMessage(err) })
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [employeeId])
 
-  const requester = useMemo(
-    () => employees.find((e) => e.employeeId === employeeId) ?? null,
-    [employees, employeeId],
-  )
-
-  /** Counterparts: same position, active, not the requester. */
-  const counterparts = useMemo(
-    () =>
-      requester
-        ? employees.filter(
-            (e) =>
-              e.employeeId !== requester.employeeId &&
-              e.position === requester.position &&
-              !e.terminationDate,
-          )
-        : NO_EMPLOYEES,
-    [employees, requester],
-  )
+  /** Only an answer about THIS requester counts — see the tagging note above. */
+  const current = employeeId && partners?.employeeId === employeeId ? partners : null
+  const requester = current?.requester ?? null
+  /** Counterparts: same branch, same position, active, not the requester — as the database answered. */
+  const counterparts = current?.counterparts ?? NO_EMPLOYEES
 
   /** What an empty counterpart list MEANS — the rule, not just the absence. */
-  const noCounterpartText = requester
-    ? t('body.shiftSwap.noCounterpart', { role: requester.position })
-    : t('body.shiftSwap.chooseEmployeeFirst')
+  const noCounterpartText = current?.error
+    ? current.error
+    : requester
+      ? t('body.shiftSwap.noCounterpart', { role: requester.position })
+      : t('body.shiftSwap.chooseEmployeeFirst')
 
   /** A counterpart chosen under a previous requester may no longer qualify — derive, don't reset. */
   const chosenCounterpart = useMemo(

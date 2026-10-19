@@ -9,6 +9,7 @@ import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { payslipsService } from '../../services/payrollService'
 import type { MyPayslip } from '../../types/payroll'
+import { fmtLocalDate } from '../hr/hrFormat'
 import { netParts } from './payrollRunRules'
 import './payroll.css'
 
@@ -99,7 +100,8 @@ export default function MyPayslipsPage() {
                               method: p.paymentMethod === 'Cash' || p.paymentMethod === 'Bank'
                                 ? t(`payroll.mine.method.${p.paymentMethod}`)
                                 : (p.paymentMethod ?? ''),
-                              date: p.paidAt.slice(0, 10),
+                              // UTC from the API: the LOCAL date it fell on (23:30 UTC is tomorrow in Beirut).
+                              date: fmtLocalDate(p.paidAt),
                             })
                           : t('payroll.mine.notPaid')}
                       </Table.Td>

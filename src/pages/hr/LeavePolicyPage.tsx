@@ -25,6 +25,8 @@ import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import { leavePolicyService, leaveTypesService } from '../../services/hrService'
 import { fmtNumber } from './hrFormat'
+import type { NumberInputValue } from '../../components/numeric'
+import { parseBoundedDecimal, parseRowCells } from '../../components/decimalInputs'
 import type { LeavePolicy, LeaveType, LeaveYearOpenSummary, LeaveYearUndoSummary } from '../../types/hr'
 
 /**
@@ -53,8 +55,11 @@ interface TypeForm {
   requiresCertificate: boolean
   minServiceMonthsToUse: number
   noticePreferredDays: number
-  /** Null is a real value here — "this type has no fixed entitlement" — not an empty field. */
-  fixedEntitlementDays: number | null
+  /**
+   * Null (or a blank box) is a real value here — "this type has no fixed entitlement". Held as the box
+   * hands it over and converted once at save (trap 6: "1." must not empty the box, or 1.5 saves as 5).
+   */
+  fixedEntitlementDays: NumberInputValue | null
 }
 
 function toForm(t: LeaveType): TypeForm {
@@ -259,6 +264,11 @@ export default function LeavePolicyPage() {
       setFormError(t('hr.leavePolicy.nameRequired'))
       return
     }
+    const fixedDays = parseBoundedDecimal(fixedEntitlementDays, 0, 366)
+    if (fixedDays === 'invalid') {
+      setFormError(t('hr.leavePolicy.fixedInvalid'))
+      return
+    }
     setFormError(null)
     const payload = {
       name: form.name.trim(),
@@ -270,10 +280,10 @@ export default function LeavePolicyPage() {
       // The DERIVED figure, so a type that has grown tiers since its entitlement was set actually
       // loses that entitlement on the next save instead of keeping a figure the field no longer
       // shows and nothing consults.
-      fixedEntitlementDays,
+      fixedEntitlementDays: fixedDays,
       // Null here means "no fixed entitlement", NOT "leave alone" — say so explicitly, or the
       // preserve rule on the server would keep the old figure forever.
-      clearFixedEntitlement: fixedEntitlementDays == null,
+      clearFixedEntitlement: fixedDays == null,
     }
 
     setSaving(true)
@@ -510,9 +520,7 @@ export default function LeavePolicyPage() {
                     step={1}
                     placeholder={fixedEntitlementBlockedBy != null ? '' : 'None'}
                     disabled={locked || fixedEntitlementBlockedBy != null}
-                    onChange={(v) =>
-                      patch({ fixedEntitlementDays: typeof v === 'number' ? v : null })
-                    }
+                    onChange={(v) => patch({ fixedEntitlementDays: v })}
                   />
                   <div className="hint">
                     {fixedEntitlementBlockedBy === 'unpaid'
@@ -879,8 +887,13 @@ function TierGrid({
   const [editKey, setEditKey] = useState<string | null>(null)
   /** Whether the blank insert row is open. */
   const [adding, setAdding] = useState(false)
-  /** The open editor's cells — '' is an empty editor, never a value to send. */
-  const [cells, setCells] = useState<Record<string, string | number>>({})
+  /**
+   * The open editor's cells, AS THE BOXES HOLD THEM — '' is an empty editor, never a value to send.
+   * TRAP 6 (QA3 WEB-5): a number box passes "1." as a string while a decimal is typed; turning that
+   * into '' emptied the box, so 1.5 days became 15. The row is converted once, at the save
+   * (parseRowCells), and the save waits while any cell is blank or not a number.
+   */
+  const [cells, setCells] = useState<Record<string, NumberInputValue>>({})
 
   const editing = adding || editKey != null
 
@@ -906,14 +919,15 @@ function TierGrid({
     setCells({})
   }
 
-  /** A blank cell has nothing to upsert — the commit waits until every editor holds a value. */
-  const incomplete = columns.some((c) => cells[c.field] === '' || cells[c.field] == null)
+  /** The row as numbers and text, or null while a cell is blank or not a number — nothing to upsert yet. */
+  const parsed = parseRowCells(cells, columns)
+  const incomplete = parsed == null
 
   async function commit() {
-    if (incomplete) return
+    if (parsed == null) return
     // The row IS the write: the endpoints upsert on the key, so an inserted row and an edited
     // one are the same call, and the grid never has to know which it was.
-    if (await onSet({ ...cells })) cancelEdit()
+    if (await onSet(parsed)) cancelEdit()
   }
 
   function editorRow(rowKey: string) {
@@ -939,9 +953,7 @@ function TierGrid({
                 min={0}
                 aria-label={c.caption}
                 disabled={disabled}
-                onChange={(v) =>
-                  setCells((prev) => ({ ...prev, [c.field]: typeof v === 'number' ? v : '' }))
-                }
+                onChange={(v) => setCells((prev) => ({ ...prev, [c.field]: v }))}
               />
             )}
           </Table.Td>

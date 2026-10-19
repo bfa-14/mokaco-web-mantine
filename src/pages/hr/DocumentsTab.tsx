@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, ReactNode } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Loader, Table } from '@mantine/core'
@@ -12,6 +13,9 @@ import { getErrorMessage } from '../../api/errorMessage'
 import { fmtBytes, fmtDateTime } from './hrFormat'
 import { documentsService } from '../../services/hrService'
 import type { Document } from '../../types/hr'
+import { useAuth } from '../../auth/useAuth'
+import { PERMISSION } from '../../auth/routeAccess'
+import { currentLocale } from '../../i18n'
 
 /* formatSize/date formatting are SHARED and null-safe — see hrFormat.ts. The local version was
    typed `(bytes: number)` and called .toFixed on it directly, which throws rather than renders the
@@ -47,6 +51,11 @@ const WIDTHS: Record<string, number | undefined> = {
 }
 
 export function DocumentsTab({ employeeId }: { employeeId: number }) {
+  const { t } = useTranslation()
+  /* EMP_VIEW shows the documents; uploading and deleting one is EMP_EDIT, and the API answers 403
+     to anyone else — so those two are not offered without it (QA3 WEB-14). Download stays. */
+  const { hasPermission } = useAuth()
+  const canEdit = hasPermission(PERMISSION.EMP_EDIT)
   const [rows, setRows] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -105,7 +114,7 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
     setUploading(true)
     try {
       await documentsService.upload(employeeId, file)
-      notify(`"${file.name}" uploaded.`, 'success', 2200)
+      notify(t('hr.documents.uploaded', { name: file.name }), 'success', 2200)
       await reload()
     } catch (err) {
       notify(getErrorMessage(err), 'error', 4500)
@@ -127,15 +136,13 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
 
   async function handleDelete(doc: Document) {
     const ok = await askConfirm(
-      <>
-        Delete <b>{doc.fileName}</b>?
-      </>,
-      'Confirm delete',
+      <Trans i18nKey="hr.documents.deleteBody" values={{ name: doc.fileName }} components={{ name: <b /> }} />,
+      t('hr.documents.deleteTitle'),
     )
     if (!ok) return
     try {
       await documentsService.remove(doc.documentId)
-      notify('Deleted.', 'success', 2000)
+      notify(t('hr.documents.deleted'), 'success', 2000)
       await reload()
     } catch (err) {
       notify(getErrorMessage(err), 'error', 4000)
@@ -144,51 +151,54 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('fileName', { header: 'File' }),
-      columnHelper.accessor('contentType', { header: 'Type' }),
+      columnHelper.accessor('fileName', { header: t('hr.documents.cols.file') }),
+      columnHelper.accessor('contentType', { header: t('hr.documents.cols.type') }),
       columnHelper.accessor('sizeBytes', {
-        header: 'Size',
+        header: t('hr.documents.cols.size'),
         cell: (info) => fmtBytes(info.row.original?.sizeBytes),
         // Sorts by the byte count so the biggest file really is last; matches on "1.4 MB".
         meta: { filterText: fmtBytes },
       }),
       columnHelper.accessor('uploadedUtc', {
-        header: 'Uploaded',
-        cell: (info) => fmtDateTime(info.getValue()),
-        meta: { filterText: fmtDateTime },
+        header: t('hr.documents.cols.uploaded'),
+        // UTC on the wire with no zone — fmtDateTime reads it as UTC (QA3 WEB-11).
+        cell: (info) => fmtDateTime(info.getValue(), currentLocale()),
+        meta: { filterText: (v) => fmtDateTime(v, currentLocale()) },
       }),
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: t('hr.documents.cols.actions'),
         cell: (info) => {
           const doc = info.row.original
           return (
             <div className="grid-actions">
               <ActionIcon
                 variant="subtle"
-                title="Download"
-                aria-label="Download"
+                title={t('hr.documents.download')}
+                aria-label={t('hr.documents.download')}
                 disabled={downloadingId === doc.documentId}
                 onClick={() => void handleDownload(doc)}
               >
                 <IconDownload size={16} />
               </ActionIcon>
-              <ActionIcon
-                variant="subtle"
-                color="red"
-                title="Delete"
-                aria-label="Delete"
-                onClick={() => void handleDelete(doc)}
-              >
-                <IconTrash size={16} />
-              </ActionIcon>
+              {canEdit && (
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  title={t('common.delete')}
+                  aria-label={t('common.delete')}
+                  onClick={() => void handleDelete(doc)}
+                >
+                  <IconTrash size={16} />
+                </ActionIcon>
+              )}
             </div>
           )
         },
       }),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [downloadingId, employeeId],
+    [downloadingId, employeeId, canEdit, t],
   )
 
   const table = useReactTable({
@@ -227,21 +237,25 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
 
       <div className="tab-toolbar">
         <span className="hint" style={{ flex: 1 }}>
-          Files are stored on the server; type and size are detected automatically.
+          {t('hr.documents.hint')}
         </span>
-        <Button
-          leftSection={<IconUpload size={16} />}
-          disabled={uploading}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {uploading ? 'Uploading…' : 'Upload Document'}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          style={{ display: 'none' }}
-          onChange={(e) => void onFilePicked(e)}
-        />
+        {canEdit && (
+          <>
+            <Button
+              leftSection={<IconUpload size={16} />}
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? t('hr.documents.uploading') : t('hr.documents.upload')}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={(e) => void onFilePicked(e)}
+            />
+          </>
+        )}
       </div>
 
       <Table striped withTableBorder verticalSpacing="xs" fz="sm">
@@ -271,7 +285,7 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
             <Table.Tr>
               <Table.Td colSpan={columns.length}>
                 <div className="empty-hint" style={{ padding: 16 }}>
-                  No documents yet.
+                  {t('hr.documents.empty')}
                 </div>
               </Table.Td>
             </Table.Tr>
@@ -301,9 +315,9 @@ export function DocumentsTab({ employeeId }: { employeeId: number }) {
           <div>{confirmState.message}</div>
           <div className="form-actions">
             <Button variant="default" onClick={() => settleConfirm(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
-            <Button onClick={() => settleConfirm(true)}>OK</Button>
+            <Button onClick={() => settleConfirm(true)}>{t('common.ok')}</Button>
           </div>
         </Modal>
       )}
