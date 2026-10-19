@@ -946,7 +946,7 @@
         "overtimeDetected": "Overtime detected",
         "overtimeDetectedTitle": "Detected from the punches. Attendance never pays this on its own.",
         "unpaidAbsenceDays": "Unpaid absence days",
-        "unpaidAbsenceDaysTitle": "Absences not covered by approved leave. This is the deduction.",
+        "unpaidAbsenceDaysTitle": "Absences and short days on rostered shifts that no approved leave covers, for the days already over: what the payslip deducts as short days.",
         "exitLeaveDays": "Exit leave days",
         "exitLeaveDaysTitle": "Time out during the day, converted to days off the leave balance."
       }
