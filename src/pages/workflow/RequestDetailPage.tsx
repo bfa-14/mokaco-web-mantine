@@ -19,6 +19,7 @@ import { PageHelp } from '../../components/PageHelp'
 import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { getErrorMessage, isForbidden } from '../../api/errorMessage'
+import { ApiError } from '../../api/client'
 import { AccessDenied } from '../AccessDenied'
 import { useAuth } from '../../auth/useAuth'
 import {
@@ -48,11 +49,9 @@ import type {
   PayrollAdjustmentPayload,
   RequestDetail,
   RequestEmailStatus,
-  RequestReversal,
   RequestStep,
   SalaryAdvancePayload,
   SeparationPayload,
-  SignatureLogEntry,
   SignatureRequirement,
   TipDistributionPayload,
 } from '../../types/workflow'
@@ -62,6 +61,15 @@ import { DecidePopup } from './DecidePopup'
 import { RequestDocuments } from './RequestDocuments'
 import { SeparationSettlement } from './SeparationSettlement'
 import { balanceDaysText } from './newRequestShared'
+import {
+  canHrReopen,
+  gmReopenAction,
+  holdsCancelRole,
+  lastStandingDecision,
+  pendingReopen,
+  retractKind,
+  serverSentence,
+} from './reversalRules'
 import {
   clockTime,
   dateTime,
@@ -983,9 +991,11 @@ function OnboardingPanel({
  *
  * Two ways back from a decision that has already taken effect, and they are not the same act.
  *
- * RETRACT is the last signer changing their mind on the same UTC day — small, immediate, and theirs
- * alone. REOPEN is the General Manager and the Owner together overriding a closed request, and it
- * takes two signatures precisely because it is not small.
+ * RETRACT is the last signer changing their mind on the same Beirut day — small, immediate, and
+ * theirs alone. REOPEN is the General Manager and the Owner together overriding a closed request, and
+ * it takes two signatures from two different people, each with their password, precisely because it
+ * is not small. Who may try which is mirrored from the procedures in ./reversalRules (QA3 WF-3,
+ * WF-5, WF-13, WF-14), with tests.
  *
  * WHAT THIS CODE DELIBERATELY DOES NOT DO is decide whether a reversal is allowed. It answers only
  * "is this plausibly mine to try?", because the real conditions — whether a payslip already
@@ -996,30 +1006,16 @@ function OnboardingPanel({
  * helps nobody.
  */
 
-/** The two role names that may reopen. The seeded role has a SPACE; the procedures accept both. */
-const REOPEN_ROLES = ['Owner', 'General Manager', 'GeneralManager']
-
 /**
- * The roles that may cancel SOMEBODY ELSE'S request — the third of the three routes, alongside
- * "I raised it" and "it concerns me".
- *
- * Compared case-insensitively, because these are role NAMES out of the database rather than
- * permission codes, and nothing normalises their casing on the way to the token.
- */
-const CANCEL_ROLES = ['HR', 'Admin', 'Owner']
-
-/**
- * THE TYPES A WITHDRAWAL IS ACTUALLY ACCEPTED FOR — mirrors RequestsController.
+ * THE TYPES THE CHAIN OFFERS "CHANGE DECISION" FOR.
  *
  * Exit permissions have a typed wrapper that also puts ApprovedMinutes back. The other five stamp no
- * figure when they are decided, so handing the step back is the whole of the undo and the engine's
- * own withdrawal is enough.
+ * figure when they are decided, so handing the step back is the whole of the undo.
  *
- * The figure-stamping types (leave, expense, overtime, salary advance, payroll adjustment) are
- * deliberately absent: the generic procedure clears the step's ValueBefore without restoring the
- * payload, so withdrawing an ApprovedWithChanges would leave the changed figure standing as though
- * the next approver had chosen it. The API refuses them, so offering the button would offer a
- * failure. KEEP THIS IN STEP with the server list.
+ * The API now takes a withdrawal for every type, and since QA3 (script 101) the engine puts back the
+ * figure an ApprovedWithChanges changed for leave, overtime, advances and adjustments as well (not
+ * for expenses). The list was not widened with that change; the header's "Retract my decision"
+ * withdraws the caller's own last decision on an open request of any type.
  */
 const WITHDRAWABLE_TYPES = new Set([
   'EXIT_PERMISSION',
@@ -1039,54 +1035,16 @@ function reversalRoleLabel(role: string | null | undefined): string {
 }
 
 /**
- * Whether a UTC timestamp falls on today's UTC date.
- *
- * UTC ON BOTH SIDES, deliberately. The procedure compares
- * `CAST(ActedAt AS DATE) <> CAST(SYSUTCDATETIME() AS DATE)`, so a local-time comparison here would
- * disagree with it for part of every day — offering Retract on something the server then refuses,
- * or hiding it on something the server would have allowed. Timestamps arrive without a suffix and
- * are UTC, hence the 'Z'.
+ * A reversal's refusal as the reader should see it. A 403 from these endpoints is not "no permission"
+ * in the app's sense: it is the procedure saying who WOULD be able to ("reopening needs the GM and the
+ * Owner together", "the other of the two must countersign"), so its own sentence is kept.
  */
-function isSameUtcDayAsNow(value: string | null | undefined): boolean {
-  if (!value) return false
-  const at = new Date(value.endsWith('Z') ? value : `${value}Z`)
-  if (Number.isNaN(at.getTime())) return false
-  const now = new Date()
-  return (
-    at.getUTCFullYear() === now.getUTCFullYear() &&
-    at.getUTCMonth() === now.getUTCMonth() &&
-    at.getUTCDate() === now.getUTCDate()
-  )
-}
-
-/**
- * The decision a retract would actually take back — the newest signature that still STANDS.
- *
- * Mirrors usp_Request_RetractLastDecision's own pick: not retracted, a real decision (a 'Submitted'
- * row carries no step and is not one), newest by ActedAt then SignatureId. Matching the tie-break
- * matters on the day it bites — two decisions in the same second would otherwise let the page offer
- * the button against a different signature from the one the server strikes.
- */
-function lastStandingDecision(history: SignatureLogEntry[]): SignatureLogEntry | null {
-  const standing = history.filter(
-    (e) =>
-      e.retractedAt == null &&
-      e.stepNo != null &&
-      (e.action === 'Approved' || e.action === 'Rejected'),
-  )
-  if (standing.length === 0) return null
-
-  return standing.reduce((newest, entry) => {
-    const a = Date.parse(entry.actedAt)
-    const b = Date.parse(newest.actedAt)
-    if (a !== b) return a > b ? entry : newest
-    return entry.signatureId > newest.signatureId ? entry : newest
-  })
-}
-
-/** The reopen that is half-signed and waiting on the other of GM/Owner, if there is one. */
-function pendingReopen(reversals: RequestReversal[] | undefined): RequestReversal | null {
-  return reversals?.find((r) => r.kind === 'Reopen' && r.completedAt == null) ?? null
+function refusalText(err: unknown): string {
+  if (err instanceof ApiError && err.status === 403) {
+    const sentence = serverSentence(err.data)
+    if (sentence) return sentence
+  }
+  return getErrorMessage(err)
 }
 
 /**
@@ -1219,8 +1177,17 @@ export default function RequestDetailPage() {
   const [retractPassword, setRetractPassword] = useState('')
   /** The server's refusal, kept in the dialog rather than a toast — see submitRetract's catch. */
   const [retractError, setRetractError] = useState<string | null>(null)
+  /**
+   * Set when the server asked for a signature this page did not foresee — the field then appears, so
+   * the refusal is never one the reader cannot act on.
+   */
+  const [retractAskPassword, setRetractAskPassword] = useState(false)
   const [gmReopenOpen, setGmReopenOpen] = useState(false)
   const [gmReopenReason, setGmReopenReason] = useState('')
+  /** Each half of the reopen is signed (QA3 WF-14). Component state only; cleared after every attempt. */
+  const [gmReopenPassword, setGmReopenPassword] = useState('')
+  /** The server's refusal, kept in the dialog — it names who must sign next. */
+  const [gmReopenError, setGmReopenError] = useState<string | null>(null)
 
   /** One send at a time. The button is the only way in, so disabling it is the whole guard. */
   const [emailBusy, setEmailBusy] = useState(false)
@@ -1414,9 +1381,9 @@ export default function RequestDetailPage() {
         autoClose: 3500,
       })
     } catch (err) {
-      // An APPROVED request refuses with actual guidance ("its result is already applied — correct the
-      // attendance day instead…"). That wording IS the value; show it verbatim, never a generic failure.
-      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 8000 })
+      // A refusal names the way that works ("a rejected request is reopened by the General Manager and
+      // the Owner together…"). That wording IS the value; show it verbatim, never a generic failure.
+      notifications.show({ message: refusalText(err), color: 'red', autoClose: 8000 })
     } finally {
       setBusy(false)
     }
@@ -1457,36 +1424,39 @@ export default function RequestDetailPage() {
   }
 
   /**
-   * Take back my own last decision, same UTC day.
+   * Take back my own last decision.
    *
-   * The refusals are the point of this handler. "Only the person who signed the LAST decision may
-   * retract it…", "Same-day only: this decision is from an earlier day…", "Its adjustment was
-   * consumed by a locked payslip - correct with a counter-adjustment." — each names the way out, so
-   * each is shown as it arrives and given long enough on screen to be read.
+   * TWO ENDPOINTS, ONE BUTTON (QA3 WF-3). On a CLOSED request (approved or rejected) it is the
+   * retract — the last signer, the same Beirut day — which also undoes what an approval did; the
+   * withdrawal this used to call refuses a closed request outright. On an OPEN request it is the
+   * step's own withdrawal ("change my decision"), offered where the server says it still may be.
+   *
+   * The refusals are the point of this handler. "Same-day only: this decision is from an earlier
+   * day…", "This period is paid — raise a payroll adjustment instead.", "Its adjustment was consumed
+   * by a locked payslip…" — each names the way out, so each is shown in the dialog as it arrives.
    */
   async function submitRetract() {
     if (!retractReason.trim()) {
       setRetractError(t('requests.retract.reasonRequired'))
       return
     }
-    // A withdrawal names a STEP; a history entry without one is not a step decision and there is
-    // nothing to hand back. canRetract already excludes these, so this is the type-level guard.
-    if (!lastDecision || lastDecision.stepNo == null) return
+    // canRetract already requires both; this is the type-level guard.
+    if (!lastDecision || lastDecision.stepNo == null || retractMode == null) return
+    if (retractNeedsPassword && !retractPassword) {
+      setRetractError(t('requests.retract.passwordRequired'))
+      return
+    }
     setRetractError(null)
     setBusy(true)
     try {
-      /* THE WITHDRAW-DECISION ENDPOINT, not the request-level retract this used to call.
-         Retract was a different act — "the last signer takes it back, same UTC day" — and it did
-         not hand the step back for a fresh decision. This UNSIGNS the step: it returns to Pending,
-         the Decide button reappears, and the history carries a Withdrawn entry. */
-      await requestsService.withdraw(
-        requestId,
-        lastDecision.stepNo,
-        retractReason.trim(),
-        // Sent only where the ORIGINAL decision was signed — the server re-reads that requirement
-        // and drops an unrequested password rather than half-checking it.
-        retractNeedsPassword ? retractPassword : undefined,
-      )
+      // Sent only where the decision being struck was signed (or the caller's role signs
+      // everything) — the server re-reads that requirement and drops an unrequested password.
+      const password = retractNeedsPassword ? retractPassword : undefined
+      if (retractMode === 'retract') {
+        await requestsService.retract(requestId, retractReason.trim(), password)
+      } else {
+        await requestsService.withdraw(requestId, lastDecision.stepNo, retractReason.trim(), password)
+      }
       setRetractOpen(false)
       setRetractReason('')
       setRetractPassword('')
@@ -1494,7 +1464,10 @@ export default function RequestDetailPage() {
       // step — status, chain, history and the Decide button all move together, so refetch.
       await load()
       notifications.show({
-        message: t('requests.retract.done', { step: lastDecision.stepNo }),
+        message:
+          retractMode === 'retract'
+            ? t('requests.retract.retracted', { step: lastDecision.stepNo })
+            : t('requests.retract.done', { step: lastDecision.stepNo }),
         color: 'green',
         autoClose: 4500,
       })
@@ -1504,7 +1477,9 @@ export default function RequestDetailPage() {
          toast that times out is the wrong place for either. The password is cleared but the reason
          is kept — one is a retry, the other is work they already did. */
       setRetractPassword('')
-      setRetractError(getErrorMessage(err))
+      const refusal = refusalText(err)
+      if (refusal.includes('must be signed with your password')) setRetractAskPassword(true)
+      setRetractError(refusal)
     } finally {
       setBusy(false)
     }
@@ -1647,14 +1622,21 @@ export default function RequestDetailPage() {
    * state onward. Only 'Reopened' is a success.
    */
   async function submitGmReopen() {
+    if (!gmReopenPassword) {
+      setGmReopenError(t('requests.reopen.passwordRequired'))
+      return
+    }
+    setGmReopenError(null)
     setBusy(true)
     try {
       const result = await requestsService.reopenWithSecondSignature(
         requestId,
         gmReopenReason.trim(),
+        gmReopenPassword,
       )
       setGmReopenOpen(false)
       setGmReopenReason('')
+      setGmReopenPassword('')
       await load()
 
       if (result.state === 'AwaitingSecond') {
@@ -1671,9 +1653,12 @@ export default function RequestDetailPage() {
         })
       }
     } catch (err) {
-      // "Only a closed (approved or rejected) request can be reopened.", "This role already signed
-      // the reopen - the OTHER of GM/Owner must sign.", and the consumption blocks.
-      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 9000 })
+      // "You already signed this reopen - the other of the General Manager and the Owner must
+      // countersign it.", "That password is not correct.", the overlap and consumption blocks — kept
+      // IN THE DIALOG, because each one is what the reader acts on next. The password never
+      // outlives an attempt; the reason does.
+      setGmReopenPassword('')
+      setGmReopenError(refusalText(err))
     } finally {
       setBusy(false)
     }
@@ -1715,11 +1700,11 @@ export default function RequestDetailPage() {
   // An EMPTY decisions list is the answer "not yours to decide" — the chain then renders read-only,
   // with no button and no explanation. A draft of the caller's own also opens the popup, to finish it.
   const canDecide = decisions.length > 0 || draft != null
-  // Reopen is offered ONLY on a rejected or cancelled request, and ONLY to a version-mover. An
-  // APPROVED request never shows it — its result is already applied — so the act is absent rather
-  // than offered-and-refused. The server enforces the same rule; this is the door, not the lock.
-  const canReopen =
-    (h.status === 'Rejected' || h.status === 'Cancelled') && hasPermission(WF.versionMove)
+  // HR's single-signature reopen is offered ONLY on a CANCELLED request, and ONLY to a version-mover
+  // (QA3 WF-14). A rejected or approved request has a decision that stands: its signer retracts it the
+  // same day, after that the GM and the Owner reopen it together. The server enforces the same rule;
+  // this is the door, not the lock.
+  const canReopen = canHrReopen(h.status, hasPermission(WF.versionMove))
 
   /* ── the two reversals ── */
 
@@ -1729,30 +1714,31 @@ export default function RequestDetailPage() {
   const lastDecision = lastStandingDecision(detail.history)
 
   /*
-   * Retract is offered on exactly the two conditions the client can KNOW: it is my signature, and it
-   * is from today (UTC). Consumption is NOT tested here — see the note above lastStandingDecision.
-   * The remaining conditions are the server's, and being refused with "correct with a
-   * counter-adjustment" teaches more than a button that quietly was not there.
+   * Retract is offered on the conditions the client can KNOW (./reversalRules): it is my signature
+   * and, on a closed request, from today in Beirut; on an open one, the server still lets me
+   * withdraw it. Consumption is NOT tested here — the server's refusal ("correct with a
+   * counter-adjustment", "this period is paid") teaches more than a button that quietly was not there.
    */
-  const canRetract =
-    lastDecision != null &&
-    // A withdrawal acts on a STEP — an entry carrying none is not one this can take back.
-    lastDecision.stepNo != null &&
-    lastDecision.actedByUserId != null &&
-    user?.userId != null &&
-    lastDecision.actedByUserId === user.userId &&
-    isSameUtcDayAsNow(lastDecision.actedAt)
+  const retractMode = retractKind({
+    status: h.status,
+    lastDecision,
+    userId: user?.userId,
+    steps,
+  })
+  const canRetract = retractMode != null
 
   /**
-   * Whether THIS withdrawal must be password-signed — read off the STEP, not the request.
-   *
-   * The step carries `withdrawNeedsSignature`, which the server computes from the same rule it will
-   * enforce: a decision made with a password must be signed to undo, even where a fresh decision
-   * would no longer demand one. Mirroring DecidePopup's UX, the field appears outright rather than
-   * after a refusal.
+   * Whether THIS take-back must be password-signed. The step's `withdrawNeedsSignature` is the
+   * server's answer for a withdrawal; a retract asks what the service asks — was the struck decision
+   * signed, or does this caller's role sign everything. Mirroring DecidePopup's UX, the field appears
+   * outright rather than after a refusal.
    */
+  const lastDecisionStep = steps.find((s) => s.stepNo === lastDecision?.stepNo)
   const retractNeedsPassword =
-    steps.find((s) => s.stepNo === lastDecision?.stepNo)?.withdrawNeedsSignature ?? false
+    retractAskPassword ||
+    (lastDecisionStep?.withdrawNeedsSignature ?? false) ||
+    (retractMode === 'retract' &&
+      ((lastDecisionStep?.signedWithPassword ?? false) || (signature?.signatureRequired ?? false)))
 
   /**
    * LIFTING A HOLD. Offered to the approver — `decisions` is non-empty only when the server says
@@ -1830,10 +1816,17 @@ export default function RequestDetailPage() {
     }
   })
 
-  // Reopen is the GM + Owner path, and it covers APPROVED requests — which the HR reopen above
-  // refuses outright, because an approved request has already done something.
-  const holdsReopenRole = (user?.roles ?? []).some((r) => REOPEN_ROLES.includes(r))
-  const canGmReopen = (h.status === 'Approved' || h.status === 'Rejected') && holdsReopenRole
+  // Reopen is the GM + Owner path, for APPROVED and REJECTED requests with a decision that stands —
+  // two different people, each signing (./reversalRules). The first signer, or a second person in
+  // the same role, is left with the banner below: the other of the two must countersign.
+  const gmAction = gmReopenAction({
+    status: h.status,
+    roles: user?.roles ?? [],
+    userId: user?.userId,
+    history: detail.history,
+    reversals: detail.reversals,
+  })
+  const canGmReopen = gmAction === 'sign' || gmAction === 'countersign'
 
   // A reopen half-signed and waiting on the other of GM/Owner.
   const awaitingSecond = pendingReopen(detail.reversals)
@@ -1850,12 +1843,9 @@ export default function RequestDetailPage() {
    * verbatim in the dialog — so a mirror that is slightly too generous costs a readable sentence,
    * never an unauthorised cancellation.
    */
-  const holdsCancelRole = (user?.roles ?? []).some((r) =>
-    CANCEL_ROLES.some((c) => c.toLowerCase() === r.toLowerCase()),
-  )
   const canCancel =
     (h.status === 'Pending' || h.status === 'OnHold') &&
-    (h.raisedByUserId === user?.userId || concernsMe || holdsCancelRole)
+    (h.raisedByUserId === user?.userId || concernsMe || holdsCancelRole(user?.roles ?? []))
 
   return (
     <div>
@@ -1901,6 +1891,7 @@ export default function RequestDetailPage() {
                 setRetractReason('')
                 setRetractPassword('')
                 setRetractError(null)
+                setRetractAskPassword(false)
                 setRetractOpen(true)
               }}
               disabled={busy}
@@ -1916,6 +1907,8 @@ export default function RequestDetailPage() {
               leftSection={<IconRestore size={16} />}
               onClick={() => {
                 setGmReopenReason('')
+                setGmReopenPassword('')
+                setGmReopenError(null)
                 setGmReopenOpen(true)
               }}
               disabled={busy}
@@ -2399,6 +2392,7 @@ export default function RequestDetailPage() {
           signature={signature}
           mySignature={mySignature}
           change={changeStep}
+          stepNo={h.currentStepNo}
           summary={
             <>
               <strong>{h.requestTypeName}</strong>
@@ -2572,6 +2566,10 @@ export default function RequestDetailPage() {
             stays in the history, struck through, with your reason beside it — and the step comes
             back to whoever owns it for a fresh decision.
           </p>
+          {/* A RETRACTED APPROVAL TAKES ITS RESULT WITH IT — said before the click, not after. */}
+          {retractMode === 'retract' && h.status === 'Approved' && (
+            <p className="hint">{t('requests.retract.undoesApproval')}</p>
+          )}
           <div className="form-field">
             <label className="form-label">
               Why? <span className="form-optional">{t('common.required')}</span>
@@ -2634,6 +2632,7 @@ export default function RequestDetailPage() {
           onClose={() => {
             setGmReopenOpen(false)
             setGmReopenReason('')
+            setGmReopenPassword('')
           }}
           title={awaitingSecond ? 'Countersign this reopen?' : 'Reopen this request?'}
           size={480}
@@ -2675,12 +2674,33 @@ export default function RequestDetailPage() {
               </div>
             </>
           )}
+          {/* EACH HALF IS SIGNED (QA3 WF-14): the password is asked of both, and checked before
+              anything is recorded. */}
+          <div className="form-field">
+            <p className="wf-sign-explain">{t('requests.reopen.signExplain')}</p>
+            <PasswordInput
+              id="wf-gm-reopen-pw"
+              label={t('requests.reopen.password')}
+              autoComplete="off"
+              value={gmReopenPassword}
+              disabled={busy}
+              onChange={(e) => setGmReopenPassword(e.currentTarget.value)}
+            />
+          </div>
+
+          {gmReopenError && (
+            <div className="alert alert--error" role="alert">
+              {gmReopenError}
+            </div>
+          )}
+
           <div className="form-actions">
             <Button
               variant="default"
               onClick={() => {
                 setGmReopenOpen(false)
                 setGmReopenReason('')
+                setGmReopenPassword('')
               }}
               disabled={busy}
             >
@@ -2689,8 +2709,8 @@ export default function RequestDetailPage() {
             <Button
               onClick={() => void submitGmReopen()}
               // The reason is required on the FIRST signature only — the second inherits it, which
-              // is why this is not a flat "reason must be non-empty" rule.
-              disabled={busy || (!awaitingSecond && !gmReopenReason.trim())}
+              // is why this is not a flat "reason must be non-empty" rule. The password, on both.
+              disabled={busy || !gmReopenPassword || (!awaitingSecond && !gmReopenReason.trim())}
             >
               {busy
                 ? 'Signing…'
