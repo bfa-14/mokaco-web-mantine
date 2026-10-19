@@ -6,7 +6,8 @@ import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { bookingsService } from '../../services/bookingService'
 import type { RoomCatalog } from '../../types/booking'
-import { minutesOf, today, withSeconds } from './bookingShared'
+import { hhmm, today, withSeconds } from './bookingShared'
+import { addClock, formSpan } from './bookingTimes'
 
 /**
  * Hold a room back: maintenance, a private event, a deep clean.
@@ -20,6 +21,10 @@ import { minutesOf, today, withSeconds } from './bookingShared'
  *
  * The reason is INTERNAL. It appears on the calendar and in the drawer for staff, and never reaches
  * the public availability feed — an anonymous visitor learns a slot is unavailable, not why.
+ *
+ * A BLOCK CAN RUN PAST MIDNIGHT (QA3 BKG-2): an end at or before the start is the next morning, up to
+ * 06:00 — 23:00 → 01:00 blocks the last two hours of a room open until 01:00, as one block, on its
+ * date. The server applies the same rule (booking.usp_Block_Add).
  */
 export function BlockRoomModal({
   opened,
@@ -57,13 +62,15 @@ export function BlockRoomModal({
     setRoomId(initialRoomId ?? catalog.rooms.find((r) => r.isActive)?.roomId ?? null)
     setBlockDate(initialDate ?? today())
     setStartTime(initialStart ?? '09:00')
-    setEndTime(initialEnd ?? (initialStart ? plusHour(initialStart) : '10:00'))
+    setEndTime(initialEnd ?? (initialStart ? addClock(initialStart, 60) : '10:00'))
     setReason('')
     setError(null)
   }, [opened, initialRoomId, initialDate, initialStart, initialEnd, catalog.rooms])
 
-  const missing =
-    roomId == null || !blockDate || minutesOf(endTime) <= minutesOf(startTime)
+  /** 23:00 → 01:00 is 1380–1500; null for no span (the same time twice, or an end after 06:00). */
+  const span = formSpan(startTime, endTime)
+
+  const missing = roomId == null || !blockDate || !span
 
   async function submit() {
     if (roomId == null || missing) return
@@ -155,9 +162,16 @@ export function BlockRoomModal({
           />
         </div>
 
-        {minutesOf(endTime) <= minutesOf(startTime) && (
+        {!span && (
           <div className="form-field full">
             <div className="hint">{t('booking.new.endAfterStart')}</div>
+          </div>
+        )}
+        {span && span.end > 1440 && (
+          <div className="form-field full">
+            <div className="hint">
+              {t('booking.new.nextMorning', { end: hhmm(endTime), hours: (span.end - span.start) / 60 })}
+            </div>
           </div>
         )}
 
@@ -186,10 +200,4 @@ export function BlockRoomModal({
       </div>
     </Modal>
   )
-}
-
-/** 'HH:mm' one hour on, clamped inside the day. */
-function plusHour(value: string): string {
-  const total = Math.min(23 * 60 + 59, minutesOf(value) + 60)
-  return `${`${Math.floor(total / 60)}`.padStart(2, '0')}:${`${total % 60}`.padStart(2, '0')}`
 }

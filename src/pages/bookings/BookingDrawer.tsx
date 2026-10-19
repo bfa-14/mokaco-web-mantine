@@ -51,6 +51,7 @@ import {
   statusLabel,
 } from './bookingShared'
 import { ReceiptModal } from './ReceiptModal'
+import { balanceOwed } from './bookingMoney'
 import { parseDecimal } from '../../components/numeric'
 import type { NumberInputValue } from '../../components/numeric'
 
@@ -199,7 +200,7 @@ export function BookingDrawer({
     setRefundMethodId(null)
     setPaying(false)
     setReference('')
-    setAmount(booking?.balanceDue ?? 0)
+    setAmount(booking ? balanceOwed(booking.status, booking.balanceDue) : 0)
     setMethodId(null)
   }, [booking])
 
@@ -339,7 +340,7 @@ export function BookingDrawer({
       // ordinary, and a drawer that shut after each would make it three clicks longer every time.
       const refreshed = await bookingsService.getReceipt(booking.bookingId)
       setReceipt(refreshed)
-      setAmount(refreshed.header?.balanceDue ?? 0)
+      setAmount(refreshed.header ? balanceOwed(refreshed.header.status, refreshed.header.balanceDue) : 0)
     } catch (err) {
       // "Amount exceeds the balance — 45.00 remains."
       setError(getErrorMessage(err))
@@ -369,7 +370,12 @@ export function BookingDrawer({
   /* The receipt is the fresher read — it is refetched after every payment — so the money comes from
      it when it has arrived, and from the row that opened the drawer until then. */
   const paid = header?.paidAmount ?? booking?.paidAmount ?? 0
-  const balance = header?.balanceDue ?? booking?.balanceDue ?? 0
+  /* A cancelled or no-show booking owes nothing (QA3 BKG-8): what it paid less its refunds is not a
+     debt of the guest's, and the refund position below says what the house owes back. */
+  const balance = balanceOwed(
+    header?.status ?? booking?.status ?? '',
+    header?.balanceDue ?? booking?.balanceDue ?? 0,
+  )
 
   /* THE REFUND POSITION: the detail read when it arrived, else the row. Both are read through the
      same helpers, which treat a missing field as "nothing owed". */

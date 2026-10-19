@@ -39,6 +39,7 @@ import {
   today,
 } from './bookingShared'
 import { BookingDrawer } from './BookingDrawer'
+import { balanceOwed } from './bookingMoney'
 import { useBookingChanged } from '../../live/bookingLive'
 import './bookings.css'
 
@@ -204,8 +205,10 @@ export default function BookingsListPage() {
         },
       }),
       /* The column somebody is actually scanning for. Sorted numerically, shown red when there is
-         still money to collect — the same red the drawer and the receipt use for a balance. */
-      columnHelper.accessor('balanceDue', {
+         still money to collect — the same red the drawer and the receipt use for a balance. A
+         cancelled or no-show booking owes nothing (QA3 BKG-8), whatever its arithmetic says. */
+      columnHelper.accessor((row) => balanceOwed(row.status, row.balanceDue), {
+        id: 'balanceDue',
         header: t('booking.fields.balance'),
         cell: (info) => (
           <span
@@ -217,7 +220,7 @@ export default function BookingsListPage() {
           </span>
         ),
         meta: {
-          filterText: (_v, row) => money(row.balanceDue, row.currencyCode),
+          filterText: (_v, row) => money(balanceOwed(row.status, row.balanceDue), row.currencyCode),
           noHeaderFilter: true,
         },
       }),
