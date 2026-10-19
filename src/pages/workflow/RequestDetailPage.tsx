@@ -1177,6 +1177,11 @@ export default function RequestDetailPage() {
   const [retractPassword, setRetractPassword] = useState('')
   /** The server's refusal, kept in the dialog rather than a toast — see submitRetract's catch. */
   const [retractError, setRetractError] = useState<string | null>(null)
+  /**
+   * Set when the server asked for a signature this page did not foresee — the field then appears, so
+   * the refusal is never one the reader cannot act on.
+   */
+  const [retractAskPassword, setRetractAskPassword] = useState(false)
   const [gmReopenOpen, setGmReopenOpen] = useState(false)
   const [gmReopenReason, setGmReopenReason] = useState('')
   /** Each half of the reopen is signed (QA3 WF-14). Component state only; cleared after every attempt. */
@@ -1472,7 +1477,9 @@ export default function RequestDetailPage() {
          toast that times out is the wrong place for either. The password is cleared but the reason
          is kept — one is a retry, the other is work they already did. */
       setRetractPassword('')
-      setRetractError(refusalText(err))
+      const refusal = refusalText(err)
+      if (refusal.includes('must be signed with your password')) setRetractAskPassword(true)
+      setRetractError(refusal)
     } finally {
       setBusy(false)
     }
@@ -1728,6 +1735,7 @@ export default function RequestDetailPage() {
    */
   const lastDecisionStep = steps.find((s) => s.stepNo === lastDecision?.stepNo)
   const retractNeedsPassword =
+    retractAskPassword ||
     (lastDecisionStep?.withdrawNeedsSignature ?? false) ||
     (retractMode === 'retract' &&
       ((lastDecisionStep?.signedWithPassword ?? false) || (signature?.signatureRequired ?? false)))
@@ -1883,6 +1891,7 @@ export default function RequestDetailPage() {
                 setRetractReason('')
                 setRetractPassword('')
                 setRetractError(null)
+                setRetractAskPassword(false)
                 setRetractOpen(true)
               }}
               disabled={busy}
