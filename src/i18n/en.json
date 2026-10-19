@@ -1701,10 +1701,14 @@
       "emailHint": "Optional — with an address, the guest is emailed their confirmation.",
       "addonPerHour": "{{name}} — {{price}} per hour",
       "addonFixed": "{{name}} — {{price}}",
-      "previewHint": "An estimate. The price that is stored is the one the server works out when the booking is taken.",
       "emailInvalid": "Enter a valid e-mail address.",
       "hoursHintNextMorning": "{{day}}: open {{open}}–{{close}} the next morning. A start after midnight belongs to the next date.",
-      "nextMorning": "Ends at {{end}} the next morning — {{hours}} h."
+      "nextMorning": "Ends at {{end}} the next morning — {{hours}} h.",
+      "discount": "Discount for {{hours}} h ({{percent}} %)",
+      "depositPercent": "Deposit ({{percent}} %)",
+      "quoteHint": "The server's price: the hour discount and the deposit for this notice, as the booking will store them.",
+      "quoteRefused": "Cannot price this yet: {{reason}}",
+      "quoting": "Working out the price…"
     },
     "block": {
       "title": "Block room",
