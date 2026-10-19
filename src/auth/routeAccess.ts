@@ -136,7 +136,10 @@ export const ROUTE_ACCESS: RouteRule[] = [
      allowed to run. The two write codes gate BUTTONS inside these pages — see PayrollRunsPage. */
   { path: '/payroll/runs', anyOf: [PERMISSION.PAYROLL_VIEW] },
   { path: '/payroll/runs/:id', anyOf: [PERMISSION.PAYROLL_VIEW] },
-  { path: '/payroll/payslips/:id', anyOf: [PERMISSION.PAYROLL_VIEW] },
+  /* '/payroll/payslips/:id' is NOT here: the payslip document is the one payroll page an employee reads
+     about themselves (their own, once the month is approved), so the route is open and the SERVER decides
+     — a PAYROLL_VIEW holder reads any payslip, anybody else gets the 403 sentence for one that is not
+     theirs (QA3 WEB-15). It is listed in OPEN_ROUTES below. */
   { path: '/payroll/advances', anyOf: [PERMISSION.PAYROLL_VIEW] },
   { path: '/payroll/adjustments', anyOf: [PERMISSION.PAYROLL_VIEW] },
   /* The one payroll page that is NOT a read: the tiers and ceilings dictionary exists only to be
@@ -237,6 +240,11 @@ export const OPEN_ROUTES: readonly string[] = [
   '/requests/:id',
   // One's own profile.
   '/profile',
+  // One's own payslips (GET /api/me/payslips: the token's employee, approved months only), and the
+  // payslip document they open — the server lets its employee read it once the run is approved, and
+  // answers 403 for anybody else's (QA3 PAY-12 / WEB-15).
+  '/my-payslips',
+  '/payroll/payslips/:id',
   // Settings — see the note at the end of ROUTE_ACCESS: the page gates its system tabs itself so
   // that the Preferences tab (the language switch) reaches everybody.
   '/settings',

@@ -52,6 +52,8 @@ const DASHBOARD: NavLeaf = { to: '/', labelKey: 'nav.dashboard', icon: 'home', e
 const SETTINGS: NavLeaf = { to: '/settings', labelKey: 'nav.settings', icon: 'preferences' }
 /** Every signed-in user has one, so it is never permission-gated. */
 const PROFILE: NavLeaf = { to: '/profile', labelKey: 'nav.myProfile', icon: 'user' }
+/** Everybody is paid, so everybody may read their own payslips — open, like the profile (QA3 PAY-12). */
+const MY_PAYSLIPS: NavLeaf = { to: '/my-payslips', labelKey: 'nav.myPayslips', icon: 'money' }
 
 const GROUPS: NavGroup[] = [
   {
@@ -99,9 +101,8 @@ const GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Every leaf here is PAYROLL_RUN, because PayrollController gates the whole class on it. The
-    // group therefore vanishes as a whole for anyone without it — same outcome as the old
-    // group-level flag, now derived from the endpoints rather than restated here.
+    // Runs, advances and adjustments are PAYROLL_VIEW, the tiers page PAYROLL_RUN (it exists only to be
+    // edited). The group vanishes for anyone holding neither — derived from the endpoints, as everywhere.
     labelKey: 'nav.payroll.group',
     icon: 'money',
     basePath: '/payroll',
@@ -293,6 +294,11 @@ export function SideNav({
       <NavLink to={PROFILE.to} className={leafClassName} onClick={onNavigate}>
         <NavIcon name={PROFILE.icon} />
         <span className="side-nav-label">{t(PROFILE.labelKey)}</span>
+      </NavLink>
+
+      <NavLink to={MY_PAYSLIPS.to} className={leafClassName} onClick={onNavigate}>
+        <NavIcon name={MY_PAYSLIPS.icon} />
+        <span className="side-nav-label">{t(MY_PAYSLIPS.labelKey)}</span>
       </NavLink>
 
       <NavLink to={SETTINGS.to} className={leafClassName} onClick={onNavigate}>
