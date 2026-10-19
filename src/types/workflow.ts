@@ -243,6 +243,17 @@ export interface DecisionOption {
 }
 
 /**
+ * Somebody the waiting step can be handed to (GET /api/requests/{id}/delegate-candidates, QA3 WEB-7):
+ * an active account other than the caller and the employee the request is about.
+ */
+export interface DelegateCandidate {
+  userId: number
+  username: string
+  /** The employee behind the account, when there is one. */
+  fullName: string | null
+}
+
+/**
  * The caller's OWN signature image, metadata only (GET /api/me/signature) — the bytes never travel
  * here. `hasSignature` false, or a null response, both mean "no image on file", which is a normal
  * state: a decision is signed with a PASSWORD, and the image is only a convention shown alongside.
