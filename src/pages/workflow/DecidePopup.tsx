@@ -25,6 +25,7 @@ import { employeesService } from '../../services/hrService'
 import type { EmployeeListItem } from '../../types/hr'
 import type {
   DecisionOption,
+  DelegateCandidate,
   ExitPermissionDetail,
   LeaveRequestPayload,
   MySignature,
@@ -37,6 +38,8 @@ import type {
   TipDistributionPayload,
 } from '../../types/workflow'
 import { balanceDaysText } from './newRequestShared'
+import { candidateLabel, holdWaitsOnRequester, offerableDecisions, offersDelegate } from './decisionRules'
+import { isDecidedAMomentAgo } from './reversalRules'
 import { shortDate } from './workflowFormat'
 import { parseDecimal } from '../../components/numeric'
 import type { NumberInputValue } from '../../components/numeric'
@@ -108,6 +111,7 @@ export function DecidePopup({
   signature,
   mySignature,
   change = null,
+  stepNo = null,
   onClose,
   onDecided,
 }: {
@@ -122,6 +126,12 @@ export function DecidePopup({
   mySignature: MySignature | null
   /** Set when CHANGING a decision already made: the step to withdraw first. */
   change?: RequestStep | null
+  /**
+   * The step on screen — the request's current step when the dialog opened (QA3 WF-2). An approval
+   * carries it, so a step somebody else decided in the meantime is refused ("decided a moment ago")
+   * instead of the NEXT step being signed on the strength of a stale screen.
+   */
+  stepNo?: number | null
   onClose: () => void
   /** Refresh whatever the caller shows. */
   onDecided: () => void | Promise<void>
@@ -137,6 +147,10 @@ export function DecidePopup({
   const [submitting, setSubmitting] = useState(false)
   /** The API's refusal, shown verbatim INSIDE the dialog. */
   const [error, setError] = useState<string | null>(null)
+  /** Who a hand-over can go to (QA3 WEB-7) — read only when a hand-over is among the decisions. */
+  const [candidates, setCandidates] = useState<DelegateCandidate[]>([])
+  /** The person picked for "Hand to someone else". */
+  const [delegateTo, setDelegateTo] = useState<number | null>(null)
 
   /* EVERY DECIMAL FIGURE BELOW IS HELD AS THE BOX HANDS IT OVER ("2." on the way to 2.5) and the
      number is DERIVED from it; writing a number back mid-decimal is what made "8.2" collapse to 0
@@ -457,17 +471,25 @@ export function DecidePopup({
           await onDecided()
           return
         }
-        setDecisions(list)
+        // A HAND-OVER NEEDS SOMEBODY TO HAND TO (QA3 WEB-7). The server lists who; with nobody,
+        // the option is not offered at all rather than offered and refused.
+        const people = offersDelegate(list)
+          ? await requestsService.delegateCandidates(requestId).catch(() => [] as DelegateCandidate[])
+          : []
+        if (cancelled) return
+        setCandidates(people)
+        const offerable = offerableDecisions(list, people.length)
+        setDecisions(offerable)
         if (change) {
           // Start from WHAT THEY DID: their previous decision, preselected, with their note.
-          const previous = change.decision && list.some((d) => d.code === change.decision)
+          const previous = change.decision && offerable.some((d) => d.code === change.decision)
             ? change.decision
             : WITHDRAW_ONLY
           setDecisionCode(previous)
           setNote(change.comment ?? '')
         } else {
           // The primary choice is preselected — the ordinary case is open → note → commit.
-          setDecisionCode(list.find((d) => d.isPrimary)?.code ?? list[0].code)
+          setDecisionCode(offerable.find((d) => d.isPrimary)?.code ?? offerable[0]?.code ?? '')
         }
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err))
@@ -648,7 +670,13 @@ export function DecidePopup({
             : `${approved} min approved.`
         }
         {
-          const result = await requestsService.approve(requestId, { comment: text || null, code: d.code, password: pw })
+          const result = await requestsService.approve(requestId, {
+            comment: text || null,
+            code: d.code,
+            password: pw,
+            // After a withdrawal the step being decided again is the withdrawn one.
+            stepNo: change?.stepNo ?? stepNo,
+          })
           /* THE LAST SIGNATURE ON A ROSTER IS WHAT ACTIVATES IT — say so, to the person who just did it. */
           if (requestTypeCode === 'ROSTER_APPROVAL' && result?.status === 'Approved')
             return t('attendance.rosterApproval.activatedByYou')
@@ -658,10 +686,12 @@ export function DecidePopup({
         await requestsService.reject(requestId, text, { code: d.code, password: pw })
         break
       case 'Hold':
-        await requestsService.hold(requestId, text, false, { code: d.code, password: pw })
+        // "Ask the employee" is a hold WAITING ON THE REQUESTER (QA3 WEB-6) — it puts the question
+        // in their court and lets them answer it; an ordinary hold is the approver's own pause.
+        await requestsService.hold(requestId, text, holdWaitsOnRequester(d), { code: d.code, password: pw })
         break
       case 'Delegate':
-        await requestsService.delegate(requestId, 0, text, d.code)
+        await requestsService.delegate(requestId, delegateTo as number, text, d.code)
         break
       default:
         throw new Error('This decision needs an engine action this app does not implement yet.')
@@ -681,6 +711,17 @@ export function DecidePopup({
       if (selected.requiresComment && !text) {
         setError('This decision needs a note.')
         return
+      }
+      if (selected.engineAction === 'Delegate') {
+        if (delegateTo == null) {
+          setError(t('workflow.delegate.chooseSomeone'))
+          return
+        }
+        // The person receiving it needs the context — the procedure refuses a blank reason too.
+        if (!text) {
+          setError(t('workflow.delegate.reasonRequired'))
+          return
+        }
       }
       /*
        * A DISCRETIONARY GRANT MUST SAY WHY. Waiving the deduction is the one decision here that
@@ -790,6 +831,15 @@ export function DecidePopup({
     } catch (err) {
       // The password never outlives one attempt; everything else stays exactly as typed.
       setPassword('')
+      // LOST A RACE (QA3 WF-2): somebody else decided this step while the dialog was open. Nothing
+      // of this attempt was saved and the dialog describes a step that has moved on, so it closes,
+      // the page behind reloads, and the server's sentence says why.
+      if (err instanceof ApiError && isDecidedAMomentAgo(err.status, err.message)) {
+        onClose()
+        await onDecided()
+        notifications.show({ message: err.message, color: 'orange', autoClose: 6000 })
+        return
+      }
       setError(
         err instanceof ApiError && err.status === 401
           ? 'That password is not correct.'
@@ -884,6 +934,21 @@ export function DecidePopup({
               </div>
             )}
           </div>
+
+          {/* WHO TO HAND IT TO (QA3 WEB-7) — the people the server says the step can go to. */}
+          {selected?.engineAction === 'Delegate' && (
+            <div className="form-field">
+              <Select
+                label={t('workflow.delegate.toLabel')}
+                data={candidates.map((c) => ({ value: String(c.userId), label: candidateLabel(c) }))}
+                value={delegateTo != null ? String(delegateTo) : null}
+                searchable
+                placeholder={t('workflow.delegate.toPlaceholder')}
+                disabled={submitting}
+                onChange={(v) => setDelegateTo(v != null ? Number(v) : null)}
+              />
+            </div>
+          )}
 
           {/* THE EXPENSE FIGURE — required, prefilled with the request, bounded ONLY by it. */}
           {isExpense && expense && selected?.engineAction === 'Approve' && (
@@ -1284,7 +1349,10 @@ export function DecidePopup({
                         reads as a rule, where this reads as the question being asked. */}
                     {discretionaryNoteRequired
                       ? `(${t('workflow.leaveDiscretionary.noteRequiredLabel')})`
-                      : isWithdrawOnly || selected?.requiresComment || redistributingNow
+                      : isWithdrawOnly ||
+                          selected?.requiresComment ||
+                          redistributingNow ||
+                          selected?.engineAction === 'Delegate'
                         ? '(required)'
                         : '(optional)'}
                   </span>
