@@ -394,59 +394,61 @@ export default function BookingsListPage() {
             />
           </Group>
 
-          <Table highlightOnHover withColumnBorders={false} verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              {table.getHeaderGroups().map((group) => (
-                <Table.Tr key={group.id}>
-                  {group.headers.map((header) => (
-                    <Table.Th
-                      key={header.id}
-                      style={{ cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      <GridHeaderContent header={header} table={table} />
-                    </Table.Th>
-                  ))}
-                </Table.Tr>
-              ))}
-              <GridFilterRow table={table} />
-            </Table.Thead>
-            <Table.Tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <Table.Tr>
-                  <Table.Td colSpan={columns.length}>
-                    <div className="empty-hint" style={{ padding: 16 }}>
-                      {t('booking.list.empty')}
-                    </div>
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <Table.Tr
-                    key={row.id}
-                    style={{
-                      cursor: 'pointer',
-                      // Struck through for cancelled and no-shows, exactly as the calendar draws
-                      // them — the booking happened to nobody, and the row should read that way.
-                      textDecoration: isStruck(row.original.status)
-                        ? 'line-through'
-                        : undefined,
-                    }}
-                    onClick={() => {
-                      setSelected(row.original)
-                      setDrawerOpen(true)
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <Table.Td key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Table.Td>
+          <div className="table-scroll">
+            <Table highlightOnHover withColumnBorders={false} verticalSpacing="xs" fz="sm">
+              <Table.Thead>
+                {table.getHeaderGroups().map((group) => (
+                  <Table.Tr key={group.id}>
+                    {group.headers.map((header) => (
+                      <Table.Th
+                        key={header.id}
+                        style={{ cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' }}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        <GridHeaderContent header={header} table={table} />
+                      </Table.Th>
                     ))}
                   </Table.Tr>
-                ))
-              )}
-            </Table.Tbody>
-          </Table>
+                ))}
+                <GridFilterRow table={table} />
+              </Table.Thead>
+              <Table.Tbody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={columns.length}>
+                      <div className="empty-hint" style={{ padding: 16 }}>
+                        {t('booking.list.empty')}
+                      </div>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Table.Tr
+                      key={row.id}
+                      style={{
+                        cursor: 'pointer',
+                        // Struck through for cancelled and no-shows, exactly as the calendar draws
+                        // them — the booking happened to nobody, and the row should read that way.
+                        textDecoration: isStruck(row.original.status)
+                          ? 'line-through'
+                          : undefined,
+                      }}
+                      onClick={() => {
+                        setSelected(row.original)
+                        setDrawerOpen(true)
+                      }}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <Table.Td key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Table.Td>
+                      ))}
+                    </Table.Tr>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
 
           <Group justify="space-between" p="xs">
             <span className="hint" style={{ margin: 0 }}>

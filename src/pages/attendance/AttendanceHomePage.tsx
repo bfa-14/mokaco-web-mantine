@@ -310,60 +310,62 @@ function SummaryGrid({ rows }: { rows: AttendanceSummary[] }) {
         />
       </Group>
 
-      <Table striped withTableBorder verticalSpacing="xs" fz="sm">
-        <Table.Thead>
-          {table.getHeaderGroups().map((hg) => (
-            <Table.Tr key={hg.id}>
-              {hg.headers.map((header) => (
-                <Table.Th
-                  key={header.id}
-                  style={{
-                    width: header.column.columnDef.size,
-                    whiteSpace: 'nowrap',
-                    userSelect: 'none',
-                    cursor: 'pointer',
-                    textAlign: NUMERIC_COLUMNS.has(header.column.id)
-                      ? 'right'
-                      : undefined,
-                  }}
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  <GridHeaderContent header={header} table={table} />
-                </Table.Th>
-              ))}
-            </Table.Tr>
-          ))}
-          <GridFilterRow table={table} />
-        </Table.Thead>
-        <Table.Tbody>
-          {table.getRowModel().rows.length === 0 ? (
-            <Table.Tr>
-              <Table.Td colSpan={columns.length}>
-                <div className="empty-hint" style={{ padding: 16 }}>
-                  {t('attendance.home.noMatch')}
-                </div>
-              </Table.Td>
-            </Table.Tr>
-          ) : (
-            table.getRowModel().rows.map((row) => (
-              <Table.Tr key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <Table.Td
-                    key={cell.id}
-                    style={
-                      NUMERIC_COLUMNS.has(cell.column.id)
-                        ? { textAlign: 'right' }
-                        : undefined
-                    }
+      <div className="table-scroll">
+        <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead>
+            {table.getHeaderGroups().map((hg) => (
+              <Table.Tr key={hg.id}>
+                {hg.headers.map((header) => (
+                  <Table.Th
+                    key={header.id}
+                    style={{
+                      width: header.column.columnDef.size,
+                      whiteSpace: 'nowrap',
+                      userSelect: 'none',
+                      cursor: 'pointer',
+                      textAlign: NUMERIC_COLUMNS.has(header.column.id)
+                        ? 'right'
+                        : undefined,
+                    }}
+                    onClick={header.column.getToggleSortingHandler()}
                   >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </Table.Td>
+                    <GridHeaderContent header={header} table={table} />
+                  </Table.Th>
                 ))}
               </Table.Tr>
-            ))
-          )}
-        </Table.Tbody>
-      </Table>
+            ))}
+            <GridFilterRow table={table} />
+          </Table.Thead>
+          <Table.Tbody>
+            {table.getRowModel().rows.length === 0 ? (
+              <Table.Tr>
+                <Table.Td colSpan={columns.length}>
+                  <div className="empty-hint" style={{ padding: 16 }}>
+                    {t('attendance.home.noMatch')}
+                  </div>
+                </Table.Td>
+              </Table.Tr>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <Table.Tr key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <Table.Td
+                      key={cell.id}
+                      style={
+                        NUMERIC_COLUMNS.has(cell.column.id)
+                          ? { textAlign: 'right' }
+                          : undefined
+                      }
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </Table.Td>
+                  ))}
+                </Table.Tr>
+              ))
+            )}
+          </Table.Tbody>
+        </Table>
+      </div>
 
       <Group justify="space-between" p="xs">
         <span className="hint" style={{ margin: 0 }}>

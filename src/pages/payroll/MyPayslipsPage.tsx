@@ -59,58 +59,60 @@ export default function MyPayslipsPage() {
         <div className="page-loading"><Loader size={36} /></div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-          <Table highlightOnHover verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>{t('payroll.mine.period')}</Table.Th>
-                <Table.Th>{t('payroll.mine.run')}</Table.Th>
-                <Table.Th>{t('payroll.mine.net')}</Table.Th>
-                <Table.Th>{t('payroll.mine.payment')}</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {(rows ?? []).length === 0 ? (
+          <div className="table-scroll">
+            <Table highlightOnHover verticalSpacing="xs" fz="sm">
+              <Table.Thead>
                 <Table.Tr>
-                  <Table.Td colSpan={4}>
-                    <div className="empty-hint" style={{ padding: 16 }}>{t('payroll.mine.empty')}</div>
-                  </Table.Td>
+                  <Table.Th>{t('payroll.mine.period')}</Table.Th>
+                  <Table.Th>{t('payroll.mine.run')}</Table.Th>
+                  <Table.Th>{t('payroll.mine.net')}</Table.Th>
+                  <Table.Th>{t('payroll.mine.payment')}</Table.Th>
                 </Table.Tr>
-              ) : (
-                (rows ?? []).map((p) => {
-                  const nets = netParts(p)
-                  return (
-                    <Table.Tr
-                      key={p.payslipId}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(`/payroll/payslips/${p.payslipId}`)}
-                    >
-                      <Table.Td>{p.periodYearMonth}</Table.Td>
-                      <Table.Td>
-                        {p.runType === 'Supplemental' ? t('payroll.mine.supplemental') : t('payroll.mine.primary')}
-                      </Table.Td>
-                      {/* Two currencies, two figures — never merged into one number. */}
-                      <Table.Td>
-                        {nets.length === 0
-                          ? t('payroll.mine.nothing')
-                          : nets.map((n) => <div key={n.currency}><b>{fmt(n.amount)}</b> {n.currency}</div>)}
-                      </Table.Td>
-                      <Table.Td>
-                        {p.paidAt
-                          ? t('payroll.mine.paidBy', {
-                              method: p.paymentMethod === 'Cash' || p.paymentMethod === 'Bank'
-                                ? t(`payroll.mine.method.${p.paymentMethod}`)
-                                : (p.paymentMethod ?? ''),
-                              // UTC from the API: the LOCAL date it fell on (23:30 UTC is tomorrow in Beirut).
-                              date: fmtLocalDate(p.paidAt),
-                            })
-                          : t('payroll.mine.notPaid')}
-                      </Table.Td>
-                    </Table.Tr>
-                  )
-                })
-              )}
-            </Table.Tbody>
-          </Table>
+              </Table.Thead>
+              <Table.Tbody>
+                {(rows ?? []).length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={4}>
+                      <div className="empty-hint" style={{ padding: 16 }}>{t('payroll.mine.empty')}</div>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  (rows ?? []).map((p) => {
+                    const nets = netParts(p)
+                    return (
+                      <Table.Tr
+                        key={p.payslipId}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigate(`/payroll/payslips/${p.payslipId}`)}
+                      >
+                        <Table.Td>{p.periodYearMonth}</Table.Td>
+                        <Table.Td>
+                          {p.runType === 'Supplemental' ? t('payroll.mine.supplemental') : t('payroll.mine.primary')}
+                        </Table.Td>
+                        {/* Two currencies, two figures — never merged into one number. */}
+                        <Table.Td>
+                          {nets.length === 0
+                            ? t('payroll.mine.nothing')
+                            : nets.map((n) => <div key={n.currency}><b>{fmt(n.amount)}</b> {n.currency}</div>)}
+                        </Table.Td>
+                        <Table.Td>
+                          {p.paidAt
+                            ? t('payroll.mine.paidBy', {
+                                method: p.paymentMethod === 'Cash' || p.paymentMethod === 'Bank'
+                                  ? t(`payroll.mine.method.${p.paymentMethod}`)
+                                  : (p.paymentMethod ?? ''),
+                                // UTC from the API: the LOCAL date it fell on (23:30 UTC is tomorrow in Beirut).
+                                date: fmtLocalDate(p.paidAt),
+                              })
+                            : t('payroll.mine.notPaid')}
+                        </Table.Td>
+                      </Table.Tr>
+                    )
+                  })
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
         </div>
       )}
     </div>

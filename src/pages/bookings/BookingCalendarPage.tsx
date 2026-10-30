@@ -614,10 +614,12 @@ export default function BookingCalendarPage() {
 
     /* The viewport's bottom is also the content pane's: `.app-shell` is exactly 100vh and the pane
        inside it is the scroller, so there is nothing below the fold to leave room for. */
-    const next = Math.max(
-      320,
-      Math.round(window.innerHeight - element.getBoundingClientRect().top - 16),
-    )
+    const fit = Math.round(window.innerHeight - element.getBoundingClientRect().top - 16)
+    /* A PHONE has no room left under the filters, so "what is left" was always the 320px floor: a
+       small box scrolling inside a scrolling page. There the grid takes the screen under the header
+       (58px) and the pane's padding instead, and the page scrolls the filters away to reach it. */
+    const phone = window.matchMedia('(max-width: 62em)').matches
+    const next = Math.max(320, phone ? Math.round(window.innerHeight - 58 - 24) : fit)
 
     if (Math.abs(next - appliedHeight.current) < 8) return
     appliedHeight.current = next
@@ -683,6 +685,15 @@ export default function BookingCalendarPage() {
     dragRef.current = drag
   }, [drag])
 
+  /**
+   * TOUCH SCROLLS, IT DOES NOT SELECT. The slots cover the whole grid, so a drag that starts on a
+   * finger made the calendar impossible to move on a phone: the browser takes the gesture over for
+   * scrolling, sends pointercancel, and the cancel used to be committed as a selection, which opened
+   * the new-booking form on almost every swipe. Only a mouse drags out a span; a finger or a pen
+   * scrolls, and a TAP (its click) opens the form at that slot like the keyboard does.
+   */
+  const lastPointerType = useRef<string>('mouse')
+
   const openNewAt = useCallback(
     (column: CalColumn, startMin: number, endMin: number) => {
       // A start at or after midnight (1440+) is the NEXT date's clock time, as the API stores it.
@@ -736,11 +747,15 @@ export default function BookingCalendarPage() {
     function onUp() {
       commitDrag()
     }
+    // A cancelled gesture (the browser scrolling, an alert, a lost pointer) proposes nothing.
+    function onCancel() {
+      setDrag(null)
+    }
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
     return () => {
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
     }
   }, [drag, commitDrag])
 
@@ -1238,7 +1253,8 @@ export default function BookingCalendarPage() {
                           time: fromMinutes(minutes),
                         })}
                         onPointerDown={(event) => {
-                          if (event.button !== 0) return
+                          lastPointerType.current = event.pointerType
+                          if (event.pointerType !== 'mouse' || event.button !== 0) return
                           event.preventDefault()
                           setDrag({ columnKey: column.key, anchor: minutes, current: minutes })
                         }}
@@ -1250,9 +1266,9 @@ export default function BookingCalendarPage() {
                           )
                         }}
                         onClick={(event) => {
-                          // Pointer input is committed by the window's pointerup, so the only
-                          // clicks that belong here are the keyboard's — which report detail 0.
-                          if (event.detail !== 0) return
+                          // A mouse is committed by the window's pointerup, so the clicks that belong
+                          // here are the keyboard's (detail 0) and a finger's or a pen's tap.
+                          if (event.detail !== 0 && lastPointerType.current === 'mouse') return
                           openNewAt(
                             column,
                             minutes,

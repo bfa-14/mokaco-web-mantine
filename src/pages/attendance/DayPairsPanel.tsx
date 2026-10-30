@@ -78,36 +78,38 @@ export function DayPairsPanel({
 
   return (
     <div className="pairs-panel">
-      <Table className="pairs-table">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th style={{ width: PAIR_WIDTHS.seq }}>{t('attendance.pairs.seq')}</Table.Th>
-            <Table.Th style={{ width: PAIR_WIDTHS.time }}>{t('attendance.pairs.in')}</Table.Th>
-            <Table.Th style={{ width: PAIR_WIDTHS.time }}>{t('attendance.pairs.out')}</Table.Th>
-            <Table.Th style={{ width: PAIR_WIDTHS.worked }}>
-              {t('attendance.pairs.worked')}
-            </Table.Th>
-            <Table.Th style={{ width: PAIR_WIDTHS.gap }}>
-              <span title={t('attendance.pairs.gapTitle')}>{t('attendance.pairs.gap')}</span>
-            </Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {intervals.map((interval) => (
-            <Table.Tr key={interval.intervalId}>
-              <Table.Td className="pairs-seq">{interval.seqNo}</Table.Td>
-              <Table.Td>{formatTime(interval.inTimeUtc)}</Table.Td>
-              <Table.Td>{formatTime(interval.outTimeUtc)}</Table.Td>
-              <Table.Td>{formatMinutes(interval.minutes)}</Table.Td>
-              {/* Dimmed because the gap is context, not a result — it is time NOT worked, and it
-                  must never read as though it were part of the day's total. */}
-              <Table.Td className="pairs-gap">
-                {interval.gapAfterMins > 0 ? formatMinutes(interval.gapAfterMins) : ''}
-              </Table.Td>
+      <div className="table-scroll">
+        <Table className="pairs-table">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th style={{ width: PAIR_WIDTHS.seq }}>{t('attendance.pairs.seq')}</Table.Th>
+              <Table.Th style={{ width: PAIR_WIDTHS.time }}>{t('attendance.pairs.in')}</Table.Th>
+              <Table.Th style={{ width: PAIR_WIDTHS.time }}>{t('attendance.pairs.out')}</Table.Th>
+              <Table.Th style={{ width: PAIR_WIDTHS.worked }}>
+                {t('attendance.pairs.worked')}
+              </Table.Th>
+              <Table.Th style={{ width: PAIR_WIDTHS.gap }}>
+                <span title={t('attendance.pairs.gapTitle')}>{t('attendance.pairs.gap')}</span>
+              </Table.Th>
             </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
+          </Table.Thead>
+          <Table.Tbody>
+            {intervals.map((interval) => (
+              <Table.Tr key={interval.intervalId}>
+                <Table.Td className="pairs-seq">{interval.seqNo}</Table.Td>
+                <Table.Td>{formatTime(interval.inTimeUtc)}</Table.Td>
+                <Table.Td>{formatTime(interval.outTimeUtc)}</Table.Td>
+                <Table.Td>{formatMinutes(interval.minutes)}</Table.Td>
+                {/* Dimmed because the gap is context, not a result — it is time NOT worked, and it
+                    must never read as though it were part of the day's total. */}
+                <Table.Td className="pairs-gap">
+                  {interval.gapAfterMins > 0 ? formatMinutes(interval.gapAfterMins) : ''}
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </div>
 
       <div className="pairs-summary">
         {t('attendance.pairs.summary', {
