@@ -27,39 +27,41 @@ function OversightTable<T>({ table }: { table: TableInstance<T> }) {
 
   return (
     <>
-      <Table striped highlightOnHover verticalSpacing="xs" fz="sm">
-        <Table.Thead>
-          {table.getHeaderGroups().map((hg) => (
-            <Table.Tr key={hg.id}>
-              {hg.headers.map((header) => (
-                <Table.Th
-                  key={header.id}
-                  style={{
-                    cursor: header.column.getCanSort() ? 'pointer' : undefined,
-                    whiteSpace: 'nowrap',
-                    userSelect: 'none',
-                  }}
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  <GridHeaderContent header={header} table={table} />
-                </Table.Th>
-              ))}
-            </Table.Tr>
-          ))}
-          <GridFilterRow table={table} />
-        </Table.Thead>
-        <Table.Tbody>
-          {table.getRowModel().rows.map((row) => (
-            <Table.Tr key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <Table.Td key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </Table.Td>
-              ))}
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
+      <div className="table-scroll">
+        <Table striped highlightOnHover verticalSpacing="xs" fz="sm">
+          <Table.Thead>
+            {table.getHeaderGroups().map((hg) => (
+              <Table.Tr key={hg.id}>
+                {hg.headers.map((header) => (
+                  <Table.Th
+                    key={header.id}
+                    style={{
+                      cursor: header.column.getCanSort() ? 'pointer' : undefined,
+                      whiteSpace: 'nowrap',
+                      userSelect: 'none',
+                    }}
+                    onClick={header.column.getToggleSortingHandler()}
+                  >
+                    <GridHeaderContent header={header} table={table} />
+                  </Table.Th>
+                ))}
+              </Table.Tr>
+            ))}
+            <GridFilterRow table={table} />
+          </Table.Thead>
+          <Table.Tbody>
+            {table.getRowModel().rows.map((row) => (
+              <Table.Tr key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <Table.Td key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </Table.Td>
+                ))}
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </div>
 
       <Group justify="space-between" p="xs">
         <span className="hint" style={{ margin: 0 }}>

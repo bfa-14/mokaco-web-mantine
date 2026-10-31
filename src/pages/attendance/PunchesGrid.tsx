@@ -311,35 +311,37 @@ export function PunchesGrid({
         </div>
       ) : (
         <>
-          <Table highlightOnHover>
-            <Table.Thead>
-              {table.getHeaderGroups().map((group) => (
-                <Table.Tr key={group.id}>
-                  {group.headers.map((header) => (
-                    <Table.Th
-                      key={header.id}
-                      style={{ width: PUNCH_WIDTHS[header.column.id] }}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      <GridHeaderContent header={header} table={table} />
-                    </Table.Th>
-                  ))}
-                </Table.Tr>
-              ))}
-              <GridFilterRow table={table} />
-            </Table.Thead>
-            <Table.Tbody>
-              {table.getRowModel().rows.map((row) => (
-                <Table.Tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <Table.Td key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </Table.Td>
-                  ))}
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+          <div className="table-scroll">
+            <Table highlightOnHover>
+              <Table.Thead>
+                {table.getHeaderGroups().map((group) => (
+                  <Table.Tr key={group.id}>
+                    {group.headers.map((header) => (
+                      <Table.Th
+                        key={header.id}
+                        style={{ width: PUNCH_WIDTHS[header.column.id] }}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        <GridHeaderContent header={header} table={table} />
+                      </Table.Th>
+                    ))}
+                  </Table.Tr>
+                ))}
+                <GridFilterRow table={table} />
+              </Table.Thead>
+              <Table.Tbody>
+                {table.getRowModel().rows.map((row) => (
+                  <Table.Tr key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <Table.Td key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </Table.Td>
+                    ))}
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </div>
 
           {table.getPageCount() > 1 && (
             <Group justify="flex-end" mt="sm">

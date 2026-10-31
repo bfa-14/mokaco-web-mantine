@@ -741,28 +741,30 @@ export default function LeavePolicyPage() {
               <p className="hint">{t('hr.leaveYear.nothingToDo', { year: openYearValue })}</p>
             ) : (
               <>
-                <Table striped withTableBorder verticalSpacing="xs" fz="sm">
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>{t('hr.leaveYear.colType')}</Table.Th>
-                      <Table.Th>{t('hr.leaveYear.colEmployees')}</Table.Th>
-                      <Table.Th>{t('hr.leaveYear.colGranted')}</Table.Th>
-                      <Table.Th>{t('hr.leaveYear.colCarried')}</Table.Th>
-                      <Table.Th>{t('hr.leaveYear.colExpired')}</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {openSummary.map((row) => (
-                      <Table.Tr key={row.leaveTypeName}>
-                        <Table.Td>{row.leaveTypeName}</Table.Td>
-                        <Table.Td>{row.employeesOpened}</Table.Td>
-                        <Table.Td>{fmtDays(row.daysGranted)}</Table.Td>
-                        <Table.Td>{fmtDays(row.daysCarriedOver)}</Table.Td>
-                        <Table.Td>{fmtDays(row.daysExpired)}</Table.Td>
+                <div className="table-scroll">
+                  <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>{t('hr.leaveYear.colType')}</Table.Th>
+                        <Table.Th>{t('hr.leaveYear.colEmployees')}</Table.Th>
+                        <Table.Th>{t('hr.leaveYear.colGranted')}</Table.Th>
+                        <Table.Th>{t('hr.leaveYear.colCarried')}</Table.Th>
+                        <Table.Th>{t('hr.leaveYear.colExpired')}</Table.Th>
                       </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {openSummary.map((row) => (
+                        <Table.Tr key={row.leaveTypeName}>
+                          <Table.Td>{row.leaveTypeName}</Table.Td>
+                          <Table.Td>{row.employeesOpened}</Table.Td>
+                          <Table.Td>{fmtDays(row.daysGranted)}</Table.Td>
+                          <Table.Td>{fmtDays(row.daysCarriedOver)}</Table.Td>
+                          <Table.Td>{fmtDays(row.daysExpired)}</Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </div>
 
                 {/* The figure that explains a total nobody expected: with part-year hires in the
                     run, headcount × annual entitlement will not match the granted days. */}
@@ -1003,71 +1005,73 @@ function TierGrid({
       <p className="hint" style={{ marginTop: 0 }}>
         {subtitle}
       </p>
-      <Table withTableBorder verticalSpacing="xs" fz="sm">
-        <Table.Thead>
-          <Table.Tr>
-            {columns.map((c) => (
-              <Table.Th key={c.field}>{c.caption}</Table.Th>
-            ))}
-            <Table.Th style={{ width: 90 }} />
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {adding && editorRow('__new__')}
-          {rows.map((row) => {
-            const r = row as Record<string, unknown>
-            const key = String(r[keyField])
-            if (editKey === key) return editorRow(key)
-            return (
-              <Table.Tr key={key}>
-                {columns.map((c) => (
-                  <Table.Td key={c.field}>{String(r[c.field] ?? '')}</Table.Td>
-                ))}
-                <Table.Td>
-                  {!readOnly && (
-                    <div className="grid-actions">
-                      <ActionIcon
-                        variant="subtle"
-                        title="Edit"
-                        aria-label="Edit"
-                        disabled={disabled || editing}
-                        onClick={() => startEdit(r)}
-                      >
-                        <IconPencil size={16} />
-                      </ActionIcon>
-                      <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        title="Delete"
-                        aria-label="Delete"
-                        disabled={disabled || editing}
-                        onClick={() => {
-                          // The DX grid confirmed deletion itself; window.confirm keeps that gate,
-                          // with DevExtreme's own default wording.
-                          if (window.confirm('Are you sure you want to delete this record?')) {
-                            void onDelete(r)
-                          }
-                        }}
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </div>
-                  )}
+      <div className="table-scroll">
+        <Table withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead>
+            <Table.Tr>
+              {columns.map((c) => (
+                <Table.Th key={c.field}>{c.caption}</Table.Th>
+              ))}
+              <Table.Th style={{ width: 90 }} />
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {adding && editorRow('__new__')}
+            {rows.map((row) => {
+              const r = row as Record<string, unknown>
+              const key = String(r[keyField])
+              if (editKey === key) return editorRow(key)
+              return (
+                <Table.Tr key={key}>
+                  {columns.map((c) => (
+                    <Table.Td key={c.field}>{String(r[c.field] ?? '')}</Table.Td>
+                  ))}
+                  <Table.Td>
+                    {!readOnly && (
+                      <div className="grid-actions">
+                        <ActionIcon
+                          variant="subtle"
+                          title="Edit"
+                          aria-label="Edit"
+                          disabled={disabled || editing}
+                          onClick={() => startEdit(r)}
+                        >
+                          <IconPencil size={16} />
+                        </ActionIcon>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          title="Delete"
+                          aria-label="Delete"
+                          disabled={disabled || editing}
+                          onClick={() => {
+                            // The DX grid confirmed deletion itself; window.confirm keeps that gate,
+                            // with DevExtreme's own default wording.
+                            if (window.confirm('Are you sure you want to delete this record?')) {
+                              void onDelete(r)
+                            }
+                          }}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </div>
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              )
+            })}
+            {rows.length === 0 && !adding && (
+              <Table.Tr>
+                <Table.Td colSpan={columns.length + 1}>
+                  <div className="hint" style={{ margin: 0 }}>
+                    No data
+                  </div>
                 </Table.Td>
               </Table.Tr>
-            )
-          })}
-          {rows.length === 0 && !adding && (
-            <Table.Tr>
-              <Table.Td colSpan={columns.length + 1}>
-                <div className="hint" style={{ margin: 0 }}>
-                  No data
-                </div>
-              </Table.Td>
-            </Table.Tr>
-          )}
-        </Table.Tbody>
-      </Table>
+            )}
+          </Table.Tbody>
+        </Table>
+      </div>
     </div>
   )
 }

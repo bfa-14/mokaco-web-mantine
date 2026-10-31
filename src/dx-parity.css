@@ -243,6 +243,21 @@ textarea.mantine-Input-input {
   overflow-x: auto;
 }
 
+/* A table wider than the screen scrolls on its own, inside this wrapper, instead of pushing the
+   whole page sideways (the title and the buttons with it). Every Mantine <Table> outside a
+   Table.ScrollContainer sits in one. Popovers are portaled, so nothing is clipped by it. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* A segmented switch cannot wrap; one with long labels (Anomalies · Worked without roster · Unknown
+   device punches) was wider than a phone and pushed the page sideways. It scrolls within itself. */
+.mantine-SegmentedControl-root {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 /* Toolbars and filter bars stack rather than overflow once their controls stop fitting. */
 .tab-toolbar,
 .filter-bar,
@@ -275,6 +290,10 @@ textarea.mantine-Input-input {
   }
   .mantine-Modal-inner {
     padding: 0;
+  }
+  /* A drawer sized for a desktop (the booking drawer is 440px) would run off a phone's edge. */
+  .mantine-Drawer-content {
+    max-width: 100vw;
   }
 }
 

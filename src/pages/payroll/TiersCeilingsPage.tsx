@@ -553,48 +553,50 @@ function ConfigGrid({
 
   return (
     <div>
-      <Table striped withTableBorder verticalSpacing="xs" fz="sm">
-        <Table.Thead>
-          {table.getHeaderGroups().map((hg: any) => (
-            <Table.Tr key={hg.id}>
-              {hg.headers.map((header: any) => (
-                <Table.Th
-                  key={header.id}
-                  style={{
-                    width: widths[header.column.id],
-                    cursor: header.column.getCanSort() ? 'pointer' : undefined,
-                    whiteSpace: 'nowrap',
-                    userSelect: 'none',
-                  }}
-                  onClick={header.column.getToggleSortingHandler()}
-                >
-                  <GridHeaderContent header={header} table={table} />
-                </Table.Th>
-              ))}
-            </Table.Tr>
-          ))}
-          <GridFilterRow table={table} />
-        </Table.Thead>
-        <Table.Tbody>
-          {table.getRowModel().rows.length === 0 ? (
-            <Table.Tr>
-              <Table.Td colSpan={columns.length}>
-                <div className="empty-hint" style={{ padding: 16 }}>{empty}</div>
-              </Table.Td>
-            </Table.Tr>
-          ) : (
-            table.getRowModel().rows.map((row: any) => (
-              <Table.Tr key={row.id}>
-                {row.getVisibleCells().map((cell: any) => (
-                  <Table.Td key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </Table.Td>
+      <div className="table-scroll">
+        <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead>
+            {table.getHeaderGroups().map((hg: any) => (
+              <Table.Tr key={hg.id}>
+                {hg.headers.map((header: any) => (
+                  <Table.Th
+                    key={header.id}
+                    style={{
+                      width: widths[header.column.id],
+                      cursor: header.column.getCanSort() ? 'pointer' : undefined,
+                      whiteSpace: 'nowrap',
+                      userSelect: 'none',
+                    }}
+                    onClick={header.column.getToggleSortingHandler()}
+                  >
+                    <GridHeaderContent header={header} table={table} />
+                  </Table.Th>
                 ))}
               </Table.Tr>
-            ))
-          )}
-        </Table.Tbody>
-      </Table>
+            ))}
+            <GridFilterRow table={table} />
+          </Table.Thead>
+          <Table.Tbody>
+            {table.getRowModel().rows.length === 0 ? (
+              <Table.Tr>
+                <Table.Td colSpan={columns.length}>
+                  <div className="empty-hint" style={{ padding: 16 }}>{empty}</div>
+                </Table.Td>
+              </Table.Tr>
+            ) : (
+              table.getRowModel().rows.map((row: any) => (
+                <Table.Tr key={row.id}>
+                  {row.getVisibleCells().map((cell: any) => (
+                    <Table.Td key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </Table.Td>
+                  ))}
+                </Table.Tr>
+              ))
+            )}
+          </Table.Tbody>
+        </Table>
+      </div>
 
       <Group justify="space-between" mt="xs">
         <span className="hint" style={{ margin: 0 }}>

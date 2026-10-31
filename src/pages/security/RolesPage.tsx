@@ -318,61 +318,63 @@ export default function RolesPage() {
             />
           </Group>
 
-          <Table striped withTableBorder verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              {table.getHeaderGroups().map((hg) => (
-                <Table.Tr key={hg.id}>
-                  {hg.headers.map((header) => (
-                    <Table.Th
-                      key={header.id}
-                      style={{
-                        width: ROLE_WIDTHS[header.column.id],
-                        cursor: header.column.getCanSort() ? 'pointer' : undefined,
-                        whiteSpace: 'nowrap',
-                        userSelect: 'none',
-                      }}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      <GridHeaderContent header={header} table={table} />
-                    </Table.Th>
-                  ))}
-                </Table.Tr>
-              ))}
-              <GridFilterRow table={table} />
-            </Table.Thead>
-            <Table.Tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <Table.Tr>
-                  <Table.Td colSpan={columns.length}>
-                    <div className="empty-hint" style={{ padding: 16 }}>
-                      {t('security.roles.empty')}
-                    </div>
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <Fragment key={row.id}>
-                    <Table.Tr>
-                      {row.getVisibleCells().map((cell) => (
-                        <Table.Td key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </Table.Td>
-                      ))}
-                    </Table.Tr>
-                    {/* Expand a role to reveal its workflow-behaviour settings — approver usage,
-                        signature and rejection together in one panel, each saving on change. */}
-                    {row.getIsExpanded() && (
+          <div className="table-scroll">
+            <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+              <Table.Thead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Table.Tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <Table.Th
+                        key={header.id}
+                        style={{
+                          width: ROLE_WIDTHS[header.column.id],
+                          cursor: header.column.getCanSort() ? 'pointer' : undefined,
+                          whiteSpace: 'nowrap',
+                          userSelect: 'none',
+                        }}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        <GridHeaderContent header={header} table={table} />
+                      </Table.Th>
+                    ))}
+                  </Table.Tr>
+                ))}
+                <GridFilterRow table={table} />
+              </Table.Thead>
+              <Table.Tbody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={columns.length}>
+                      <div className="empty-hint" style={{ padding: 16 }}>
+                        {t('security.roles.empty')}
+                      </div>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Fragment key={row.id}>
                       <Table.Tr>
-                        <Table.Td colSpan={columns.length}>
-                          {detailPanel(row.original)}
-                        </Table.Td>
+                        {row.getVisibleCells().map((cell) => (
+                          <Table.Td key={cell.id}>
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </Table.Td>
+                        ))}
                       </Table.Tr>
-                    )}
-                  </Fragment>
-                ))
-              )}
-            </Table.Tbody>
-          </Table>
+                      {/* Expand a role to reveal its workflow-behaviour settings — approver usage,
+                          signature and rejection together in one panel, each saving on change. */}
+                      {row.getIsExpanded() && (
+                        <Table.Tr>
+                          <Table.Td colSpan={columns.length}>
+                            {detailPanel(row.original)}
+                          </Table.Td>
+                        </Table.Tr>
+                      )}
+                    </Fragment>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
 
           <Group justify="space-between" mt="xs">
             <span className="hint" style={{ margin: 0 }}>

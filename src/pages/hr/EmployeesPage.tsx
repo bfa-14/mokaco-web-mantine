@@ -404,63 +404,65 @@ export default function EmployeesPage() {
             />
           </Group>
 
-          <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              {table.getHeaderGroups().map((hg) => (
-                <Table.Tr key={hg.id}>
-                  {hg.headers.map((header) => (
-                    <Table.Th
-                      key={header.id}
-                      style={{
-                        width: WIDTHS[header.column.id],
-                        // The original pinned the ID column with alignment={alignStart()} so it
-                        // survives RTL; the rest keep the table's natural start alignment.
-                        textAlign: header.column.id === 'employeeId' ? alignStart() : undefined,
-                        cursor: header.column.getCanSort() ? 'pointer' : undefined,
-                        whiteSpace: 'nowrap',
-                        userSelect: 'none',
-                      }}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      <GridHeaderContent header={header} table={table} />
-                    </Table.Th>
-                  ))}
-                </Table.Tr>
-              ))}
-              <GridFilterRow table={table} />
-            </Table.Thead>
-            <Table.Tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <Table.Tr>
-                  <Table.Td colSpan={columns.length}>
-                    <div className="empty-hint" style={{ padding: 16 }}>
-                      {onlyMissing ? t('hr.employees.allHaveLogin') : t('hr.employees.empty')}
-                    </div>
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <Table.Tr
-                    key={row.id}
-                    onDoubleClick={() => navigate(`/hr/employees/${row.original.employeeId}`)}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <Table.Td
-                        key={cell.id}
-                        style={
-                          cell.column.id === 'employeeId'
-                            ? { textAlign: alignStart() }
-                            : undefined
-                        }
+          <div className="table-scroll">
+            <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
+              <Table.Thead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Table.Tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <Table.Th
+                        key={header.id}
+                        style={{
+                          width: WIDTHS[header.column.id],
+                          // The original pinned the ID column with alignment={alignStart()} so it
+                          // survives RTL; the rest keep the table's natural start alignment.
+                          textAlign: header.column.id === 'employeeId' ? alignStart() : undefined,
+                          cursor: header.column.getCanSort() ? 'pointer' : undefined,
+                          whiteSpace: 'nowrap',
+                          userSelect: 'none',
+                        }}
+                        onClick={header.column.getToggleSortingHandler()}
                       >
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </Table.Td>
+                        <GridHeaderContent header={header} table={table} />
+                      </Table.Th>
                     ))}
                   </Table.Tr>
-                ))
-              )}
-            </Table.Tbody>
-          </Table>
+                ))}
+                <GridFilterRow table={table} />
+              </Table.Thead>
+              <Table.Tbody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={columns.length}>
+                      <div className="empty-hint" style={{ padding: 16 }}>
+                        {onlyMissing ? t('hr.employees.allHaveLogin') : t('hr.employees.empty')}
+                      </div>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => (
+                    <Table.Tr
+                      key={row.id}
+                      onDoubleClick={() => navigate(`/hr/employees/${row.original.employeeId}`)}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <Table.Td
+                          key={cell.id}
+                          style={
+                            cell.column.id === 'employeeId'
+                              ? { textAlign: alignStart() }
+                              : undefined
+                          }
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Table.Td>
+                      ))}
+                    </Table.Tr>
+                  ))
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
 
           <Group justify="space-between" mt="xs">
             <span className="hint" style={{ margin: 0 }}>

@@ -2,6 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* On a phone 100vh is the screen WITHOUT the browser's toolbars, so the bottom of every page sat
+     under them and could not be reached. dvh is the visible height; 100vh stays for older browsers. */
+  height: 100dvh;
 }
 
 .app-header {

@@ -2002,90 +2002,92 @@ export default function DailyAttendancePage() {
             />
           </Group>
 
-          <Table striped withColumnBorders={false} verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              {table.getHeaderGroups().map((hg) => (
-                <Table.Tr key={hg.id}>
-                  {hg.headers.map((header) => {
-                    const canSort = header.column.getCanSort()
+          <div className="table-scroll">
+            <Table striped withColumnBorders={false} verticalSpacing="xs" fz="sm">
+              <Table.Thead>
+                {table.getHeaderGroups().map((hg) => (
+                  <Table.Tr key={hg.id}>
+                    {hg.headers.map((header) => {
+                      const canSort = header.column.getCanSort()
+                      return (
+                        <Table.Th
+                          key={header.id}
+                          style={{
+                            width: header.column.columnDef.size,
+                            whiteSpace: 'nowrap',
+                            userSelect: 'none',
+                            cursor: canSort ? 'pointer' : undefined,
+                            textAlign:
+                              header.column.id === 'actions' ? alignEnd() : undefined,
+                          }}
+                          onClick={
+                            canSort ? header.column.getToggleSortingHandler() : undefined
+                          }
+                        >
+                          <GridHeaderContent header={header} table={table} />
+                        </Table.Th>
+                      )
+                    })}
+                  </Table.Tr>
+                ))}
+                <GridFilterRow table={table} />
+              </Table.Thead>
+              <Table.Tbody>
+                {table.getRowModel().rows.length === 0 ? (
+                  <Table.Tr>
+                    <Table.Td colSpan={columns.length}>
+                      <div className="empty-hint" style={{ padding: 16 }}>
+                        No attendance days match these filters.
+                      </div>
+                    </Table.Td>
+                  </Table.Tr>
+                ) : (
+                  table.getRowModel().rows.map((row) => {
+                    const id = row.original.attendanceId
+                    const pairs = pairsById[id]
+
                     return (
-                      <Table.Th
-                        key={header.id}
-                        style={{
-                          width: header.column.columnDef.size,
-                          whiteSpace: 'nowrap',
-                          userSelect: 'none',
-                          cursor: canSort ? 'pointer' : undefined,
-                          textAlign:
-                            header.column.id === 'actions' ? alignEnd() : undefined,
-                        }}
-                        onClick={
-                          canSort ? header.column.getToggleSortingHandler() : undefined
-                        }
-                      >
-                        <GridHeaderContent header={header} table={table} />
-                      </Table.Th>
-                    )
-                  })}
-                </Table.Tr>
-              ))}
-              <GridFilterRow table={table} />
-            </Table.Thead>
-            <Table.Tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <Table.Tr>
-                  <Table.Td colSpan={columns.length}>
-                    <div className="empty-hint" style={{ padding: 16 }}>
-                      No attendance days match these filters.
-                    </div>
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                table.getRowModel().rows.map((row) => {
-                  const id = row.original.attendanceId
-                  const pairs = pairsById[id]
-
-                  return (
-                    // NO row click, deliberately. Nothing on this page happens because a click
-                    // landed somewhere vague — every action, including merely opening a day, is an
-                    // aimed click on its own named button. The chevron is one of those.
-                    <Fragment key={row.id}>
-                      <Table.Tr>
-                        {row.getVisibleCells().map((cell) => (
-                          <Table.Td
-                            key={cell.id}
-                            style={
-                              cell.column.id === 'actions'
-                                ? { textAlign: alignEnd() }
-                                : undefined
-                            }
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </Table.Td>
-                        ))}
-                      </Table.Tr>
-
-                      {/* The pairs, in a row of their own spanning the full width. Rendered only
-                          while open, and only once the first fetch has been started — an expanded
-                          row with no state yet would flash an empty panel. */}
-                      {expandedIds.has(id) && pairs && (
+                      // NO row click, deliberately. Nothing on this page happens because a click
+                      // landed somewhere vague — every action, including merely opening a day, is an
+                      // aimed click on its own named button. The chevron is one of those.
+                      <Fragment key={row.id}>
                         <Table.Tr>
-                          <Table.Td colSpan={row.getVisibleCells().length} style={{ padding: 0 }}>
-                            <DayPairsPanel
-                              record={row.original}
-                              state={pairs}
-                              onRetry={() => void loadPairs(id)}
-                              onSeePunches={() => showPunchesFor(row.original.workDate)}
-                            />
-                          </Table.Td>
+                          {row.getVisibleCells().map((cell) => (
+                            <Table.Td
+                              key={cell.id}
+                              style={
+                                cell.column.id === 'actions'
+                                  ? { textAlign: alignEnd() }
+                                  : undefined
+                              }
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </Table.Td>
+                          ))}
                         </Table.Tr>
-                      )}
-                    </Fragment>
-                  )
-                })
-              )}
-            </Table.Tbody>
-          </Table>
+
+                        {/* The pairs, in a row of their own spanning the full width. Rendered only
+                            while open, and only once the first fetch has been started — an expanded
+                            row with no state yet would flash an empty panel. */}
+                        {expandedIds.has(id) && pairs && (
+                          <Table.Tr>
+                            <Table.Td colSpan={row.getVisibleCells().length} style={{ padding: 0 }}>
+                              <DayPairsPanel
+                                record={row.original}
+                                state={pairs}
+                                onRetry={() => void loadPairs(id)}
+                                onSeePunches={() => showPunchesFor(row.original.workDate)}
+                              />
+                            </Table.Td>
+                          </Table.Tr>
+                        )}
+                      </Fragment>
+                    )
+                  })
+                )}
+              </Table.Tbody>
+            </Table>
+          </div>
 
           <Group justify="space-between" p="xs">
             <span className="hint" style={{ margin: 0 }}>
