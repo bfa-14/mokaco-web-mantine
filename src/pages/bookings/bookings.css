@@ -578,7 +578,8 @@
 
 .bk-hours-editor {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  /* The two time boxes may shrink below their 120px: on a phone the row did not fit (42px too wide). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 120px) minmax(0, 120px) auto;
   align-items: end;
   gap: 8px 10px;
 }

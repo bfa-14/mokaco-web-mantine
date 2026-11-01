@@ -277,15 +277,30 @@ textarea.mantine-Input-input {
   max-width: 100%;
 }
 
+/* DIALOGS FOLLOW THE VISIBLE SCREEN (1 Nov 2026). --vv-height / --vv-top are the part of the screen the
+   on-screen keyboard leaves visible (visualViewport.ts); without them, 100dvh. A dialog sized to the
+   whole layout ran on under the keyboard and its buttons could not be reached. Every width: on a
+   desktop the visible screen is the window, so nothing changes there. Mantine's own full-screen
+   variant (--modal-content-max-height: auto) is still honoured. */
+.mantine-Modal-inner,
+.mantine-Drawer-inner {
+  top: var(--vv-top, 0px);
+  bottom: auto;
+  height: var(--vv-height, 100dvh);
+}
+.mantine-Modal-content {
+  max-height: var(--modal-content-max-height, calc(var(--vv-height, 100dvh) - var(--modal-y-offset) * 2));
+}
+
 /* A dialog on a phone is the screen. Done in CSS rather than a Modal defaultProps wrapper so it
-   reaches every modal in the app, including the ones mounted conditionally. dvh, not vh, so the
-   mobile browser's collapsing address bar does not leave the actions off-screen. */
+   reaches every modal in the app, including the ones mounted conditionally. The VISIBLE height, not
+   100vh, so neither the browser's bars nor the keyboard leave the actions off-screen. */
 @media (max-width: 560px) {
   .mantine-Modal-content {
     width: 100vw;
     max-width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: var(--vv-height, 100dvh);
+    max-height: var(--vv-height, 100dvh);
     border-radius: 0;
   }
   .mantine-Modal-inner {
@@ -294,6 +309,61 @@ textarea.mantine-Input-input {
   /* A drawer sized for a desktop (the booking drawer is 440px) would run off a phone's edge. */
   .mantine-Drawer-content {
     max-width: 100vw;
+  }
+}
+
+/* On a phone or a touch tablet the dialog's buttons stay in reach: the action row sticks to the
+   bottom of the dialog while the fields scroll under it, full-bleed across the body's padding, on the
+   body's own background. The rows: .form-actions (68 of the app's dialogs), .pr-actions (payroll),
+   a closing Group. NOT a section's own row inside a .form-section (Auto-roster's "Save staffing"),
+   and not a row the page switches off (data-sticky="off": the booking drawer's main row while its
+   payment form is open). Only where the screen is tall enough for it to help: a phone in landscape
+   with the keyboard up has ~150px left. */
+@media (max-width: 560px) and (min-height: 300px), (hover: none) and (pointer: coarse) and (min-height: 300px) {
+  .mantine-Modal-body .form-actions:not(.form-section .form-actions):not([data-sticky='off']),
+  .mantine-Drawer-body .form-actions:not(.form-section .form-actions):not([data-sticky='off']),
+  .mantine-Modal-body .pr-actions,
+  .mantine-Modal-body > .mantine-Group-root:last-child {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-inline: calc(var(--mb-padding, var(--mantine-spacing-md)) * -1);
+    padding: 10px var(--mb-padding, var(--mantine-spacing-md));
+    background: var(--mantine-color-body);
+    box-shadow: 0 -1px 0 var(--mantine-color-gray-3);
+  }
+  /* Auto-roster's footer draws its own rule. */
+  .mantine-Drawer-body .auto-roster-actions {
+    box-shadow: none;
+  }
+  /* A field the keyboard's Next key (or a tap) brings into view lands clear of the sticky header and
+     the sticky action row, not under them. */
+  .mantine-Modal-content,
+  .mantine-Drawer-content {
+    scroll-padding-block: 64px 72px;
+  }
+}
+
+/* With the page lock off on touch devices, a downward pull at the top of a dialog reached the page
+   and could pull-to-refresh it, losing what was typed. While a dialog is open the page does not. The
+   CONTENT, not the root: Mantine keeps a closed dialog's empty root on the page. */
+@media (hover: none) and (pointer: coarse), (max-width: 560px) {
+  html:has(.mantine-Modal-content, .mantine-Drawer-content) {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* iOS zooms the page in on a field whose text is under 16px (the app's fields are 12px), and stays
+   zoomed: the "page got big and will not move back" of a phone. 16px on touch devices stops it
+   without taking pinch-zoom away. */
+@media (hover: none) and (pointer: coarse) {
+  /* html raises the specificity over the components' own sheets (DateRangeField.css loads later). */
+  html .mantine-Input-input,
+  html .drf-input,
+  html input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html select,
+  html textarea {
+    font-size: 16px;
   }
 }
 

@@ -300,14 +300,14 @@ export default function HolidaysPage() {
               {formError}
             </div>
           )}
-          <Group justify="flex-end">
+          <div className="form-actions">
             <Button variant="default" onClick={() => setFormOpen(false)} disabled={saving}>
               {t('holidays.cancel')}
             </Button>
             <Button onClick={() => void submit()} loading={saving}>
               {t('holidays.save')}
             </Button>
-          </Group>
+          </div>
         </div>
       </Modal>
 

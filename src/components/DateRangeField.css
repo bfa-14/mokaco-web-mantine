@@ -75,6 +75,8 @@
   display: flex;
   gap: 12px;
   align-items: flex-start;
+  /* The Popover caps its height to the room left on screen (size middleware); what does not fit scrolls. */
+  overflow-y: auto;
 }
 
 .drf-presets {

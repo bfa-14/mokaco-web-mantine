@@ -1,4 +1,29 @@
 import { createTheme } from '@mantine/core'
+
+/**
+ * Where a dialog is the whole screen (dx-parity.css makes it so up to 560px), or the device is driven
+ * by a finger: phones and touch tablets. Read when a dialog renders, so a rotated tablet is asked again.
+ */
+const TOUCH_DIALOGS = '(max-width: 560px), (hover: none) and (pointer: coarse)'
+function touchDialogs(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia?.(TOUCH_DIALOGS).matches === true
+}
+
+/**
+ * EVERY Modal and Drawer of the app (1 Nov 2026: on a phone a dialog could not be scrolled to its
+ * buttons, moved or zoomed).
+ *
+ * Mantine locks the page behind an open dialog with react-remove-scroll, which cancels any touch move
+ * that nothing under the finger can scroll in that direction: a sideways move always, and an upward
+ * one once the dialog has reached its end. With the keyboard up, "Take booking" sat under the keyboard
+ * and there was no gesture left to reach it. On a touch device the dialog covers what the lock
+ * protects, so there it is off: the browser pans, zooms and scrolls the dialog as it would any page.
+ * Everywhere, a pinch is a zoom (allowPinchZoom), never swallowed.
+ */
+const dialogDefaults = () => ({
+  lockScroll: !touchDialogs(),
+  removeScrollProps: { allowPinchZoom: true },
+})
 import type { MantineColorsTuple } from '@mantine/core'
 
 /**
@@ -32,4 +57,10 @@ export const theme = createTheme({
   fontFamily: "'Helvetica Neue', 'Segoe UI', helvetica, verdana, sans-serif",
   headings: { fontFamily: "'Helvetica Neue', 'Segoe UI', helvetica, verdana, sans-serif" },
   defaultRadius: 'md',
+  components: {
+    // A FUNCTION, called on each render (Mantine's useProps), so the media query is current. .extend()
+    // types defaultProps as an object only, hence the plain entries.
+    Modal: { defaultProps: dialogDefaults },
+    Drawer: { defaultProps: dialogDefaults },
+  },
 })
