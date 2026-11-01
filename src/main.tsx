@@ -16,7 +16,11 @@ import './environment'
 import { DirectionProvider, MantineProvider } from '@mantine/core'
 import { Notifications } from '@mantine/notifications'
 import { theme } from './theme'
+import { trackVisualViewport } from './visualViewport'
 import App from './App.tsx'
+
+// Dialogs follow the part of the screen the keyboard leaves visible (dx-parity.css, --vv-height).
+trackVisualViewport()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
