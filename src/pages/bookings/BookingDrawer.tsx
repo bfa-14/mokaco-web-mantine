@@ -694,23 +694,23 @@ export function BookingDrawer({
                   />
                 </div>
 
-                <div className="form-field full">
-                  <div className="form-actions">
-                    <Button
-                      variant="default"
-                      onClick={() => setPaying(false)}
-                      disabled={busy}
-                    >
-                      {t('common.cancel')}
-                    </Button>
-                    <Button
-                      onClick={addPayment}
-                      loading={busy}
-                      disabled={methodId == null || amountValue <= 0}
-                    >
-                      {t('common.save')}
-                    </Button>
-                  </div>
+                {/* A grid item of its own, not inside a .form-field cell: on a phone it sticks to the
+                    drawer's bottom while the payment's fields are filled in (dx-parity.css). */}
+                <div className="form-actions full">
+                  <Button
+                    variant="default"
+                    onClick={() => setPaying(false)}
+                    disabled={busy}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    onClick={addPayment}
+                    loading={busy}
+                    disabled={methodId == null || amountValue <= 0}
+                  >
+                    {t('common.save')}
+                  </Button>
                 </div>
               </div>
             )}
@@ -718,7 +718,8 @@ export function BookingDrawer({
             {/* ── actions ──
                 A CLOSED BOOKING SHOWS NO DECISIONS AT ALL, only the receipt. The server refuses to
                 move one, so offering the buttons would be offering four ways to be told no. */}
-            <div className="form-actions" style={{ flexWrap: 'wrap' }}>
+            {/* While a payment is being taken its own Save row is the one that sticks on a phone. */}
+            <div className="form-actions" style={{ flexWrap: 'wrap' }} data-sticky={paying ? 'off' : undefined}>
               <Button
                 variant="default"
                 leftSection={<IconPrinter size={16} />}

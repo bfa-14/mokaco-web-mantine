@@ -781,15 +781,7 @@ export default function LeavePolicyPage() {
           {/* QA3 (LEV-9): what undoing removes, said before it is done; then what it did. */}
           {openSummary === null && undoAsk && (
             <div className="alert alert--warning" role="alert">
-              <p style={{ marginTop: 0 }}>{t('hr.leaveYear.undoExplain', { year: openYearValue })}</p>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <Button variant="default" onClick={() => setUndoAsk(false)} disabled={undoBusy}>
-                  {t('common.cancel')}
-                </Button>
-                <Button color="red" onClick={() => void runYearUndo()} loading={undoBusy} disabled={undoBusy}>
-                  {undoBusy ? t('hr.leaveYear.undoing') : t('hr.leaveYear.undoConfirm')}
-                </Button>
-              </div>
+              <p style={{ margin: 0 }}>{t('hr.leaveYear.undoExplain', { year: openYearValue })}</p>
             </div>
           )}
           {openSummary === null && undoResult && (
@@ -808,35 +800,50 @@ export default function LeavePolicyPage() {
               the plain filled Button to commit — the same primary this page's "Save changes" is,
               carrying `loading` while the work is in flight rather than only being disabled. */}
           <div className="form-actions">
-            {/* The way back, kept apart from the pair: only before a run, and not while it asks. */}
-            {openSummary === null && !undoAsk && (
-              <Button
-                variant="subtle"
-                color="red"
-                style={{ marginInlineEnd: 'auto' }}
-                disabled={openingBusy || undoBusy}
-                onClick={() => {
-                  setOpenError(null)
-                  setUndoResult(null)
-                  setUndoAsk(true)
-                }}
-              >
-                {t('hr.leaveYear.undo')}
+            {/* While the undo is asked, ITS answer is the action row: on a phone this row sticks to the
+                dialog's bottom, so the buttons that act must be here, not inside the warning. */}
+            {openSummary === null && undoAsk ? (
+              <>
+                <Button variant="default" onClick={() => setUndoAsk(false)} disabled={undoBusy}>
+                  {t('common.cancel')}
+                </Button>
+                <Button color="red" onClick={() => void runYearUndo()} loading={undoBusy} disabled={undoBusy}>
+                  {undoBusy ? t('hr.leaveYear.undoing') : t('hr.leaveYear.undoConfirm')}
+                </Button>
+              </>
+            ) : (
+              <>
+              {/* The way back, kept apart from the pair: only before a run, and not while it asks. */}
+              {openSummary === null && !undoAsk && (
+                <Button
+                  variant="subtle"
+                  color="red"
+                  style={{ marginInlineEnd: 'auto' }}
+                  disabled={openingBusy || undoBusy}
+                  onClick={() => {
+                    setOpenError(null)
+                    setUndoResult(null)
+                    setUndoAsk(true)
+                  }}
+                >
+                  {t('hr.leaveYear.undo')}
+                </Button>
+              )}
+              <Button variant="default" onClick={() => setYearOpen(false)} disabled={openingBusy}>
+                {openSummary !== null ? t('common.close') : t('common.cancel')}
               </Button>
-            )}
-            <Button variant="default" onClick={() => setYearOpen(false)} disabled={openingBusy}>
-              {openSummary !== null ? t('common.close') : t('common.cancel')}
-            </Button>
-            {/* Gone once it has run — the answer is on screen, and offering the button again beside
-                it invites a second run whose only honest report would be "nothing to do". */}
-            {openSummary === null && (
-              <Button
-                onClick={() => void runYearOpen()}
-                loading={openingBusy}
-                disabled={openingBusy || undoBusy || undoAsk}
-              >
-                {openingBusy ? t('hr.leaveYear.opening') : t('hr.leaveYear.confirm')}
-              </Button>
+              {/* Gone once it has run — the answer is on screen, and offering the button again beside
+                  it invites a second run whose only honest report would be "nothing to do". */}
+              {openSummary === null && (
+                <Button
+                  onClick={() => void runYearOpen()}
+                  loading={openingBusy}
+                  disabled={openingBusy || undoBusy || undoAsk}
+                >
+                  {openingBusy ? t('hr.leaveYear.opening') : t('hr.leaveYear.confirm')}
+                </Button>
+              )}
+              </>
             )}
           </div>
         </Modal>

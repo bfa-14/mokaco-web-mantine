@@ -6,18 +6,21 @@ import assert from 'node:assert/strict'
 import { trackVisualViewport, viewportVars } from '../src/visualViewport.ts'
 
 test('a reading at zoom 1 gives the visible height and how far the page is panned', () => {
-  assert.deepEqual(viewportVars({ height: 412.6, offsetTop: 231.2, scale: 1 }), { height: '413px', top: '231px' })
-  assert.deepEqual(viewportVars({ height: 844, offsetTop: 0, scale: 1 }), { height: '844px', top: '0px' })
+  assert.deepEqual(viewportVars({ height: 412.6, offsetTop: 231.2, scale: 1 }, 844), { height: '413px', top: '231px' })
+  assert.deepEqual(viewportVars({ height: 844, offsetTop: 0, scale: 1 }, 844), { height: '844px', top: '0px' })
 })
 
-test('while the person is pinch-zoomed nothing moves under their fingers', () => {
-  assert.equal(viewportVars({ height: 300, offsetTop: 120, scale: 2.2 }), null)
+test('while the person is pinch-zoomed the dialog takes the layout viewport, which a pinch does not change', () => {
+  assert.deepEqual(viewportVars({ height: 300, offsetTop: 120, scale: 2.2 }, 844), { height: '844px', top: '0px' })
+  // the keyboard came up during the zoom (Android, resizes-content): the layout is shorter, and so is the dialog
+  assert.deepEqual(viewportVars({ height: 150, offsetTop: 40, scale: 2.2 }, 454), { height: '454px', top: '0px' })
 })
 
 test('a nonsense reading changes nothing; a negative pan (iOS rubber band) counts as none', () => {
-  assert.equal(viewportVars({ height: 0, offsetTop: 0, scale: 1 }), null)
-  assert.equal(viewportVars({ height: Number.NaN, offsetTop: 0, scale: 1 }), null)
-  assert.deepEqual(viewportVars({ height: 600, offsetTop: -14, scale: 1 }), { height: '600px', top: '0px' })
+  assert.equal(viewportVars({ height: 0, offsetTop: 0, scale: 1 }, 844), null)
+  assert.equal(viewportVars({ height: Number.NaN, offsetTop: 0, scale: 1 }, 844), null)
+  assert.equal(viewportVars({ height: 300, offsetTop: 0, scale: 2 }, 0), null)
+  assert.deepEqual(viewportVars({ height: 600, offsetTop: -14, scale: 1 }, 844), { height: '600px', top: '0px' })
 })
 
 test('the variables follow the keyboard: set at once, then once per frame, and the listeners go away', () => {
@@ -34,7 +37,10 @@ test('the variables follow the keyboard: set at once, then once per frame, and t
     visualViewport: vv,
     addEventListener: (type: string, fn: () => void) => winListeners.set(type, fn),
     removeEventListener: (type: string) => winListeners.delete(type),
-    document: { documentElement: { style: { setProperty: (k: string, v: string) => vars.set(k, v) } } },
+    document: {
+      activeElement: null,
+      documentElement: { clientHeight: 844, style: { setProperty: (k: string, v: string) => vars.set(k, v) } },
+    },
     requestAnimationFrame: (fn: () => void) => frames.push(fn),
     cancelAnimationFrame: () => {},
   } as unknown as Window

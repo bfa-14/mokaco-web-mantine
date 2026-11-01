@@ -243,6 +243,9 @@ export function DateRangeField({
         onChange={(next) => (next ? open() : close())}
         position="bottom-start"
         shadow="md"
+        // size: never taller than the room left on screen (with a phone's keyboard up, little); the
+        // dropdown then scrolls (.drf-dropdown in DateRangeField.css).
+        middlewares={{ flip: true, shift: true, size: true }}
         withinPortal
         // Focus stays in the text box that opened it: somebody typing a date must not have the caret taken away.
         trapFocus={false}

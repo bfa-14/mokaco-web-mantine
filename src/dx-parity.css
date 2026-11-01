@@ -312,12 +312,17 @@ textarea.mantine-Input-input {
   }
 }
 
-/* On a phone or a touch tablet the dialog's buttons stay in reach: the row (.form-actions in 68 of the
-   app's dialogs, a closing Group in the rest) sticks to the bottom of the dialog while the fields
-   scroll under it. Full-bleed across the body's padding, on the body's own background. */
-@media (max-width: 560px), (hover: none) and (pointer: coarse) {
-  .mantine-Modal-body .form-actions,
-  .mantine-Drawer-body .form-actions,
+/* On a phone or a touch tablet the dialog's buttons stay in reach: the action row sticks to the
+   bottom of the dialog while the fields scroll under it, full-bleed across the body's padding, on the
+   body's own background. The rows: .form-actions (68 of the app's dialogs), .pr-actions (payroll),
+   a closing Group. NOT a section's own row inside a .form-section (Auto-roster's "Save staffing"),
+   and not a row the page switches off (data-sticky="off": the booking drawer's main row while its
+   payment form is open). Only where the screen is tall enough for it to help: a phone in landscape
+   with the keyboard up has ~150px left. */
+@media (max-width: 560px) and (min-height: 300px), (hover: none) and (pointer: coarse) and (min-height: 300px) {
+  .mantine-Modal-body .form-actions:not(.form-section .form-actions):not([data-sticky='off']),
+  .mantine-Drawer-body .form-actions:not(.form-section .form-actions):not([data-sticky='off']),
+  .mantine-Modal-body .pr-actions,
   .mantine-Modal-body > .mantine-Group-root:last-child {
     position: sticky;
     bottom: 0;
@@ -326,6 +331,39 @@ textarea.mantine-Input-input {
     padding: 10px var(--mb-padding, var(--mantine-spacing-md));
     background: var(--mantine-color-body);
     box-shadow: 0 -1px 0 var(--mantine-color-gray-3);
+  }
+  /* Auto-roster's footer draws its own rule. */
+  .mantine-Drawer-body .auto-roster-actions {
+    box-shadow: none;
+  }
+  /* A field the keyboard's Next key (or a tap) brings into view lands clear of the sticky header and
+     the sticky action row, not under them. */
+  .mantine-Modal-content,
+  .mantine-Drawer-content {
+    scroll-padding-block: 64px 72px;
+  }
+}
+
+/* With the page lock off on touch devices, a downward pull at the top of a dialog reached the page
+   and could pull-to-refresh it, losing what was typed. While a dialog is open the page does not. The
+   CONTENT, not the root: Mantine keeps a closed dialog's empty root on the page. */
+@media (hover: none) and (pointer: coarse), (max-width: 560px) {
+  html:has(.mantine-Modal-content, .mantine-Drawer-content) {
+    overscroll-behavior-y: none;
+  }
+}
+
+/* iOS zooms the page in on a field whose text is under 16px (the app's fields are 12px), and stays
+   zoomed: the "page got big and will not move back" of a phone. 16px on touch devices stops it
+   without taking pinch-zoom away. */
+@media (hover: none) and (pointer: coarse) {
+  /* html raises the specificity over the components' own sheets (DateRangeField.css loads later). */
+  html .mantine-Input-input,
+  html .drf-input,
+  html input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  html select,
+  html textarea {
+    font-size: 16px;
   }
 }
 

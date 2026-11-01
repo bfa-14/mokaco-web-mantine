@@ -730,7 +730,8 @@ function RoomHoursModal({
             </span>
             <TextInput
               type="time"
-              w={120}
+              w="100%"
+              maw={120}
               value={day.openTime}
               disabled={day.isClosed}
               aria-label={t('booking.rooms.openTime')}
@@ -738,7 +739,8 @@ function RoomHoursModal({
             />
             <TextInput
               type="time"
-              w={120}
+              w="100%"
+              maw={120}
               value={day.closeTime}
               disabled={day.isClosed}
               aria-label={t('booking.rooms.closeTime')}

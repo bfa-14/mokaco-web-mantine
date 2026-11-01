@@ -613,6 +613,13 @@
   border-inline-start: 1px solid var(--border);
   padding: 0 6px;
 }
+/* On a phone the pinned name and the pinned summary covered the whole width, so no day could be
+   tapped. There the summary scrolls with the days; the name stays pinned. */
+@media (max-width: 560px) {
+  .roster-table .roster-sum {
+    position: static;
+  }
+}
 
 .roster-table thead .roster-sum {
   z-index: 3;
