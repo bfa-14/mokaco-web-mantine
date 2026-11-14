@@ -996,7 +996,7 @@
       "absenteesEarlyTitle": "{{date}} is not over yet",
       "absenteesEarlyText": "Marking absentees now writes an Absent day for everybody rostered on {{date}} who has not punched yet, including people whose shift starts later. Their day is put right when their punch is processed, but until then they show as absent. Absentees are normally marked for a day that has ended.",
       "absenteesEarlyAnyway": "Mark {{date}} anyway",
-      "buildHint": "All three act on the day above, except Run processor — that one takes every unprocessed punch, whatever day it belongs to. Run it first: it turns punches into days, so it only ever sees days that HAVE punches. Marking absentees afterwards is what writes a day for the people who were rostered and never punched.",
+      "buildHint": "All three act on the day or period above (up to 31 days), except Run processor — that one takes every unprocessed punch, whatever day it belongs to. Run it first: it turns punches into days, so it only ever sees days that HAVE punches. Marking absentees afterwards is what writes a day for the people who were rostered and never punched.",
       "punchesHint": "Every punch recorded on {{date}}, exactly as the machine sent it — before the processor turns it into hours. Updates by itself as machines are read.",
       "punchCount_one": "{{count}} punch on {{date}}",
       "punchCount_other": "{{count}} punches on {{date}}",
@@ -1051,7 +1051,9 @@
         "short": "Short {{minutes}}",
         "overtime": "Overtime detected {{minutes}}",
         "exit": "Exit {{actual}} of {{approved}} approved"
-      }
+      },
+      "dayOrPeriod": "Day or period",
+      "periodTooLong": "Choose at most 31 days at a time."
     },
     "pairs": {
       "expand": "Show the punch pairs behind this day",

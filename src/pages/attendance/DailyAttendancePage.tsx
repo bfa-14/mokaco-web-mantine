@@ -5,7 +5,7 @@ import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, g
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Loader, NumberInput, Pagination, SegmentedControl, Select, Table, Textarea, TextInput } from '@mantine/core'
 import { Drawer, Modal } from '../../components/dialogs'
-import { DatePickerInput, DateTimePicker } from '@mantine/dates'
+import { DateTimePicker } from '@mantine/dates'
 import { useMediaQuery } from '@mantine/hooks'
 import { DateRangeField } from '../../components/DateRangeField'
 import { notifications } from '@mantine/notifications'
@@ -1299,12 +1299,14 @@ function progressText(progress: DayProgress): string {
  * they hold in their head. That question is the whole reason this control exists.
  */
 function DaySelector({
-  day,
+  from,
+  to,
   onChange,
   disabled,
 }: {
-  day: string
-  onChange: (value: string) => void
+  from: string
+  to: string
+  onChange: (from: string, to: string) => void
   disabled?: boolean
 }) {
   const { t } = useTranslation()
@@ -1315,34 +1317,37 @@ function DaySelector({
     <div className="filter-bar">
       <div className="filter-field">
         <label className="filter-field-label" htmlFor="attendance-day">
-          {t('attendance.daily.day')}
+          {t('attendance.daily.dayOrPeriod')}
         </label>
-        {/* Never empty: every action beside it names this date, so clearing keeps the day already
-            chosen rather than leaving three buttons pointing at nothing. */}
-        <DatePickerInput
+        {/* A day, or a period of up to 31 days. Never empty: every action beside it names these dates.
+            The same day twice is one day. */}
+        <DateRangeField
           id="attendance-day"
-          valueFormat="DD/MM/YYYY"
-          leftSection={<IconCalendar size={14} />}
-          value={day}
-          w={160}
+          w={230}
+          from={from}
+          to={to}
+          defaultFrom={todayValue}
+          defaultTo={todayValue}
           disabled={disabled}
-          onChange={(v) => onChange(v || day)}
+          onChange={(nextFrom, nextTo) => {
+            if (nextFrom && nextTo) onChange(nextFrom, nextTo)
+          }}
         />
       </div>
 
       <Button
         size="xs"
-        variant={day === todayValue ? 'light' : 'subtle'}
+        variant={from === todayValue && to === todayValue ? 'light' : 'subtle'}
         disabled={disabled}
-        onClick={() => onChange(todayValue)}
+        onClick={() => onChange(todayValue, todayValue)}
       >
         {t('attendance.daily.today')}
       </Button>
       <Button
         size="xs"
-        variant={day === yesterdayValue ? 'light' : 'subtle'}
+        variant={from === yesterdayValue && to === yesterdayValue ? 'light' : 'subtle'}
         disabled={disabled}
-        onClick={() => onChange(yesterdayValue)}
+        onClick={() => onChange(yesterdayValue, yesterdayValue)}
       >
         {t('attendance.daily.yesterday')}
       </Button>
@@ -1440,6 +1445,17 @@ export default function DailyAttendancePage() {
    * follow this one.
    */
   const [day, setDay] = useState(today())
+  /** The last day of the period the build buttons and the Punches view act on; equal to `day` = one day. */
+  const [dayTo, setDayTo] = useState(today())
+  const isPeriod = dayTo !== day
+  /** The day or the period, in words, for the buttons and hints. */
+  const dayLabel = isPeriod ? `${formatDayLabel(day)} – ${formatDayLabel(dayTo)}` : formatDayLabel(day)
+  /** A period longer than the API accepts (31 days). */
+  const periodTooLong = (new Date(`${dayTo}T00:00:00Z`).getTime() - new Date(`${day}T00:00:00Z`).getTime()) / 86400000 + 1 > 31
+  function setDays(nextFrom: string, nextTo: string) {
+    setDay(nextFrom)
+    setDayTo(nextTo)
+  }
   const [running, setRunning] = useState(false)
 
   const [openDayId, setOpenDayId] = useState<number | null>(null)
@@ -1502,7 +1518,7 @@ export default function DailyAttendancePage() {
 
   /** Jump from a day to the raw punches behind it: same page, other tab, that day selected. */
   function showPunchesFor(workDate: string) {
-    setDay(workDate.slice(0, 10))
+    setDays(workDate.slice(0, 10), workDate.slice(0, 10))
     setView('punches')
   }
 
@@ -1637,7 +1653,7 @@ export default function DailyAttendancePage() {
   async function runReprocessDay() {
     setRunning(true)
     try {
-      const result = await attendanceService.reprocessDay(day)
+      const result = isPeriod ? await attendanceService.reprocessRange(day, dayTo) : await attendanceService.reprocessDay(day)
       notifications.show({
         message: t('attendance.daily.reprocessDone', { count: result.employeeDaysProcessed }),
         color: 'green',
@@ -1660,18 +1676,21 @@ export default function DailyAttendancePage() {
   const companyYesterday = dayBefore(companyDay)
 
   function askMarkAbsentees() {
-    if (day >= companyDay) setAbsentAsk(true)
-    else void runMarkAbsentees(day)
+    if (dayTo >= companyDay) setAbsentAsk(true)
+    else void runMarkAbsentees(day, dayTo)
   }
 
-  async function runMarkAbsentees(target: string) {
+  async function runMarkAbsentees(target: string, targetTo: string = target) {
     setRunning(true)
     try {
-      const result = await attendanceService.markAbsentees(target)
+      const result =
+        targetTo !== target
+          ? await attendanceService.markAbsenteesRange(target, targetTo)
+          : await attendanceService.markAbsentees(target)
       notifications.show({
         message: t('attendance.daily.absenteesDone', {
           count: result.absenteesMarked,
-          date: formatDayLabel(target),
+          date: targetTo !== target ? `${formatDayLabel(target)} – ${formatDayLabel(targetTo)}` : formatDayLabel(target),
         }),
         color: 'green',
         autoClose: 2500,
@@ -2151,7 +2170,12 @@ export default function DailyAttendancePage() {
 
           {/* The day first, the actions under it: two of the three buttons below NAME this date,
               so it has to be settled before either is a sensible thing to press. */}
-          <DaySelector day={day} onChange={setDay} disabled={running} />
+          <DaySelector from={day} to={dayTo} onChange={setDays} disabled={running} />
+          {periodTooLong && (
+            <div className="alert alert--error" role="alert">
+              {t('attendance.daily.periodTooLong')}
+            </div>
+          )}
 
           <div className="filter-bar">
             <Button
@@ -2168,20 +2192,20 @@ export default function DailyAttendancePage() {
                 a day is the rarer, more deliberate act of the two. */}
             <Button
               variant="default"
-              disabled={running}
-              title={t('attendance.daily.reprocessTitle', { date: formatDayLabel(day) })}
+              disabled={running || periodTooLong}
+              title={t('attendance.daily.reprocessTitle', { date: dayLabel })}
               onClick={() => void runReprocessDay()}
             >
-              {t('attendance.daily.reprocess', { date: formatDayLabel(day) })}
+              {t('attendance.daily.reprocess', { date: dayLabel })}
             </Button>
 
             <Button
               variant="default"
-              disabled={running}
-              title={t('attendance.daily.absenteesTitle', { date: formatDayLabel(day) })}
+              disabled={running || periodTooLong}
+              title={t('attendance.daily.absenteesTitle', { date: dayLabel })}
               onClick={askMarkAbsentees}
             >
-              {t('attendance.daily.absentees', { date: formatDayLabel(day) })}
+              {t('attendance.daily.absentees', { date: dayLabel })}
             </Button>
           </div>
           <p className="hint">
@@ -2333,7 +2357,7 @@ export default function DailyAttendancePage() {
         />
         {view === 'punches' && (
           <span className="hint">
-            {t('attendance.daily.punchesHint', { date: formatDayLabel(day) })}
+            {t('attendance.daily.punchesHint', { date: dayLabel })}
           </span>
         )}
         {view === 'days' && inProgressCount > 0 && (
@@ -2349,7 +2373,7 @@ export default function DailyAttendancePage() {
           rather than being duplicated for the people who already have one. */}
       {view === 'punches' && !canManage && (
         <div className="card">
-          <DaySelector day={day} onChange={setDay} />
+          <DaySelector from={day} to={dayTo} onChange={setDays} />
         </div>
       )}
 
@@ -2358,8 +2382,9 @@ export default function DailyAttendancePage() {
       ) : view === 'punches' ? (
         <PunchesGrid
           date={day}
+          to={periodTooLong ? day : dayTo}
           branchId={branchId}
-          onGoToToday={day === today() ? undefined : () => setDay(today())}
+          onGoToToday={day === today() && !isPeriod ? undefined : () => setDays(today(), today())}
         />
       ) : loading ? (
         <div className="page-loading">
@@ -2569,12 +2594,12 @@ export default function DailyAttendancePage() {
         <Modal
           opened
           onClose={() => setAbsentAsk(false)}
-          title={t('attendance.daily.absenteesEarlyTitle', { date: formatDayLabel(day) })}
+          title={t('attendance.daily.absenteesEarlyTitle', { date: dayLabel })}
           size={520}
           centered
         >
           <p className="hint" style={{ marginTop: 0 }}>
-            {t('attendance.daily.absenteesEarlyText', { date: formatDayLabel(day) })}
+            {t('attendance.daily.absenteesEarlyText', { date: dayLabel })}
           </p>
           <div className="form-actions">
             <Button variant="default" onClick={() => setAbsentAsk(false)}>
@@ -2584,19 +2609,26 @@ export default function DailyAttendancePage() {
               variant="default"
               onClick={() => {
                 setAbsentAsk(false)
-                void runMarkAbsentees(day)
+                void runMarkAbsentees(day, dayTo)
               }}
             >
-              {t('attendance.daily.absenteesEarlyAnyway', { date: formatDayLabel(day) })}
+              {t('attendance.daily.absenteesEarlyAnyway', { date: dayLabel })}
             </Button>
             <Button
               onClick={() => {
+                // The finished part of the period: from its start (or yesterday) up to yesterday.
+                const upFrom = day <= companyYesterday ? day : companyYesterday
                 setAbsentAsk(false)
-                setDay(companyYesterday)
-                void runMarkAbsentees(companyYesterday)
+                setDays(upFrom, companyYesterday)
+                void runMarkAbsentees(upFrom, companyYesterday)
               }}
             >
-              {t('attendance.daily.absentees', { date: formatDayLabel(companyYesterday) })}
+              {t('attendance.daily.absentees', {
+                date:
+                  day < companyYesterday
+                    ? `${formatDayLabel(day)} – ${formatDayLabel(companyYesterday)}`
+                    : formatDayLabel(companyYesterday),
+              })}
             </Button>
           </div>
         </Modal>

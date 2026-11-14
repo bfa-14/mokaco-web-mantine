@@ -127,13 +127,17 @@ const machineText = (_value: unknown, punch: RawPunch) =>
  */
 export function PunchesGrid({
   date,
+  to,
   branchId,
   onGoToToday,
 }: {
   date: string
+  /** The last day of a period (at most 31 days); absent or equal to `date` = the one day. */
+  to?: string
   branchId: number | null
   onGoToToday?: () => void
 }) {
+  const isRange = !!to && to !== date
   const { t } = useTranslation()
   const [punches, setPunches] = useState<RawPunch[]>([])
   const [loading, setLoading] = useState(true)
@@ -152,7 +156,7 @@ export function PunchesGrid({
     const seq = ++loadSeq.current
     setLoading(true)
     try {
-      const rows = await importService.getPunches(date)
+      const rows = await importService.getPunches(date, { to })
       if (seq !== loadSeq.current) return
       setPunches(rows)
       setError(null)
@@ -161,7 +165,7 @@ export function PunchesGrid({
     } finally {
       if (seq === loadSeq.current) setLoading(false)
     }
-  }, [date])
+  }, [date, to])
 
   useEffect(() => {
     void load()
@@ -187,7 +191,13 @@ export function PunchesGrid({
           </span>
         ),
         meta: { filterText: (v) => formatTime(v as string) },
-        cell: (info) => <span>{formatTime(info.row.original.punchTimeUtc)}</span>,
+        // Over a period the day is part of the answer; over one day it is the heading.
+        cell: (info) => (
+          <span>
+            {isRange ? `${formatDayLabel(info.row.original.punchTimeUtc)} ` : ''}
+            {formatTime(info.row.original.punchTimeUtc)}
+          </span>
+        ),
       }),
       punchColumnHelper.accessor('fullName', {
         header: () => t('attendance.dailyPage.col.employee'),
@@ -247,7 +257,7 @@ export function PunchesGrid({
         ),
       }),
     ],
-    [t],
+    [t, isRange],
   )
 
   const table = useReactTable({
@@ -298,7 +308,7 @@ export function PunchesGrid({
         <span className="hint">
           {t('attendance.daily.punchCount', {
             count: visible.length,
-            date: formatDayLabel(date),
+            date: isRange ? `${formatDayLabel(date)} – ${formatDayLabel(to)}` : formatDayLabel(date),
           })}
         </span>
       </div>
@@ -306,7 +316,9 @@ export function PunchesGrid({
       {visible.length === 0 ? (
         <div className="empty-hint">
           <div className="empty-hint-main">
-            {t('attendance.daily.noPunches', { date: formatDayLabel(date) })}
+            {t('attendance.daily.noPunches', {
+              date: isRange ? `${formatDayLabel(date)} – ${formatDayLabel(to)}` : formatDayLabel(date),
+            })}
           </div>
           {t('attendance.daily.noPunchesHint')}
           {/* An empty day that is NOT today is far more often the wrong day than a missing pull,

@@ -408,10 +408,22 @@ export const attendanceService = {
       `/api/attendance/reprocess?date=${encodeURIComponent(date)}`,
       { method: 'POST' },
     ),
+  /** Every day of a period (at most 31), one after the other. */
+  reprocessRange: (from: string, to: string) =>
+    apiRequest<ProcessResult>(
+      `/api/attendance/reprocess?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { method: 'POST' },
+    ),
   /** Run AFTER the processor: it writes records for people who were rostered but never punched. */
   markAbsentees: (workDate: string) =>
     apiRequest<MarkAbsenteesResult>(
       `/api/attendance/mark-absentees?workDate=${encodeURIComponent(workDate)}`,
+      { method: 'POST' },
+    ),
+  /** Every day of a period (at most 31). */
+  markAbsenteesRange: (from: string, to: string) =>
+    apiRequest<MarkAbsenteesResult>(
+      `/api/attendance/mark-absentees?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
       { method: 'POST' },
     ),
 
@@ -504,8 +516,9 @@ export const importService = {
    * The date is required by the server: the raw log grows forever, and an unbounded read of it is
    * a page that works today and times out in two years.
    */
-  getPunches: (date: string, options?: { deviceId?: number; unresolvedOnly?: boolean }) => {
-    const params = new URLSearchParams({ date })
+  getPunches: (date: string, options?: { deviceId?: number; unresolvedOnly?: boolean; to?: string }) => {
+    // With `to`, the period date..to (at most 31 days); without it, the one day.
+    const params = options?.to && options.to !== date ? new URLSearchParams({ from: date, to: options.to }) : new URLSearchParams({ date })
     if (options?.deviceId != null) params.set('deviceId', String(options.deviceId))
     if (options?.unresolvedOnly) params.set('unresolvedOnly', 'true')
     return apiRequest<RawPunch[]>(`/api/attendance/punches?${params.toString()}`)
