@@ -9,7 +9,7 @@ import { DatePickerInput, DateTimePicker } from '@mantine/dates'
 import { useMediaQuery } from '@mantine/hooks'
 import { DateRangeField } from '../../components/DateRangeField'
 import { notifications } from '@mantine/notifications'
-import { IconAlertTriangle, IconBriefcase, IconDownload, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBriefcase, IconDownload, IconMessageReport, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { dateTimeToPicker, secondsDateTimeFromPicker } from '../../components/date/pickerValue'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
@@ -41,6 +41,7 @@ import { PunchesGrid } from './PunchesGrid'
 import { NotOnRosterPanel } from './NotOnRosterPanel'
 import { TodayBoard } from './TodayBoard'
 import { MissingPunchDialog } from './MissingPunchDialog'
+import { ReportDayDialog } from './DayReports'
 import { missingSide } from './missingPunch'
 import { applyQuickFilters, hhmmOf, periodShortcut, QUICK_FILTERS, quickFilterCounts, toCsv } from './dailyFilters'
 import type { QuickFilter } from './dailyFilters'
@@ -807,6 +808,7 @@ function DayDetailPopup({
   onHiding,
   onChanged,
   onEnterMissing,
+  onReport,
 }: {
   attendanceId: number
   /** Only needed by the manual-override form the drawer can open. */
@@ -816,6 +818,8 @@ function DayDetailPopup({
   onChanged: () => Promise<void>
   /** The one-step fix of a missing In or Out (the page opens its dialog). */
   onEnterMissing: (record: AttendanceRecord) => void
+  /** "Something is wrong with this day" for somebody who cannot correct it. */
+  onReport: (record: AttendanceRecord) => void
 }) {
   const { hasPermission } = useAuth()
   const canCorrect = hasPermission(PERMISSIONS.correct)
@@ -1012,6 +1016,17 @@ function DayDetailPopup({
               </div>
             )}
 
+            {!canCorrect && (
+              <div className="card" style={{ marginBottom: 14 }}>
+                <div className="tab-toolbar">
+                  <p className="hint" style={{ margin: 0 }}>{t('attendance.dayReport.drawerHint')}</p>
+                  <Button variant="default" leftSection={<IconMessageReport size={16} />} onClick={() => onReport(detail)}>
+                    {t('attendance.dayReport.reportToHr')}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <DayTimeline detail={detail} />
 
             <DayNumbers detail={detail} />
@@ -1152,6 +1167,7 @@ function DayCard({
   onMissing,
   onFix,
   onEdit,
+  onReport,
 }: {
   record: AttendanceRecord
   shiftLabel: string | null
@@ -1161,6 +1177,8 @@ function DayCard({
   onMissing: () => void
   onFix: () => void
   onEdit: () => void
+  /** For somebody who cannot correct (a branch manager): send the real times to HR. */
+  onReport: () => void
 }) {
   const progress = dayProgress(record, today)
   const missing = progress ? null : missingSide(record)
@@ -1223,6 +1241,11 @@ function DayCard({
         {canCorrect && missing && (
           <Button leftSection={<IconClock size={14} />} onClick={onMissing}>
             {translate(missing === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+          </Button>
+        )}
+        {!canCorrect && (
+          <Button variant="default" leftSection={<IconMessageReport size={14} />} onClick={onReport}>
+            {translate('attendance.dayReport.reportToHr')}
           </Button>
         )}
         {canCorrect && !missing && (
@@ -1494,6 +1517,8 @@ export default function DailyAttendancePage() {
   const [correctionRow, setCorrectionRow] = useState<AttendanceRecord | null>(null)
   /** The one-step "enter the missing time" of a day with a plain missing In or Out. */
   const [missingRow, setMissingRow] = useState<AttendanceRecord | null>(null)
+  /** "Something is wrong with this day", for somebody who cannot correct it (a branch manager). */
+  const [reportRow, setReportRow] = useState<AttendanceRecord | null>(null)
 
   const loadShifts = useCallback((f: string, t2: string, emp: number | null, branch: number | null) => {
     rosterService
@@ -1906,7 +1931,7 @@ export default function DailyAttendancePage() {
       columnHelper.display({
         id: 'actions',
         header: () => t('attendance.dailyPage.col.actions'),
-        size: canCorrect ? 190 : 88,
+        size: canCorrect ? 190 : 170,
         cell: (info) => {
           const row = info.row.original
 
@@ -1931,6 +1956,17 @@ export default function DailyAttendancePage() {
               >
                 {t('attendance.dailyPage.view')}
               </Button>
+              {!canCorrect && (
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconMessageReport size={14} />}
+                  title={t('attendance.dayReport.reportTitle')}
+                  onClick={() => setReportRow(row)}
+                >
+                  {t('attendance.dayReport.report')}
+                </Button>
+              )}
               {canCorrect && missing && (
                 <Button
                   variant="subtle"
@@ -2406,6 +2442,7 @@ export default function DailyAttendancePage() {
                     onMissing={() => setMissingRow(record)}
                     onFix={() => setCorrectionRow(record)}
                     onEdit={() => setManualRow(record)}
+                    onReport={() => setReportRow(record)}
                   />
                 ))
               )}
@@ -2576,6 +2613,22 @@ export default function DailyAttendancePage() {
             setOpenDayId(null)
             setMissingRow(record)
           }}
+          onReport={(record) => {
+            setOpenDayId(null)
+            setReportRow(record)
+          }}
+        />
+      )}
+
+      {reportRow !== null && (
+        <ReportDayDialog
+          employeeId={reportRow.employeeId}
+          employeeName={reportRow.fullName}
+          workDate={reportRow.workDate}
+          currentIn={reportRow.firstInUtc}
+          currentOut={reportRow.lastOutUtc}
+          onClose={() => setReportRow(null)}
+          onSent={() => undefined}
         />
       )}
 

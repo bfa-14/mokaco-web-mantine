@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActionIcon, Loader } from '@mantine/core'
+import { ActionIcon, Button, Loader } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
 import { IconChevronLeft, IconChevronRight, IconRefresh } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
-import { myAttendanceService } from '../../services/attendanceService'
-import type { MyAttendance, MyAttendanceDay, MyDayDecision } from '../../types/attendance'
+import { useAuth } from '../../auth/useAuth'
+import { dayReportsService, myAttendanceService } from '../../services/attendanceService'
+import type { DayReport, MyAttendance, MyAttendanceDay, MyDayDecision } from '../../types/attendance'
+import { ReportDayDialog, reportStateText } from './DayReports'
 import { useLanguage } from '../../i18n/useLanguage'
 import { currentLocale } from '../../i18n'
 import { formatDayLabel, formatMinutes, formatTime } from './attendanceFormat'
@@ -29,12 +32,22 @@ export default function MyAttendancePage() {
   const [data, setData] = useState<MyAttendance | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  /** My reports about days of the month shown ("something is wrong with this day"), newest first. */
+  const [reports, setReports] = useState<DayReport[]>([])
+  const [reporting, setReporting] = useState<MyAttendanceDay | null>(null)
 
   const load = useCallback(async (asked: string | null) => {
     setLoading(true)
     try {
-      setData(await myAttendanceService.get(asked ?? undefined))
+      const mine = await myAttendanceService.get(asked ?? undefined)
+      setData(mine)
       setError(null)
+      if (mine) {
+        const first = `${mine.month}-01`
+        const last = mine.days[mine.days.length - 1]?.workDate.slice(0, 10) ?? first
+        // A database without script 110 simply has no reports to show.
+        dayReportsService.mine(first, last).then(setReports).catch(() => setReports([]))
+      }
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -121,13 +134,32 @@ export default function MyAttendancePage() {
 
             <div className="my-days">
               {data.days.map((day) => (
-                <DayRow key={day.workDate} day={day} today={data.today.slice(0, 10)} />
+                <DayRow
+                  key={day.workDate}
+                  day={day}
+                  today={data.today.slice(0, 10)}
+                  report={reports.find((r) => r.workDate.slice(0, 10) === day.workDate.slice(0, 10)) ?? null}
+                  onReport={() => setReporting(day)}
+                  onChanged={() => void load(month)}
+                />
               ))}
             </div>
             <p className="hint" style={{ marginBottom: 0 }}>{t('attendance.my.footnote')}</p>
           </section>
         </>
       ) : null}
+
+      {reporting && data && (
+        <ReportDayDialog
+          employeeId={null}
+          employeeName={data.fullName}
+          workDate={reporting.workDate}
+          currentIn={reporting.firstIn}
+          currentOut={reporting.lastOut}
+          onClose={() => setReporting(null)}
+          onSent={() => void load(month)}
+        />
+      )}
     </div>
   )
 }
@@ -193,8 +225,34 @@ function decisionText(d: MyDayDecision, t: T): string {
   return `${what} — ${ruling}`
 }
 
-function DayRow({ day, today }: { day: MyAttendanceDay; today: string }) {
+function DayRow({
+  day,
+  today,
+  report,
+  onReport,
+  onChanged,
+}: {
+  day: MyAttendanceDay
+  today: string
+  report: DayReport | null
+  onReport: () => void
+  onChanged: () => void
+}) {
   const { t } = useTranslation()
+  const myUserId = useAuth().user?.userId
+  const [withdrawing, setWithdrawing] = useState(false)
+  async function withdraw() {
+    if (!report) return
+    setWithdrawing(true)
+    try {
+      await dayReportsService.withdraw(report.reportId)
+      onChanged()
+    } catch (err) {
+      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 6000 })
+    } finally {
+      setWithdrawing(false)
+    }
+  }
   const date = day.workDate.slice(0, 10)
   const future = date > today
   const isToday = date === today
@@ -229,6 +287,22 @@ function DayRow({ day, today }: { day: MyAttendanceDay; today: string }) {
               {decisionText(d, t)}
             </span>
           ))}
+        {report && (
+          <span className={report.status === 'Open' ? 'badge badge--late' : 'badge badge--muted'} title={report.message}>
+            {reportStateText(report, t)}
+          </span>
+        )}
+        {report?.status === 'Open' && report.reportedByUserId !== myUserId ? null : report?.status === 'Open' ? (
+          <Button variant="subtle" size="compact-xs" loading={withdrawing} onClick={() => void withdraw()}>
+            {t('attendance.dayReport.withdraw')}
+          </Button>
+        ) : (
+          !future && (
+            <Button variant="subtle" size="compact-xs" onClick={onReport}>
+              {t('attendance.dayReport.open')}
+            </Button>
+          )
+        )}
         {day.offRosterState && (
           <span className={day.offRosterState === 'Open' ? 'badge badge--late' : 'badge badge--muted'}>
             {t(day.offRosterState === 'Open' ? 'attendance.my.offRosterOpen' : 'attendance.my.offRosterDismissed')}

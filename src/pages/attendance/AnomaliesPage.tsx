@@ -32,6 +32,7 @@ import { bulkTargets, coversWholeMonth, sameRows } from './anomalyBulk'
 import { companyToday, dayProgress } from './dayProgress'
 import { DeviceQuarantineList } from './AnomalyExtraLists'
 import { NotOnRosterSection } from './NotOnRosterPanel'
+import { DayReportsQueue } from './DayReports'
 import { currentPeriod, formatDate, formatMinutes, formatTime, periodLabel, periodRange } from './attendanceFormat'
 
 /* ── words ── */
@@ -40,7 +41,7 @@ const TYPES: AnomalyType[] = ['LateArrival', 'EarlyDeparture', 'MissingPunch', '
 
 /** The three worklists of this page. The two beside the anomalies are not rulings — they are days and punches the
     system could not place: a day worked that the roster does not know, a punch from a PIN that belongs to nobody. */
-type PageView = 'anomalies' | 'unrostered' | 'devices'
+type PageView = 'anomalies' | 'unrostered' | 'reports' | 'devices'
 const DECISIONS: AnomalyDecision[] = ['Excused', 'Deducted', 'Corrected']
 
 /** The type as the words on screen. Unknown codes render as themselves rather than as a missing key. */
@@ -446,7 +447,8 @@ export default function AnomaliesPage() {
   const decisionFilter = parseDecisionFilter(searchParams.get('decision'))
   const branchId = Number(searchParams.get('branchId')) || null
   const viewParam = searchParams.get('view')
-  const view: PageView = viewParam === 'unrostered' || viewParam === 'devices' ? viewParam : 'anomalies'
+  const view: PageView =
+    viewParam === 'unrostered' || viewParam === 'devices' || viewParam === 'reports' ? viewParam : 'anomalies'
   /** Bumped by the refresh button and after a PIN is mapped — the two side lists re-read on it. */
   const [extraReload, setExtraReload] = useState(0)
 
@@ -784,6 +786,7 @@ export default function AnomaliesPage() {
         data={[
           { value: 'anomalies', label: t('attendance.anomalies.views.anomalies') },
           { value: 'unrostered', label: t('attendance.anomalies.views.unrostered') },
+          { value: 'reports', label: t('attendance.dayReport.tab') },
           { value: 'devices', label: t('attendance.anomalies.views.devices') },
         ]}
       />
@@ -796,7 +799,15 @@ export default function AnomaliesPage() {
           </p>
         </>
       ) : (
-        <PageHelp>{t(view === 'unrostered' ? 'attendance.unrostered.help' : 'attendance.quarantine.help')}</PageHelp>
+        <PageHelp>
+          {t(
+            view === 'unrostered'
+              ? 'attendance.unrostered.help'
+              : view === 'reports'
+                ? 'attendance.dayReport.help'
+                : 'attendance.quarantine.help',
+          )}
+        </PageHelp>
       )}
 
       <div className="filter-bar">
@@ -864,7 +875,9 @@ export default function AnomaliesPage() {
         </div>
       )}
 
-      {view === 'unrostered' ? (
+      {view === 'reports' ? (
+        <DayReportsQueue />
+      ) : view === 'unrostered' ? (
         <NotOnRosterSection from={from} to={to} branchId={branchId} reloadKey={extraReload} />
       ) : view === 'devices' ? (
         /* A mapped PIN replays its punches, which can raise or clear anomalies — the first view is re-read too. */

@@ -1,6 +1,8 @@
 import { apiRequest } from '../api/client'
 import type {
   AnomalyDecideAllRequest,
+  DayReport,
+  DayReportCreateRequest,
   MyAttendance,
   AnomalyDecideAllResult,
   AnomalyDecisionRequest,
@@ -542,4 +544,28 @@ export const myAttendanceService = {
     (await apiRequest<MyAttendance | undefined>(
       `/api/me/attendance${month ? `?month=${encodeURIComponent(month)}` : ''}`,
     )) ?? null,
+}
+
+/**
+ * "Something is wrong with this day" (script 110). Reporting and reading one's own: sign-in only (the procedure lets
+ * the employee report their own days and a branch manager the days of their branches). Queue and decide:
+ * ATTENDANCE_CORRECT. Accepting is an approved correction with the reported times.
+ */
+export const dayReportsService = {
+  create: (request: DayReportCreateRequest) =>
+    apiRequest<{ reportId: number }>('/api/day-reports', { method: 'POST', body: JSON.stringify(request) }),
+  mine: (from?: string, to?: string) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    return apiRequest<DayReport[]>(`/api/day-reports/mine${params.size ? `?${params.toString()}` : ''}`)
+  },
+  withdraw: (reportId: number) => apiRequest<void>(`/api/day-reports/${reportId}/withdraw`, { method: 'POST' }),
+  queue: (status?: string) =>
+    apiRequest<DayReport[]>(`/api/day-reports${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  decide: (reportId: number, accept: boolean, note?: string | null) =>
+    apiRequest<{ reportId: number; status: string; correctionId: number | null }>(`/api/day-reports/${reportId}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ accept, note: note ?? null }),
+    }),
 }

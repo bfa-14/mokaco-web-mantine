@@ -1442,3 +1442,44 @@ export interface MyAttendance {
     waitingForHr: number
   }
 }
+
+/* ── Script 110: "something is wrong with this day" ── */
+
+export type DayReportStatus = 'Open' | 'Accepted' | 'Rejected' | 'Withdrawn'
+
+export interface DayReport {
+  reportId: number
+  employeeId: number
+  employeeName: string
+  branchId: number | null
+  branchName: string | null
+  workDate: string
+  claimedIn: string | null
+  claimedOut: string | null
+  message: string
+  reportedByUserId: number
+  reportedBy: string | null
+  reportedAtUtc: string
+  status: DayReportStatus
+  decidedBy: string | null
+  decidedAtUtc: string | null
+  decisionNote: string | null
+  correctionId: number | null
+  attendanceId: number | null
+  currentFirstIn: string | null
+  currentLastOut: string | null
+  currentStatus: string | null
+  currentWorkedMinutes: number | null
+  currentHasAnomaly: boolean
+  isAboutMe: boolean
+  canDecide: boolean
+}
+
+export interface DayReportCreateRequest {
+  /** Empty = the caller's own day. */
+  employeeId?: number | null
+  workDate: string
+  claimedIn: string | null
+  claimedOut: string | null
+  message: string
+}
