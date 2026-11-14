@@ -1142,7 +1142,25 @@
       "punchTime": "Punch",
       "punchKey": "Key",
       "punchMachine": "Machine",
-      "emptyDaysHint": "The days listed above have punches but are not on the roster: they become attendance days once somebody decides them."
+      "emptyDaysHint": "The days listed above have punches but are not on the roster: they become attendance days once somebody decides them.",
+      "bulk": {
+        "open": "Decide several at once ({{count}})",
+        "title": "Add several days as working days",
+        "hint": "Each ticked day is added to the roster on the shift proposed for it (the one starting nearest the first punch) and worked out from its punches at once, exactly as if you had decided it alone. Days with a single punch are not ticked: they are more often a visit than a day's work. Untick any day that was not work and decide it on its own.",
+        "all": "Tick all",
+        "none": "Untick all",
+        "onePunch": "one punch at {{time}}",
+        "onShift": "On {{shift}}",
+        "noShift": "No active shift to propose: decide this day on its own.",
+        "note": "Added with several days at once (proposed shift).",
+        "progress": "Adding {{done}} of {{total}}…",
+        "submit_one": "Add {{count}} day to the roster",
+        "submit_other": "Add {{count}} days to the roster",
+        "done_one": "{{count}} day was added to the roster and worked out from its punches.",
+        "done_other": "{{count}} days were added to the roster and worked out from their punches.",
+        "failed_one": "{{count}} day could not be added:",
+        "failed_other": "{{count}} days could not be added:"
+      }
     },
     "quarantine": {
       "help": "Punches that arrived under a device PIN enrolled to nobody. They are kept, not dropped. Map the PIN to its employee: the waiting punches become theirs and every day they fall on is derived again. Days already paid stay as paid — raise a payroll adjustment for those.",
