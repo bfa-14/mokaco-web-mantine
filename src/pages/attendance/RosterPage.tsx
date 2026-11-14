@@ -18,6 +18,7 @@ import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { DateRangeField } from '../../components/DateRangeField'
 import { t } from '../../i18n/t'
+import { Trans } from 'react-i18next'
 import { notifications } from '@mantine/notifications'
 import {
   IconCalendar,
@@ -115,17 +116,11 @@ const SHIFT_COLORS = [
   '#6f8a86',
 ]
 
-/** Monday first, because the weekday mask the API expects ('1111100' = Mon–Fri) is Monday first. */
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const WEEKDAY_FULL = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-]
+/**
+ * Monday first, because the weekday mask the API expects ('1111100' = Mon–Fri) is Monday first.
+ * Keys of attendance.rosterPage.weekdayShort; the full names are common.weekday.1–7 (Monday = 1).
+ */
+const WEEKDAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 /** Mon–Fri on, weekend off: the shape most coffee-shop rosters actually start from. */
 const DEFAULT_WEEKDAYS = [true, true, true, true, true, false, false]
@@ -353,14 +348,12 @@ function OverwriteField({
   return (
     <div className="form-field">
       <Checkbox
-        label="Overwrite existing"
+        label={t('attendance.rosterPage.overwrite.label')}
         checked={value}
         onChange={(e) => onChange(e.currentTarget.checked)}
         disabled={disabled}
       />
-      <div className="hint">
-        Leave this off to keep manual changes you have already made.
-      </div>
+      <div className="hint">{t('attendance.rosterPage.overwrite.hint')}</div>
     </div>
   )
 }
@@ -636,7 +629,7 @@ export default function RosterPage() {
   const employeeName = useCallback(
     (employeeId: number) =>
       employees.find((e) => e.employeeId === employeeId)?.fullName ??
-      `Employee ${employeeId}`,
+      t('attendance.rosterPage.employeeFallback', { id: employeeId }),
     [employees],
   )
 
@@ -869,7 +862,7 @@ export default function RosterPage() {
     if (keys.length === 0) return
     if (!setDayForm.isRestDay && setDayForm.shiftId == null) {
       notifications.show({
-        message: 'Pick a shift, or tick "Rest day".',
+        message: t('attendance.rosterPage.setDay.pickShiftOrRest'),
         color: 'red',
         autoClose: 4000,
       })
@@ -927,7 +920,7 @@ export default function RosterPage() {
         }
       }
       notifications.show({
-        message: `Set ${keys.length} day(s).`,
+        message: t('attendance.rosterPage.setDay.done', { count: keys.length }),
         color: 'green',
         autoClose: 2500,
       })
@@ -943,7 +936,7 @@ export default function RosterPage() {
          written. */
       const message = getErrorMessage(err)
       setSetDayError(
-        written > 0 ? `${message} (${written} of ${keys.length} day(s) were set before this.)` : message,
+        written > 0 ? t('attendance.rosterPage.setDay.partial', { message, written, count: keys.length }) : message,
       )
       notifications.show({ message, color: 'red', autoClose: 5000 })
       if (written > 0) await load()
@@ -1026,7 +1019,7 @@ export default function RosterPage() {
   async function submitGenerate() {
     if (generateForm.employeeIds.length === 0 || generateForm.shiftId == null) {
       notifications.show({
-        message: 'Pick at least one employee and a shift.',
+        message: t('attendance.rosterPage.generate.pickEmployeesAndShift'),
         color: 'red',
         autoClose: 4000,
       })
@@ -1054,7 +1047,7 @@ export default function RosterPage() {
                 employees: outcome.employeesProcessed,
                 count: outcome.rowsInserted,
               })
-            : `${outcome.employeesProcessed} employee(s) rostered.`,
+            : t('attendance.rosterPage.generate.employeesRostered', { count: outcome.employeesProcessed }),
         color: 'green',
         autoClose: 3500,
       })
@@ -1186,7 +1179,7 @@ export default function RosterPage() {
       }))
       await rosterService.savePatterns(patternEmployeeId, payload)
       notifications.show({
-        message: 'Default week saved. Use "Apply weekly patterns" to write it onto a month.',
+        message: t('attendance.rosterPage.patterns.saved'),
         color: 'green',
         autoClose: 3000,
       })
@@ -1490,10 +1483,8 @@ export default function RosterPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Roster</h1>
-          <p className="page-subtitle">
-            Who was supposed to work which shift, day by day.
-          </p>
+          <h1 className="page-title">{t('attendance.rosterPage.title')}</h1>
+          <p className="page-subtitle">{t('attendance.rosterPage.subtitle')}</p>
         </div>
         {/* The generation tools all live together on the month toolbar below, ranked by how often
             they are the right answer. A second, competing primary button up here would undo that
@@ -1502,8 +1493,8 @@ export default function RosterPage() {
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={16} />
@@ -1511,11 +1502,7 @@ export default function RosterPage() {
         </div>
       </div>
 
-      <PageHelp>
-        The roster tells attendance what each person was SUPPOSED to work —
-        without it, the system cannot tell late from early, or absent from off.
-        Generate it, don&apos;t type it.
-      </PageHelp>
+      <PageHelp>{t('attendance.rosterPage.help')}</PageHelp>
 
       {error && (
         <div className="alert alert--error" role="alert">
@@ -1532,8 +1519,8 @@ export default function RosterPage() {
         <ActionIcon
           variant="default"
           size="lg"
-          title={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : 'Previous month'}
-          aria-label="Previous month"
+          title={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : t('attendance.rosterPage.previousMonth')}
+          aria-label={t('attendance.rosterPage.previousMonth')}
           onClick={() => goToPeriod(previousPeriod(period))}
           // The draft is one branch-month: moving away would leave it drawn over the wrong grid.
           disabled={draft.active}
@@ -1541,14 +1528,14 @@ export default function RosterPage() {
           <BackChevron />
         </ActionIcon>
         <div className="filter-field">
-          <span className="filter-field-label">Month</span>
+          <span className="filter-field-label">{t('attendance.roster.auto.drawer.month')}</span>
           <strong>{periodLabel(period)}</strong>
         </div>
         <ActionIcon
           variant="default"
           size="lg"
-          title={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : 'Next month'}
-          aria-label="Next month"
+          title={draft.active ? t('attendance.roster.auto.disabled.draftOpen') : t('attendance.rosterPage.nextMonth')}
+          aria-label={t('attendance.rosterPage.nextMonth')}
           onClick={() => goToPeriod(nextPeriod(period))}
           disabled={draft.active}
         >
@@ -1557,12 +1544,12 @@ export default function RosterPage() {
 
         {branches.length > 1 && (
           <div className="filter-field">
-            <span className="filter-field-label">Branch</span>
+            <span className="filter-field-label">{t('common.branch')}</span>
             <Select
-              aria-label="Branch filter"
+              aria-label={t('attendance.rosterPage.branchFilter')}
               w={200}
               data={[
-                { value: 'all', label: 'All branches' },
+                { value: 'all', label: t('attendance.rosterPage.allBranches') },
                 ...branches
                   .filter((b) => b.isActive || b.branchId === branchFilter)
                   .map((b) => ({ value: String(b.branchId), label: b.name })),
@@ -1603,7 +1590,7 @@ export default function RosterPage() {
                   // rows the draft was planned against, and its save would be refused.
                   disabled={draft.active || autoBranchId == null}
                 >
-                  Apply weekly patterns
+                  {t('attendance.rosterPage.apply.title')}
                 </Button>
               </span>
             </Tooltip>
@@ -1635,7 +1622,7 @@ export default function RosterPage() {
               onClick={() => openGenerate()}
               disabled={draft.active}
             >
-              Generate roster…
+              {t('attendance.rosterPage.generate.button')}
             </Button>
             {/* Secondary: the seasonal case — a temporary rota that repeats month to month.
                 DEMOTED from the default because copying a month copies that month's NOISE too:
@@ -1662,7 +1649,7 @@ export default function RosterPage() {
                   }}
                   disabled={draft.active || autoBranchId == null}
                 >
-                  Copy previous month
+                  {t('attendance.rosterPage.copy.title')}
                 </Button>
               </span>
             </Tooltip>
@@ -1672,7 +1659,7 @@ export default function RosterPage() {
               leftSection={<IconSettings size={16} />}
               onClick={openPatterns}
             >
-              Weekly patterns…
+              {t('attendance.rosterPage.patterns.button')}
             </Button>
             {/* QA3 (REL-16): the month's completed days derived again against the roster as it stands. */}
             <Tooltip
@@ -1756,12 +1743,8 @@ export default function RosterPage() {
             }}
           >
             <div>
-              <strong>
-                {gaps.length} employee-days have no shift assigned.
-              </strong>
-              <div className="hint">
-                Attendance cannot judge late or absent without one.
-              </div>
+              <strong>{t('attendance.rosterPage.gaps.title', { count: gaps.length })}</strong>
+              <div className="hint">{t('attendance.rosterPage.gaps.hint')}</div>
             </div>
             {canManage && (
               <Button
@@ -1769,7 +1752,7 @@ export default function RosterPage() {
                 leftSection={<IconPlus size={16} />}
                 onClick={openGenerateForGaps}
               >
-                Fix these
+                {t('attendance.rosterPage.gaps.fix')}
               </Button>
             )}
           </div>
@@ -1786,20 +1769,15 @@ export default function RosterPage() {
       null : employees.length === 0 ? (
         <div className="card">
           <div className="empty-hint">
-            <div className="empty-hint-main">
-              There is nobody to roster yet.
-            </div>
-            Add employees under HR &rsaquo; Employees first — the roster is a
-            grid of people against days, and it needs the people.
+            <div className="empty-hint-main">{t('attendance.rosterPage.empty.noEmployees')}</div>
+            {t('attendance.rosterPage.empty.noEmployeesHint')}
           </div>
         </div>
       ) : shifts.length === 0 ? (
         <div className="card">
           <div className="empty-hint">
-            <div className="empty-hint-main">No shifts have been defined.</div>
-            Create at least one shift under Attendance &rsaquo; Shifts. A shift
-            is what tells the system when the day starts, so it can tell late
-            from on time.
+            <div className="empty-hint-main">{t('attendance.rosterPage.empty.noShifts')}</div>
+            {t('attendance.rosterPage.empty.noShiftsHint')}
           </div>
         </div>
       ) : (
@@ -1835,7 +1813,7 @@ export default function RosterPage() {
             <table className="roster-table" aria-busy={draftBusy || undefined}>
               <thead>
                 <tr>
-                  <th className="roster-emp">Employee</th>
+                  <th className="roster-emp">{t('attendance.roster.auto.staff.name')}</th>
                   {days.map((date) => {
                     const holiday = holidayByDate.get(date)
                     return (
@@ -1899,18 +1877,20 @@ export default function RosterPage() {
                       if (onLeave) {
                         const amount = leave.daysOnLeave(employee.employeeId, date)
                         cellClass += ' roster-cell--leave'
-                        label = 'Lve'
-                        title = `${employee.fullName} — ${date}: approved leave${
-                          amount && amount !== 1 ? ` (${amount} days booked on this date)` : ''
-                        }.${
+                        label = t('attendance.rosterPage.cell.leave')
+                        title = `${t('attendance.rosterPage.cell.leaveTitle', {
+                          name: employee.fullName,
+                          date,
+                          booked: amount && amount !== 1 ? ` ${t('attendance.rosterPage.cell.leaveBooked', { count: amount })}` : '',
+                        })}${
                           shown?.state === 'work' && shiftName
                             ? ` ${t('attendance.roster.auto.cell.leaveWork', { shift: shiftName })}`
                             : ''
                         }`
                       } else if (shown?.state === 'rest') {
                         cellClass += ' roster-cell--rest'
-                        label = 'Rest'
-                        title = `${employee.fullName} — ${date}: rest day.`
+                        label = t('attendance.roster.auto.sum.rest')
+                        title = t('attendance.rosterPage.cell.restTitle', { name: employee.fullName, date })
                       } else if (shown?.state === 'work' && shown.shiftId != null) {
                         label = shiftName.slice(0, 3)
                         background = shiftColor.get(shown.shiftId)
@@ -1927,8 +1907,7 @@ export default function RosterPage() {
                         })
                       } else {
                         cellClass += ' roster-cell--empty'
-                        title =
-                          'No shift assigned. Attendance cannot judge late or absent without one.'
+                        title = t('attendance.rosterPage.cell.emptyTitle')
                       }
 
                       /* THE DRAFT'S MARKS: dashed = planned by the generator, accent = your edit, a
@@ -2142,14 +2121,14 @@ export default function RosterPage() {
                 className="roster-swatch"
                 style={{ background: '#e6e3dc' }}
               />
-              Rest day (rostered off)
+              {t('attendance.rosterPage.legend.rest')}
             </span>
             <span className="roster-legend-item">
               <span
                 className="roster-swatch"
                 style={{ background: '#dfeee4' }}
               />
-              Approved leave (outranks any shift)
+              {t('attendance.rosterPage.legend.leave')}
             </span>
             <span className="roster-legend-item">
               <span
@@ -2160,7 +2139,7 @@ export default function RosterPage() {
                   border: '1px solid var(--border)',
                 }}
               />
-              Nothing assigned (the system cannot judge this day)
+              {t('attendance.rosterPage.legend.empty')}
             </span>
             {holidayByDate.size > 0 && (
               <span className="roster-legend-item">
@@ -2196,7 +2175,7 @@ export default function RosterPage() {
             </span>
             {editable && (
               <span className="roster-legend-item">
-                Click a cell to set it. Drag across cells to set many at once.
+                {t('attendance.rosterPage.legend.clickHint')}
               </span>
             )}
             {canManage && editState.readOnly && editState.openRequestId != null && (
@@ -2221,7 +2200,7 @@ export default function RosterPage() {
                 const { employeeId, workDate } = parseCellKey([...selected][0])
                 return `${employeeName(employeeId)} — ${formatDayLabel(workDate)}`
               })()
-            : `Set ${selectedCount} days`
+            : t('attendance.rosterPage.setDay.title', { count: selectedCount })
         }
         size={480}
         centered
@@ -2234,7 +2213,7 @@ export default function RosterPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="roster-day-shift">
-            Shift
+            {t('attendance.roster.auto.shiftCover.shift')}
           </label>
           <Select
             id="roster-day-shift"
@@ -2246,7 +2225,7 @@ export default function RosterPage() {
                 shiftId: v != null ? Number(v) : null,
               }))
             }
-            placeholder="Pick a shift…"
+            placeholder={t('attendance.rosterPage.pickShift')}
             allowDeselect={false}
             disabled={saving || setDayForm.isRestDay}
           />
@@ -2258,7 +2237,7 @@ export default function RosterPage() {
 
         <div className="form-field">
           <Checkbox
-            label="Rest day"
+            label={t('attendance.rosterDay.rest')}
             checked={setDayForm.isRestDay}
             onChange={(e) => {
               const checked = e.currentTarget.checked
@@ -2270,10 +2249,7 @@ export default function RosterPage() {
             }}
             disabled={saving}
           />
-          <div className="hint">
-            A rest day is still rostered — it says “this person was off”,
-            which is not the same as saying nothing at all.
-          </div>
+          <div className="hint">{t('attendance.rosterPage.setDay.restHint')}</div>
         </div>
 
         {pinAvailable && (
@@ -2303,10 +2279,10 @@ export default function RosterPage() {
             }}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitSetDay()} disabled={saving || (draft.active && draftBusy)}>
-            {saving ? 'Saving…' : `Set ${selectedCount} day(s)`}
+            {saving ? t('common.saving') : t('attendance.rosterPage.setDay.submit', { count: selectedCount })}
           </Button>
         </div>
       </Modal>
@@ -2314,13 +2290,13 @@ export default function RosterPage() {
       <Modal
         opened={generateVisible}
         onClose={() => setGenerateVisible(false)}
-        title="Generate roster"
+        title={t('attendance.rosterPage.generate.title')}
         size={560}
         centered
       >
         <div className="form-field">
           <label className="form-label" htmlFor="roster-gen-employees">
-            Employees
+            {t('attendance.rosterPage.generate.employees')}
           </label>
           {/* PORT NOTE: the inline RequiredRule is gone with DevExtreme; submitGenerate() keeps
               the same gate ("Pick at least one employee and a shift."). */}
@@ -2337,7 +2313,7 @@ export default function RosterPage() {
                 employeeIds: values.map(Number),
               }))
             }
-            placeholder="Select employees…"
+            placeholder={t('attendance.rosterPage.generate.selectEmployees')}
             searchable
             disabled={saving}
           />
@@ -2365,7 +2341,7 @@ export default function RosterPage() {
           </div>
           <div className="form-field">
             <label className="form-label" htmlFor="roster-gen-to">
-              To
+              {t('common.to')}
             </label>
             <DatePickerInput
               id="roster-gen-to"
@@ -2382,7 +2358,7 @@ export default function RosterPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="roster-gen-shift">
-            Shift
+            {t('attendance.roster.auto.shiftCover.shift')}
           </label>
           <Select
             id="roster-gen-shift"
@@ -2394,19 +2370,19 @@ export default function RosterPage() {
                 shiftId: v != null ? Number(v) : null,
               }))
             }
-            placeholder="Pick a shift…"
+            placeholder={t('attendance.rosterPage.pickShift')}
             allowDeselect={false}
             disabled={saving}
           />
         </div>
 
         <div className="form-field">
-          <span className="form-label">Working days</span>
+          <span className="form-label">{t('attendance.rosterPage.generate.workingDays')}</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {WEEKDAY_LABELS.map((label, index) => (
+            {WEEKDAY_KEYS.map((day, index) => (
               <Checkbox
-                key={label}
-                label={label}
+                key={day}
+                label={t(`attendance.rosterPage.weekdayShort.${day}`)}
                 checked={generateForm.weekdays[index]}
                 onChange={(e) => {
                   const checked = e.currentTarget.checked
@@ -2421,10 +2397,7 @@ export default function RosterPage() {
               />
             ))}
           </div>
-          <div className="hint">
-            Days you do not tick are written as REST DAYS, so the roster comes
-            out complete. A blank day is the one thing the system cannot read.
-          </div>
+          <div className="hint">{t('attendance.rosterPage.generate.restHint')}</div>
         </div>
 
         <p className="hint">
@@ -2447,10 +2420,10 @@ export default function RosterPage() {
             onClick={() => setGenerateVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitGenerate()} disabled={saving}>
-            {saving ? 'Saving…' : 'Generate'}
+            {saving ? t('common.saving') : t('attendance.rosterPage.generate.submit')}
           </Button>
         </div>
       </Modal>
@@ -2458,22 +2431,21 @@ export default function RosterPage() {
       <Modal
         opened={copyVisible}
         onClose={() => setCopyVisible(false)}
-        title="Copy previous month"
+        title={t('attendance.rosterPage.copy.title')}
         size={480}
         centered
       >
         <div className="form-field">
           <p style={{ margin: 0 }}>
-            Copy <strong>{periodLabel(previousPeriod(period))}</strong> onto{' '}
-            <strong>{periodLabel(period)}</strong>. Shifts are matched by
-            WEEKDAY, so a Monday shift lands on a Monday — not on the same date
-            number.
+            <Trans
+              i18nKey="attendance.rosterPage.copy.body"
+              values={{ from: periodLabel(previousPeriod(period)), to: periodLabel(period) }}
+              components={{ b: <strong /> }}
+            />
           </p>
           {/* Said out loud, because this is the reason it is no longer the default. */}
           <p className="hint" style={{ marginBottom: 0 }}>
-            A copy brings last month&rsquo;s exceptions with it — the swaps, the one-off
-            days off, the cover that has already ended. If this month follows the usual
-            schedule, <strong>Apply weekly patterns</strong> gives a cleaner result.
+            <Trans i18nKey="attendance.rosterPage.copy.hint" components={{ b: <strong /> }} />
           </p>
         </div>
 
@@ -2494,10 +2466,10 @@ export default function RosterPage() {
             onClick={() => setCopyVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitCopy()} disabled={saving}>
-            {saving ? 'Copying…' : 'Copy month'}
+            {saving ? t('attendance.rosterPage.copy.running') : t('attendance.rosterPage.copy.submit')}
           </Button>
         </div>
       </Modal>
@@ -2505,19 +2477,20 @@ export default function RosterPage() {
       <Modal
         opened={applyVisible}
         onClose={() => setApplyVisible(false)}
-        title="Apply weekly patterns"
+        title={t('attendance.rosterPage.apply.title')}
         size={480}
         centered
       >
         <div className="form-field">
           <p style={{ margin: 0 }}>
-            Every employee who has a saved default week has it expanded into
-            real days across <strong>{periodLabel(period)}</strong>. Employees
-            with no saved pattern are left alone.
+            <Trans
+              i18nKey="attendance.rosterPage.apply.body"
+              values={{ month: periodLabel(period) }}
+              components={{ b: <strong /> }}
+            />
           </p>
           <p className="hint" style={{ marginBottom: 0 }}>
-            This is the usual way to fill a month: a pattern carries the schedule people
-            actually work, without last month&rsquo;s one-off exceptions coming along with it.
+            {t('attendance.rosterPage.apply.hint')}
           </p>
         </div>
 
@@ -2538,10 +2511,10 @@ export default function RosterPage() {
             onClick={() => setApplyVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitApplyPatterns()} disabled={saving}>
-            {saving ? 'Applying…' : 'Apply patterns'}
+            {saving ? t('attendance.rosterPage.apply.running') : t('attendance.rosterPage.apply.submit')}
           </Button>
         </div>
       </Modal>
@@ -2579,13 +2552,13 @@ export default function RosterPage() {
       <Modal
         opened={patternsVisible}
         onClose={() => setPatternsVisible(false)}
-        title="Weekly patterns"
+        title={t('attendance.rosterPage.patterns.title')}
         size={560}
         centered
       >
         <div className="form-field">
           <label className="form-label" htmlFor="roster-pattern-employee">
-            Employee
+            {t('attendance.roster.auto.staff.name')}
           </label>
           <Select
             id="roster-pattern-employee"
@@ -2597,16 +2570,12 @@ export default function RosterPage() {
             onChange={(v) => {
               if (v != null) void loadPatterns(Number(v))
             }}
-            placeholder="Pick an employee…"
+            placeholder={t('attendance.rosterPage.patterns.pickEmployee')}
             searchable
             allowDeselect={false}
             disabled={saving}
           />
-          <div className="hint">
-            This is the employee&apos;s DEFAULT WEEK — a template with no dates.
-            It changes nothing on its own; “Apply weekly patterns” is what
-            expands it into a real month.
-          </div>
+          <div className="hint">{t('attendance.rosterPage.patterns.hint')}</div>
         </div>
 
         {patternsLoading ? (
@@ -2627,7 +2596,7 @@ export default function RosterPage() {
               }}
             >
               <span className="form-label" style={{ margin: 0 }}>
-                {WEEKDAY_FULL[index]}
+                {t(`common.weekday.${index + 1}`)}
               </span>
               <Select
                 data={shifts.map((shift) => ({
@@ -2644,12 +2613,12 @@ export default function RosterPage() {
                     ),
                   )
                 }
-                placeholder="No shift"
+                placeholder={t('attendance.rosterPage.patterns.noShift')}
                 clearable
                 disabled={saving || row.isRestDay}
               />
               <Checkbox
-                label="Rest"
+                label={t('attendance.roster.auto.sum.rest')}
                 checked={row.isRestDay}
                 onChange={(e) => {
                   const checked = e.currentTarget.checked
@@ -2677,13 +2646,13 @@ export default function RosterPage() {
             onClick={() => setPatternsVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             onClick={() => void submitPatterns()}
             disabled={saving || patternEmployeeId == null}
           >
-            {saving ? 'Saving…' : 'Save default week'}
+            {saving ? t('common.saving') : t('attendance.rosterPage.patterns.submit')}
           </Button>
         </div>
       </Modal>

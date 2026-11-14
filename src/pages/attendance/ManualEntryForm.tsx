@@ -12,15 +12,13 @@ import { getErrorMessage } from '../../api/errorMessage'
 import type { AttendanceRecord } from '../../types/attendance'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import { branchOptions } from '../../hr/assignableOptions'
-import { formatDate, formatDayFraction, formatMinutes } from './attendanceFormat'
+import { formatDate, formatDayFraction, formatMinutes, statusText } from './attendanceFormat'
+import { t as translate } from '../../i18n/t'
 
 /** Present / Absent / Leave / RestDay — the four states a day can be told to be. */
-const STATUS_OPTIONS = [
-  { value: 'Present', label: 'Present' },
-  { value: 'Absent', label: 'Absent' },
-  { value: 'Leave', label: 'Leave' },
-  { value: 'RestDay', label: 'Rest day' },
-]
+const STATUS_VALUES = ['Present', 'Absent', 'Leave', 'RestDay']
+/** Read when drawn, so the words follow the language. */
+const statusOptions = () => STATUS_VALUES.map((value) => ({ value, label: statusText(value) }))
 
 interface FormState {
   employeeId: number | null
@@ -54,28 +52,27 @@ const EMPTY_FORM: FormState = {
 function ComputedResult({ record }: { record: AttendanceRecord }) {
   return (
     <div className="card" style={{ marginTop: 14, borderInlineStart: '4px solid #2e7d4f' }}>
-      <div className="empty-hint-main">Saved. This is what the day now says:</div>
+      <div className="empty-hint-main">{translate('attendance.manualEntry.savedTitle')}</div>
       <div className="result-row" style={{ marginTop: 10, marginBottom: 0 }}>
         <div className="result-tile">
           <div className="result-tile-value">
             {formatMinutes(record.workedMinutes)}
           </div>
-          <div className="result-tile-label">Worked</div>
+          <div className="result-tile-label">{translate('attendance.dailyPage.metric.worked')}</div>
         </div>
         <div className="result-tile">
           <div className="result-tile-value">{formatDayFraction(record.dayFraction)}</div>
-          <div className="result-tile-label">Of a day</div>
+          <div className="result-tile-label">{translate('attendance.manualEntry.ofDay')}</div>
         </div>
         <div className="result-tile">
           <div className="result-tile-value">
             {formatMinutes(record.lateMinutes)}
           </div>
-          <div className="result-tile-label">Late</div>
+          <div className="result-tile-label">{translate('attendance.dailyPage.metric.late')}</div>
         </div>
       </div>
       <p className="hint" style={{ marginBottom: 0, marginTop: 10 }}>
-        Measured against {record.fullName}&rsquo;s rostered shift for that day — the same
-        rules as a machine-read day. The processor will not touch it again.
+        {translate('attendance.manualEntry.measured', { name: record.fullName })}
       </p>
     </div>
   )
@@ -161,8 +158,8 @@ export function ManualEntryForm({
 
   async function submit() {
     const errors: { employeeId?: string; workDate?: string; hrNote?: string } = {}
-    if (form.employeeId == null) errors.employeeId = 'Choose an employee'
-    if (!form.workDate) errors.workDate = 'Choose the date'
+    if (form.employeeId == null) errors.employeeId = translate('attendance.manualEntry.chooseEmployee')
+    if (!form.workDate) errors.workDate = translate('attendance.manualEntry.chooseDate')
     if (!form.hrNote.trim()) {
       errors.hrNote = 'A reason is required — this sets what somebody is paid.'
     }
@@ -189,7 +186,7 @@ export function ManualEntryForm({
       // recomputed day is so HR can see what their entry actually did to it.
       setResult(saved)
       notifications.show({
-        message: 'Day saved. It is now a manual entry.',
+        message: translate('attendance.manualEntry.saved'),
         color: 'green',
         autoClose: 3000,
       })
@@ -204,10 +201,7 @@ export function ManualEntryForm({
   return (
     <div>
       <p className="hint" style={{ marginTop: 0 }}>
-        Use this when the machine was down or someone forgot to punch. Worked hours,
-        lateness and overtime are recalculated against the person&rsquo;s rostered shift for
-        that day. This marks the day as manually entered, so the automatic processor will
-        not overwrite it.
+        {translate('attendance.manualEntry.intro')}
       </p>
 
       {/* WARN, never block. Replacing a punch-based day is legitimate — HR may know something the
@@ -215,14 +209,15 @@ export function ManualEntryForm({
       {replacesPunches && (
         <div className="card" style={{ marginBottom: 14, borderInlineStart: '4px solid #c9821f' }}>
           <div className="empty-hint-main">
-            This will replace the punch-based record for this day.
+            {translate('attendance.manualEntry.replaceTitle')}
           </div>
           <p className="hint" style={{ marginBottom: 0, marginTop: 4 }}>
-            {conflict?.fullName} already has a {conflict?.source} record for{' '}
-            {formatDate(conflict?.workDate ?? '')} showing{' '}
-            {formatMinutes(conflict?.workedMinutes ?? 0)} worked. Your entry takes over, and
-            the processor will stop touching this day. The original punches are kept and are
-            still visible on the day&rsquo;s detail.
+            {translate('attendance.manualEntry.replaceText', {
+              name: conflict?.fullName ?? '',
+              source: conflict?.source ?? '',
+              date: formatDate(conflict?.workDate ?? ''),
+              worked: formatMinutes(conflict?.workedMinutes ?? 0),
+            })}
           </p>
         </div>
       )}
@@ -230,7 +225,7 @@ export function ManualEntryForm({
       <div className="form-grid">
         <div className="form-field">
           <label className="form-label" htmlFor="manual-employee">
-            Employee
+            {translate('attendance.dailyPage.col.employee')}
           </label>
           <Select
             id="manual-employee"
@@ -243,9 +238,9 @@ export function ManualEntryForm({
               setForm((f) => ({ ...f, employeeId: v != null ? Number(v) : null }))
               setFieldErrors((fe) => ({ ...fe, employeeId: undefined }))
             }}
-            placeholder="Whose day is this?"
+            placeholder={translate('attendance.manualEntry.whose')}
             searchable
-            nothingFoundMessage="No employee matches that name."
+            nothingFoundMessage={translate('attendance.manualEntry.noEmployee')}
             error={fieldErrors.employeeId}
             // Changing WHO a day belongs to would silently create a second day rather than edit
             // this one, so the person is fixed once the record exists.
@@ -255,7 +250,7 @@ export function ManualEntryForm({
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-date">
-            Work date
+            {translate('attendance.manualEntry.workDate')}
           </label>
           {/* Required ("Choose the date"), so not clearable. State stays 'yyyy-MM-dd'. */}
           <DatePickerInput
@@ -274,7 +269,7 @@ export function ManualEntryForm({
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-first-in">
-            First in
+            {translate('attendance.dailyPage.col.firstIn')}
           </label>
           {/* Both punch times are OPTIONAL — "leave blank if unknown" is a real answer here — so
               both are clearable, and clearing puts back the null the API expects. The state keeps
@@ -290,14 +285,14 @@ export function ManualEntryForm({
               const value = secondsDateTimeFromPicker(v)
               setForm((f) => ({ ...f, firstInUtc: value }))
             }}
-            placeholder="Leave blank if unknown"
+            placeholder={translate('attendance.manualEntry.blankIfUnknown')}
             disabled={saving}
           />
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-last-out">
-            Last out
+            {translate('attendance.dailyPage.col.lastOut')}
           </label>
           <DateTimePicker
             id="manual-last-out"
@@ -309,14 +304,14 @@ export function ManualEntryForm({
               const value = secondsDateTimeFromPicker(v)
               setForm((f) => ({ ...f, lastOutUtc: value }))
             }}
-            placeholder="Leave blank if unknown"
+            placeholder={translate('attendance.manualEntry.blankIfUnknown')}
             disabled={saving}
           />
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-exit">
-            Minutes away mid-day
+            {translate('attendance.manualEntry.away')}
           </label>
           <NumberInput
             id="manual-exit"
@@ -327,12 +322,12 @@ export function ManualEntryForm({
             min={0}
             disabled={saving}
           />
-          <div className="hint">Time they left and came back. Comes off worked time.</div>
+          <div className="hint">{translate('attendance.manualEntry.awayHint')}</div>
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-exit-approved">
-            Of that, how many were approved
+            {translate('attendance.manualEntry.approved')}
           </label>
           <NumberInput
             id="manual-exit-approved"
@@ -344,33 +339,31 @@ export function ManualEntryForm({
             disabled={saving}
           />
           <div className="hint">
-            Kept apart from the actual on purpose. Any difference becomes an exit variance
-            for you to rule on.
+            {translate('attendance.manualEntry.approvedHint')}
           </div>
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-status">
-            Status
+            {translate('attendance.dailyPage.col.status')}
           </label>
           <Select
             id="manual-status"
-            data={STATUS_OPTIONS}
+            data={statusOptions()}
             value={form.status}
             onChange={(v) => setForm((f) => ({ ...f, status: v ?? null }))}
-            placeholder="Work it out from the roster and the times"
+            placeholder={translate('attendance.manualEntry.statusPlaceholder')}
             clearable
             disabled={saving}
           />
           <div className="hint">
-            Leave blank unless you are overriding it — blank lets the system decide from the
-            roster and the punches.
+            {translate('attendance.manualEntry.statusHint')}
           </div>
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="manual-branch">
-            Branch
+            {translate('attendance.dailyPage.col.branch')}
           </label>
           <Select
             id="manual-branch"
@@ -381,16 +374,16 @@ export function ManualEntryForm({
             onChange={(v) =>
               setForm((f) => ({ ...f, branchId: v != null ? Number(v) : null }))
             }
-            placeholder="Their home branch"
+            placeholder={translate('attendance.manualEntry.homeBranch')}
             clearable
             disabled={saving}
           />
-          <div className="hint">Where the day was worked. Blank uses their home branch.</div>
+          <div className="hint">{translate('attendance.manualEntry.branchHint')}</div>
         </div>
 
         <div className="form-field full">
           <label className="form-label" htmlFor="manual-note">
-            Why
+            {translate('attendance.manualEntry.why')}
           </label>
           <Textarea
             id="manual-note"
@@ -405,8 +398,7 @@ export function ManualEntryForm({
             disabled={saving}
           />
           <div className="hint">
-            Kept on the day for good. A year from now this is the only thing that explains
-            why these hours were typed instead of measured.
+            {translate('attendance.manualEntry.whyHint')}
           </div>
         </div>
       </div>
@@ -415,11 +407,13 @@ export function ManualEntryForm({
 
       <div className="form-actions">
         <Button variant="default" onClick={onCancel} disabled={saving}>
-          {result ? 'Close' : 'Cancel'}
+          {translate(result ? 'common.close' : 'common.cancel')}
         </Button>
         {!result && (
           <Button onClick={() => void submit()} disabled={saving}>
-            {saving ? 'Saving…' : existing ? 'Override this day' : 'Save day'}
+            {saving
+              ? translate('common.saving')
+              : translate(existing ? 'attendance.manualEntry.override' : 'attendance.manualEntry.save')}
           </Button>
         )}
       </div>

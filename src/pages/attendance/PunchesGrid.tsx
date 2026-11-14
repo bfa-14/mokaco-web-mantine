@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { t as translate } from '../../i18n/t'
 import { Link } from 'react-router-dom'
 import {
   createColumnHelper,
@@ -61,15 +62,15 @@ const PUNCH_WIDTHS: Record<string, number | undefined> = {
  * that — something happened, we recorded it faithfully, and nobody has told us what it means.
  */
 function DirectionChip({ punchType }: { punchType: number }) {
-  if (punchType === 0) return <span className="badge badge--on">In</span>
-  if (punchType === 1) return <span className="badge badge--muted">Out</span>
+  if (punchType === 0) return <span className="badge badge--on">{translate('attendance.punchesGrid.in')}</span>
+  if (punchType === 1) return <span className="badge badge--muted">{translate('attendance.punchesGrid.out')}</span>
 
   return (
     <span
       className="badge badge--off"
-      title="A device key the processor does not model — a break or overtime key on most firmware. The punch is stored exactly as the machine sent it."
+      title={translate('attendance.punchesGrid.keyTitle')}
     >
-      Key {punchType}
+      {translate('attendance.punchesGrid.key', { value: punchType })}
     </span>
   )
 }
@@ -89,21 +90,26 @@ function WhoCell({ punch }: { punch: RawPunch }) {
     <Link
       to="/attendance/unresolved"
       className="badge badge--off"
-      title="Nobody is enrolled on this PIN, so this punch belongs to no one yet. It is stored and waiting — map the PIN and it is claimed retroactively."
+      title={translate('attendance.punchesGrid.unmappedTitle')}
     >
-      PIN {punch.enrollPin} — not mapped
+      {translate('attendance.punchesGrid.unmapped', { pin: punch.enrollPin })}
     </Link>
   )
 }
 
 /** What the Employee column filters on — the same words the cell shows. */
 const whoText = (_value: unknown, punch: RawPunch) =>
-  punch.fullName ?? `PIN ${punch.enrollPin} — not mapped`
+  punch.fullName ?? translate('attendance.punchesGrid.unmapped', { pin: punch.enrollPin })
 
 const directionText = (punchType: number) =>
-  punchType === 0 ? 'In' : punchType === 1 ? 'Out' : `Key ${punchType}`
+  punchType === 0
+    ? translate('attendance.punchesGrid.in')
+    : punchType === 1
+      ? translate('attendance.punchesGrid.out')
+      : translate('attendance.punchesGrid.key', { value: punchType })
 
-const processedText = (isProcessed: boolean) => (isProcessed ? 'Processed' : 'Waiting')
+const processedText = (isProcessed: boolean) =>
+  translate(isProcessed ? 'attendance.punchesGrid.processed' : 'attendance.punchesGrid.waiting')
 
 /** The machine's label if it has one, else its serial — the same fallback the Devices page uses. */
 const machineText = (_value: unknown, punch: RawPunch) =>
@@ -176,68 +182,72 @@ export function PunchesGrid({
     () => [
       punchColumnHelper.accessor('punchTimeUtc', {
         header: () => (
-          <span title="The time the TERMINAL stamped, in its own clock. Nothing converts it — which is why a machine running fast quietly moves everybody's hours.">
-            Time
+          <span title={t('attendance.punchesGrid.timeTitle')}>
+            {t('attendance.punchesGrid.time')}
           </span>
         ),
         meta: { filterText: (v) => formatTime(v as string) },
         cell: (info) => <span>{formatTime(info.row.original.punchTimeUtc)}</span>,
       }),
       punchColumnHelper.accessor('fullName', {
-        header: 'Employee',
+        header: () => t('attendance.dailyPage.col.employee'),
         meta: { filterText: whoText },
         cell: (info) => <WhoCell punch={info.row.original} />,
       }),
       punchColumnHelper.accessor('punchType', {
-        header: 'In/Out',
-        meta: { filterText: directionText, filterOptions: ['In', 'Out'] },
+        header: () => t('attendance.punchesGrid.direction'),
+        meta: { filterText: directionText, filterOptions: [t('attendance.punchesGrid.in'), t('attendance.punchesGrid.out')] },
         cell: (info) => <DirectionChip punchType={info.row.original.punchType} />,
       }),
       punchColumnHelper.accessor('deviceName', {
-        header: 'Machine',
+        header: () => t('attendance.punchesGrid.machine'),
         meta: { filterText: machineText },
         cell: (info) => <span>{machineText(null, info.row.original)}</span>,
       }),
       punchColumnHelper.accessor('source', {
         header: () => (
-          <span title="How the punch reached us. Pull = the server called the machine; Device = the machine pushed to us; Excel = a spreadsheet; Manual = typed by a person.">
-            Source
+          <span title={t('attendance.punchesGrid.sourceTitle')}>
+            {t('attendance.dailyPage.col.source')}
           </span>
         ),
+        cell: (info) => t(`attendance.source.${info.row.original.source}`, { defaultValue: info.row.original.source }),
       }),
       punchColumnHelper.accessor('isProcessed', {
         header: () => (
-          <span title="Whether the processor has turned this punch into part of an employee-day yet. Waiting is normal for a punch made today — the nightly job consumes it, or you can process the day by hand.">
-            Processed
+          <span title={t('attendance.punchesGrid.processedTitle')}>
+            {t('attendance.punchesGrid.processed')}
           </span>
         ),
-        meta: { filterText: processedText, filterOptions: ['Processed', 'Waiting'] },
+        meta: { filterText: processedText, filterOptions: [t('attendance.punchesGrid.processed'), t('attendance.punchesGrid.waiting')] },
         cell: (info) =>
           info.row.original.isProcessed ? (
-            <IconCheck size={16} color="var(--mantine-color-green-7)" aria-label="Processed" />
+            <IconCheck size={16} color="var(--mantine-color-green-7)" aria-label={t('attendance.punchesGrid.processed')} />
           ) : (
-            <span className="badge badge--muted" title="Stored, and not yet part of an employee-day.">
-              waiting
+            <span className="badge badge--muted" title={t('attendance.punchesGrid.waitingTitle')}>
+              {t('attendance.punchesGrid.waitingBadge')}
             </span>
           ),
       }),
       punchColumnHelper.accessor('createdUtc', {
         header: () => (
-          <span title="When WE received it, as opposed to when it was punched. On a pulled machine the two differ by up to one poll interval — and that gap is what separates 'the machine never recorded it' from 'we have not collected it yet'.">
-            Landed
+          <span title={t('attendance.punchesGrid.landedTitle')}>
+            {t('attendance.punchesGrid.landed')}
           </span>
         ),
         meta: { filterText: (v) => `${formatDate(v as string)} ${formatTime(v as string)}` },
         cell: (info) => (
           <span
-            title={`Punched ${formatTime(info.row.original.punchTimeUtc)}, received ${formatTime(info.row.original.createdUtc)}`}
+            title={t('attendance.punchesGrid.landedCell', {
+              punched: formatTime(info.row.original.punchTimeUtc),
+              received: formatTime(info.row.original.createdUtc),
+            })}
           >
             {formatDate(info.row.original.createdUtc)} {formatTime(info.row.original.createdUtc)}
           </span>
         ),
       }),
     ],
-    [],
+    [t],
   )
 
   const table = useReactTable({
@@ -280,7 +290,7 @@ export function PunchesGrid({
             setGlobalFilter(value)
           }}
           leftSection={<IconSearch size={14} />}
-          placeholder="Search punches"
+          placeholder={t('attendance.punchesGrid.search')}
           w={240}
         />
         {/* Names the day rather than saying "this day": the bug this view exists to expose is

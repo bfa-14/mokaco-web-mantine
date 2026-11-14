@@ -251,7 +251,8 @@
       "noAccessHint": "Reports need the ‘View reports’ permission. Ask whoever administers the system.",
       "allBranches": "All branches",
       "allEmployees": "All employees"
-    }
+    },
+    "pageHelpTitle": "What is this page for?"
   },
   "workflow": {
     "leaveNotice": {
@@ -1564,6 +1565,341 @@
       "rest": "Rest day",
       "holiday": "Public holiday: {{name}}",
       "draft": "Draft, not saved yet"
+    },
+    "dailyPage": {
+      "disposition": {
+        "UnpaidAbsence": {
+          "title": "Unpaid absence",
+          "consequence": "The extra minutes come off pay as unpaid time. Choose this when nobody authorised the time away and there is nothing to offset it against."
+        },
+        "Overtime": {
+          "title": "Offset against overtime",
+          "consequence": "The extra minutes are cancelled against overtime detected on the same day. Nothing is deducted — and nothing is paid for that overtime either, because it was used up here."
+        },
+        "Ignore": {
+          "title": "Ignore it",
+          "consequence": "Nothing is deducted and nothing is paid. The day is closed exactly as the punches left it. Choose this when the difference is too small to act on."
+        }
+      },
+      "timeline": {
+        "empty": "Nothing to draw for this day.",
+        "noPair": "There is no complete in-and-out pair, so there are no worked intervals to show.",
+        "expected": "That is expected for a day nobody was due to work.",
+        "useEdit": "Use “Edit this day” to state what happened, or “Request a correction” if the punches are simply wrong.",
+        "worked": "worked {{minutes}}",
+        "gap": "gap {{minutes}}",
+        "workedTitle": "The sum of the intervals actually clocked. Time away in the middle of the day is not worked time.",
+        "workedTotal": "Worked {{minutes}}",
+        "breakTitle": "The unpaid break, charged once. If they punched out for it, the gap already covers it.",
+        "break": "break {{minutes}} taken from the gap",
+        "exitTitle": "Time away beyond the break. This is what needs an exit permission.",
+        "exit": "exit {{minutes}}",
+        "fractionTitle": "Worked divided by the standard day for this person on this date, capped at 1.",
+        "fraction": "{{value}} of a day"
+      },
+      "metric": {
+        "worked": "Worked",
+        "workedRule": "The sum of the intervals actually clocked, minus any break not already taken as a gap. NOT first-in to last-out — time away in the middle of the day is not worked time.",
+        "standard": "Standard",
+        "standardRule": "What a full day means for this person on this date: their rostered shift's length minus its break, or the configured standard day when nothing was rostered.",
+        "fraction": "Day fraction",
+        "fractionRule": "Worked divided by standard, capped at 1.00. Payroll sums these, so somebody who left two hours early counts 0.75 of a day, not 1.",
+        "late": "Late",
+        "lateRule": "Minutes past the shift's start plus its grace period. Zero when no shift was rostered — you cannot be late for a shift nobody assigned.",
+        "overtime": "Overtime",
+        "overtimeRule": "Minutes over the standard day. DETECTED ONLY — attendance never pays this. Pay only what an approved overtime request authorises.",
+        "exitActual": "Exit actual",
+        "exitActualRule": "What the punches SHOW they were away for, beyond their break. An observed fact.",
+        "exitApproved": "Exit approved",
+        "exitApprovedRule": "What was AUTHORISED. Independent of the actual — neither one ever overwrites the other.",
+        "exitVariance": "Exit variance",
+        "more": "{{minutes}} more",
+        "less": "{{minutes}} less",
+        "exitVarianceRule": "Actual minus approved. MORE means they were away longer than allowed; LESS means they came back early. Payroll is blocked until HR rules on it.",
+        "exitLeave": "Exit leave",
+        "exitLeaveRule": "What comes off the leave balance for the mid-day absence. By default the time actually taken, which the Settings page can change."
+      },
+      "noteOptional": "Note (optional)",
+      "whyRequired": "Why (required)",
+      "currently": "Currently {{value}}",
+      "exitForm": {
+        "saved": "Approved exit set to {{minutes}} for {{name}}.",
+        "intro": "This records what was AUTHORISED. It does not change what the punches observed — the two are kept apart on purpose.",
+        "minutes": "Approved exit minutes",
+        "actual": "The punches show {{minutes}} of exit time actually taken.",
+        "alsoActual": "Also count this as actually taken",
+        "alsoActualHint": "The exit was approved but they never punched for it, so attendance sees no gap. Tick this to count the approved time as actually taken.",
+        "save": "Save approval"
+      },
+      "dispositionForm": {
+        "saved": "{{name}}, {{date}}: variance of {{minutes}} ruled “{{title}}”.",
+        "intro": "They were away {{actual}} and {{approved}} was approved — a difference of {{variance}}. Overtime detected the same day: {{overtime}}. Pick what should happen to that difference."
+      },
+      "adjustForm": {
+        "noteRequired": "A reason is required — this changes somebody's pay.",
+        "saved": "{{name}}, {{date}} adjusted. The processor will not touch this day again.",
+        "intro": "This changes what this person is paid for the day. The note is required and is kept forever. Set worked minutes OR the day fraction — leave the other blank and the system keeps what it computed.",
+        "worked": "Worked minutes",
+        "save": "Adjust day"
+      },
+      "fix": "Fix",
+      "edit": "Edit",
+      "view": "View",
+      "col": {
+        "employee": "Employee",
+        "branch": "Branch",
+        "date": "Date",
+        "shift": "Shift",
+        "firstIn": "First in",
+        "lastOut": "Last out",
+        "worked": "Worked",
+        "pairs": "Pairs",
+        "fraction": "Day fraction",
+        "late": "Late",
+        "overtime": "Overtime",
+        "exit": "Exit actual / approved",
+        "status": "Status",
+        "source": "Source",
+        "actions": "Actions"
+      },
+      "correction": {
+        "reasonRequired": "A reason is required — a correction without one is an unexplained change to somebody's pay.",
+        "saved": "Correction raised. It will apply once approved on the Corrections page.",
+        "intro": "This records what you changed and why. The original punches from the machine are never overwritten.",
+        "exitMinutes": "Exit minutes",
+        "save": "Request correction"
+      },
+      "action": {
+        "approval": "Set exit approval",
+        "disposition": "Dispose the exit variance",
+        "adjust": "Adjust the day",
+        "correction": "Request a correction",
+        "manual": "Edit / override this day"
+      },
+      "drawer": {
+        "title": "Day detail",
+        "manualTitle": "HR entered or corrected this day by hand. The processor will not touch it again.",
+        "help": "The timeline shows what the punches actually say. The break is taken out of the first gap; anything beyond that is time away that needs an exit permission.",
+        "anomalyTitle": "This day could not be read confidently",
+        "anomalyText": "The hours on it are not trustworthy, and it blocks payroll until it is fixed.",
+        "fixThis": "Fix this",
+        "changeTitle": "Change this day",
+        "editTitle": "State what happened, by hand. Takes effect immediately and stops the processor touching this day.",
+        "edit": "Edit day",
+        "fixTitle": "The punches do not add up. Raise a correction — logged, with an old-to-new trail, and it changes nothing until somebody approves it.",
+        "approvalTitle": "Record how many minutes of the mid-day absence were authorised.",
+        "dispositionTitle": "Rule on the difference between the exit that was approved and the one the punches show.",
+        "disposition": "Dispose variance",
+        "adjustTitle": "Add or remove worked time on this day, with a mandatory note.",
+        "adjust": "Adjust hours"
+      },
+      "processed_one": "Processed {{count}} employee-day.",
+      "processed_other": "Processed {{count}} employee-days.",
+      "viewTitle": "See the punches behind this day.",
+      "rowFixTitle": "The punches on this day do not add up. Raise a correction — it is logged and takes effect once approved.",
+      "rowEditTitle": "Enter or override this day by hand. Takes effect immediately and stops the processor touching it.",
+      "colTitle": {
+        "pairs": "Complete in→out stretches. Worked time is the sum of these — expand the row to see them.",
+        "fraction": "How much of a full day was earned. Worked time divided by the standard day, capped at 1.",
+        "late": "Minutes past the shift start plus its grace period.",
+        "overtime": "Detected only. Attendance never pays this — pay only what an approved overtime request authorises.",
+        "exit": "Actual is what the punches show. Approved is what was authorised. They are independent.",
+        "source": "Device, Excel, or Manual — how this day's data arrived."
+      },
+      "csv": {
+        "employee": "Employee",
+        "branch": "Branch",
+        "date": "Date",
+        "shift": "Shift",
+        "firstIn": "First in",
+        "lastOut": "Last out",
+        "workedMin": "Worked (min)",
+        "workedHm": "Worked (h:mm)",
+        "fraction": "Day fraction",
+        "lateMin": "Late (min)",
+        "shortMin": "Short (min)",
+        "overtimeMin": "Overtime detected (min)",
+        "exitActualMin": "Exit actual (min)",
+        "exitApprovedMin": "Exit approved (min)",
+        "status": "Status",
+        "source": "Source",
+        "manual": "Manual",
+        "problem": "Problem",
+        "hrNote": "HR note"
+      },
+      "title": "Daily attendance",
+      "subtitle": "One row per employee per day. Use View to see the punches behind a day.",
+      "addManual": "Add manual entry",
+      "help": "One row per employee per day. Worked time is the sum of the intervals actually clocked — if someone leaves for two hours and comes back, those two hours are not worked time. ‘Day fraction’ is how much of a full day they earned.",
+      "buildTitle": "Build the days",
+      "runProcessor": "Run processor (all unprocessed punches)",
+      "everyone": "Everyone",
+      "allBranches": "All branches",
+      "apply": "Apply",
+      "anomalyBand_one": "{{count}} day in this range could not be read confidently",
+      "anomalyBand_other": "{{count}} days in this range could not be read confidently",
+      "anomalyBandText_one": "The hours on it are not trustworthy, and the month cannot be paid while any are left open. Fix them with a correction — the original punches are never edited.",
+      "anomalyBandText_other": "The hours on them are not trustworthy, and the month cannot be paid while any are left open. Fix them with a correction — the original punches are never edited.",
+      "fixAnomalies": "Fix these anomalies",
+      "viewDays": "Days",
+      "viewPunches": "Punches",
+      "noDays": "No attendance days between {{from}} and {{to}}.",
+      "noDaysHint": "Punches only become days once the processor has run. Widen the dates, or run the processor above and then mark absentees for the days that are finished.",
+      "noMatch": "No attendance days match these filters.",
+      "overrideTitle": "Override {{name}} — {{date}}",
+      "fixTitle": "Fix {{name}} — {{date}}"
+    },
+    "punchesGrid": {
+      "in": "In",
+      "out": "Out",
+      "key": "Key {{value}}",
+      "keyTitle": "A device key the processor does not model — a break or overtime key on most firmware. The punch is stored exactly as the machine sent it.",
+      "unmapped": "PIN {{pin}} — not mapped",
+      "unmappedTitle": "Nobody is enrolled on this PIN, so this punch belongs to no one yet. It is stored and waiting — map the PIN and it is claimed retroactively.",
+      "processed": "Processed",
+      "waiting": "Waiting",
+      "waitingBadge": "waiting",
+      "waitingTitle": "Stored, and not yet part of an employee-day.",
+      "time": "Time",
+      "timeTitle": "The time the TERMINAL stamped, in its own clock. Nothing converts it — which is why a machine running fast quietly moves everybody's hours.",
+      "direction": "In/Out",
+      "machine": "Machine",
+      "sourceTitle": "How the punch reached us. Pull = the server called the machine; Device = the machine pushed to us; Excel = a spreadsheet; Manual = typed by a person.",
+      "processedTitle": "Whether the processor has turned this punch into part of an employee-day yet. Waiting is normal for a punch made today — the nightly job consumes it, or you can process the day by hand.",
+      "landed": "Landed",
+      "landedTitle": "When WE received it, as opposed to when it was punched. On a pulled machine the two differ by up to one poll interval — and that gap is what separates 'the machine never recorded it' from 'we have not collected it yet'.",
+      "landedCell": "Punched {{punched}}, received {{received}}",
+      "search": "Search punches"
+    },
+    "rosterPage": {
+      "title": "Roster",
+      "subtitle": "Who was supposed to work which shift, day by day.",
+      "help": "The roster tells attendance what each person was SUPPOSED to work — without it, the system cannot tell late from early, or absent from off. Generate it, don't type it.",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "branchFilter": "Branch filter",
+      "allBranches": "All branches",
+      "employeeFallback": "Employee {{id}}",
+      "pickShift": "Pick a shift…",
+      "weekdayShort": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      },
+      "overwrite": {
+        "label": "Overwrite existing",
+        "hint": "Leave this off to keep manual changes you have already made."
+      },
+      "gaps": {
+        "title_one": "{{count}} employee-day has no shift assigned.",
+        "title_other": "{{count}} employee-days have no shift assigned.",
+        "hint": "Attendance cannot judge late or absent without one.",
+        "fix": "Fix these"
+      },
+      "empty": {
+        "noEmployees": "There is nobody to roster yet.",
+        "noEmployeesHint": "Add employees under HR › Employees first — the roster is a grid of people against days, and it needs the people.",
+        "noShifts": "No shifts have been defined.",
+        "noShiftsHint": "Create at least one shift under Attendance › Shifts. A shift is what tells the system when the day starts, so it can tell late from on time."
+      },
+      "cell": {
+        "leave": "Lve",
+        "leaveTitle": "{{name}} — {{date}}: approved leave{{booked}}.",
+        "leaveBooked_one": "({{count}} days booked on this date)",
+        "leaveBooked_other": "({{count}} days booked on this date)",
+        "restTitle": "{{name}} — {{date}}: rest day.",
+        "emptyTitle": "No shift assigned. Attendance cannot judge late or absent without one."
+      },
+      "legend": {
+        "rest": "Rest day (rostered off)",
+        "leave": "Approved leave (outranks any shift)",
+        "empty": "Nothing assigned (the system cannot judge this day)",
+        "clickHint": "Click a cell to set it. Drag across cells to set many at once."
+      },
+      "setDay": {
+        "title_one": "Set {{count}} day",
+        "title_other": "Set {{count}} days",
+        "submit_one": "Set {{count}} day",
+        "submit_other": "Set {{count}} days",
+        "restHint": "A rest day is still rostered — it says “this person was off”, which is not the same as saying nothing at all.",
+        "pickShiftOrRest": "Pick a shift, or tick \"Rest day\".",
+        "done_one": "Set {{count}} day.",
+        "done_other": "Set {{count}} days.",
+        "partial_one": "{{message}} ({{written}} of {{count}} day were set before this.)",
+        "partial_other": "{{message}} ({{written}} of {{count}} days were set before this.)"
+      },
+      "generate": {
+        "button": "Generate roster…",
+        "title": "Generate roster",
+        "employees": "Employees",
+        "selectEmployees": "Select employees…",
+        "workingDays": "Working days",
+        "restHint": "Days you do not tick are written as REST DAYS, so the roster comes out complete. A blank day is the one thing the system cannot read.",
+        "submit": "Generate",
+        "pickEmployeesAndShift": "Pick at least one employee and a shift.",
+        "employeesRostered_one": "{{count}} employee rostered.",
+        "employeesRostered_other": "{{count}} employees rostered."
+      },
+      "copy": {
+        "title": "Copy previous month",
+        "body": "Copy <b>{{from}}</b> onto <b>{{to}}</b>. Shifts are matched by WEEKDAY, so a Monday shift lands on a Monday — not on the same date number.",
+        "hint": "A copy brings last month’s exceptions with it — the swaps, the one-off days off, the cover that has already ended. If this month follows the usual schedule, <b>Apply weekly patterns</b> gives a cleaner result.",
+        "running": "Copying…",
+        "submit": "Copy month"
+      },
+      "apply": {
+        "title": "Apply weekly patterns",
+        "body": "Every employee who has a saved default week has it expanded into real days across <b>{{month}}</b>. Employees with no saved pattern are left alone.",
+        "hint": "This is the usual way to fill a month: a pattern carries the schedule people actually work, without last month’s one-off exceptions coming along with it.",
+        "running": "Applying…",
+        "submit": "Apply patterns"
+      },
+      "patterns": {
+        "button": "Weekly patterns…",
+        "title": "Weekly patterns",
+        "pickEmployee": "Pick an employee…",
+        "hint": "This is the employee's DEFAULT WEEK — a template with no dates. It changes nothing on its own; “Apply weekly patterns” is what expands it into a real month.",
+        "noShift": "No shift",
+        "submit": "Save default week",
+        "saved": "Default week saved. Use \"Apply weekly patterns\" to write it onto a month."
+      }
+    },
+    "manualEntry": {
+      "savedTitle": "Saved. This is what the day now says:",
+      "ofDay": "Of a day",
+      "measured": "Measured against {{name}}’s rostered shift for that day — the same rules as a machine-read day. The processor will not touch it again.",
+      "chooseEmployee": "Choose an employee",
+      "chooseDate": "Choose the date",
+      "saved": "Day saved. It is now a manual entry.",
+      "intro": "Use this when the machine was down or someone forgot to punch. Worked hours, lateness and overtime are recalculated against the person’s rostered shift for that day. This marks the day as manually entered, so the automatic processor will not overwrite it.",
+      "replaceTitle": "This will replace the punch-based record for this day.",
+      "replaceText": "{{name}} already has a {{source}} record for {{date}} showing {{worked}} worked. Your entry takes over, and the processor will stop touching this day. The original punches are kept and are still visible on the day’s detail.",
+      "whose": "Whose day is this?",
+      "noEmployee": "No employee matches that name.",
+      "workDate": "Work date",
+      "blankIfUnknown": "Leave blank if unknown",
+      "away": "Minutes away mid-day",
+      "awayHint": "Time they left and came back. Comes off worked time.",
+      "approved": "Of that, how many were approved",
+      "approvedHint": "Kept apart from the actual on purpose. Any difference becomes an exit variance for you to rule on.",
+      "statusPlaceholder": "Work it out from the roster and the times",
+      "statusHint": "Leave blank unless you are overriding it — blank lets the system decide from the roster and the punches.",
+      "homeBranch": "Their home branch",
+      "branchHint": "Where the day was worked. Blank uses their home branch.",
+      "why": "Why",
+      "whyHint": "Kept on the day for good. A year from now this is the only thing that explains why these hours were typed instead of measured.",
+      "override": "Override this day",
+      "save": "Save day"
+    },
+    "source": {
+      "Device": "Device",
+      "Excel": "Excel",
+      "Manual": "Manual",
+      "Pull": "Pull"
     }
   },
   "payroll": {
