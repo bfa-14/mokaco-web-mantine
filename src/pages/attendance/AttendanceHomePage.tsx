@@ -29,6 +29,12 @@ interface Blocker {
   label: string
   to: string
   hint: string
+  /**
+   * Does a count above zero stop payroll? True for every counter but one: the days that are not on
+   * the roster block only from the month the setting names. Until then they are counted and shown,
+   * and the month can still be paid - so the headline must not call it "not ready" on their account.
+   */
+  blocking: boolean
 }
 
 /**
@@ -67,7 +73,7 @@ function blockersOf(readiness: PayrollReadiness): Blocker[] {
   const label = (key: string) => tr(`attendance.home.blockers.${key}`)
   const hint = (key: string) => tr(`attendance.home.blockers.${key}Hint`)
 
-  return [
+  const tiles: { key: string; count: number; to: string; blocking?: boolean; hint?: string }[] = [
     {
       key: 'unprocessedPunches',
       count: readiness.unprocessedPunches,
@@ -104,7 +110,30 @@ function blockersOf(readiness: PayrollReadiness): Blocker[] {
       // Straight onto the worklist: this month, undecided rows only.
       to: `/attendance/anomalies${range}&decision=undecided`,
     },
-  ].map((b) => ({ ...b, label: label(b.key), hint: hint(b.key) }))
+  ]
+
+  // Days somebody punched on that the approved roster does not know and nobody has decided (script
+  // 108). Absent from an API on a database without that script: then there is no tile, not a zero.
+  if (readiness.undecidedUnrosteredDays != null) {
+    const blocks = readiness.unrosteredDaysBlock ?? false
+    const from = readiness.unrosteredBlocksFrom
+    tiles.push({
+      key: 'undecidedUnrosteredDays',
+      count: readiness.undecidedUnrosteredDays,
+      // The Daily page lists them above its grid, for this period, with the decision buttons.
+      to: `/attendance/daily${range}`,
+      blocking: blocks,
+      hint: blocks
+        ? hint('undecidedUnrosteredDays')
+        : `${hint('undecidedUnrosteredDays')} ${
+            from
+              ? tr('attendance.home.blockers.undecidedUnrosteredDaysLater', { month: periodLabel(from) })
+              : tr('attendance.home.blockers.undecidedUnrosteredDaysNever')
+          }`,
+    })
+  }
+
+  return tiles.map((b) => ({ ...b, label: label(b.key), hint: b.hint ?? hint(b.key), blocking: b.blocking ?? true }))
 }
 
 /**
@@ -122,7 +151,8 @@ function ReadinessVerdict({
   // "Ready" is not the API's isReady flag alone: it is the same six counters the tiles
   // below show, so the headline and the grid can never contradict each other.
   const { t } = useTranslation()
-  const openCount = blockers.filter((blocker) => blocker.count > 0).length
+  // Only the counters that BLOCK decide the headline; a counted-but-not-blocking tile is amber below.
+  const openCount = blockers.filter((blocker) => blocker.blocking && blocker.count > 0).length
   const ready = openCount === 0
 
   return (
@@ -157,9 +187,11 @@ function ReadinessVerdict({
             key={blocker.key}
             to={blocker.to}
             className={
-              blocker.count > 0
-                ? 'readiness-tile readiness-tile--open'
-                : 'readiness-tile readiness-tile--clear'
+              blocker.count === 0
+                ? 'readiness-tile readiness-tile--clear'
+                : blocker.blocking
+                  ? 'readiness-tile readiness-tile--open'
+                  : 'readiness-tile readiness-tile--warn'
             }
           >
             <div className="readiness-tile-value">{blocker.count}</div>

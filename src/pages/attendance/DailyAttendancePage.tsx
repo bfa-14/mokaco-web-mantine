@@ -30,10 +30,12 @@ import type {
   AttendanceDetail,
   AttendanceInterval,
   AttendanceRecord,
+  UnrosteredDay,
 } from '../../types/attendance'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import { AnomalyIcon, DayFractionBar, StatusBadge } from './attendanceShared'
 import { PunchesGrid } from './PunchesGrid'
+import { NotOnRosterPanel } from './NotOnRosterPanel'
 import { DayPairsPanel } from './DayPairsPanel'
 import type { PairsState } from './DayPairsPanel'
 import {
@@ -48,7 +50,10 @@ import {
   statusText,
   toDateString,
 } from './attendanceFormat'
+import { companyToday, dayBefore, dayProgress, isOpenAnomaly } from './dayProgress'
+import type { DayProgress } from './dayProgress'
 import { alignEnd } from '../../i18n/physical'
+import { t as translate } from '../../i18n/t'
 import { useLanguage } from '../../i18n/useLanguage'
 
 /** The four values ATTENDANCE_RECORD.status can hold. A correction may only move a day between these. */
@@ -839,10 +844,13 @@ function DayDetailPopup({
   const { isRtl } = useLanguage()
   const edge = isRtl ? 'left' : 'right'
 
+  const { t } = useTranslation()
   const [detail, setDetail] = useState<AttendanceDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [action, setAction] = useState<ActionKind | null>(null)
+  /** Today's open day is a shift in progress, not a fault (dayProgress.ts). */
+  const progress = detail ? dayProgress(detail, companyToday()) : null
 
   const loadDetail = useCallback(async () => {
     try {
@@ -957,7 +965,35 @@ function DayDetailPopup({
                 these days block payroll, so the way out has to be obvious.
                 Shown for ANY anomalous day, including one that still has a timeline (a sensor
                 double-tap leaves a valid interval AND an unmatched punch). */}
-            {detail.hasAnomaly && (
+            {detail.hasAnomaly && progress && (
+              /* TODAY's open day: the person is at work. Said as that, with the correction still
+                 one click away for the case it is really for - somebody who left without punching out. */
+              <div className="card" style={{ marginBottom: 14 }}>
+                <div className="tab-toolbar">
+                  <div>
+                    <div className="empty-hint-main">
+                      <IconClock size={16} className="day-progress-icon" aria-hidden="true" />{' '}
+                      {progressText(progress)}
+                    </div>
+                    <p className="hint" style={{ marginTop: 4 }}>
+                      {t('attendance.daily.inProgressCardText')}
+                    </p>
+                  </div>
+                  {canCorrect && (
+                    <div className="page-head-actions">
+                      <Button
+                        variant="default"
+                        leftSection={<IconPencil size={16} />}
+                        onClick={() => setAction('correction')}
+                      >
+                        {t('attendance.daily.inProgressFix')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {detail.hasAnomaly && !progress && (
               <div className="card" style={{ marginBottom: 14 }}>
                 <div className="tab-toolbar">
                   <div>
@@ -1113,6 +1149,13 @@ const columnHelper = createColumnHelper<AttendanceRecord>()
 
 const PAGE_SIZES = ['15', '30', '50']
 
+/** A day still being worked, in words: "On shift since 08:04", or "Day in progress" once there are outs too. */
+function progressText(progress: DayProgress): string {
+  return progress.kind === 'onShift'
+    ? translate('attendance.daily.onShiftSince', { time: formatTime(progress.since) })
+    : translate('attendance.daily.dayInProgress')
+}
+
 /**
  * THE DAY CONTROL — one date, labelled, with the two days anybody actually wants one click away.
  *
@@ -1214,8 +1257,22 @@ export default function DailyAttendancePage() {
 
   const [rows, setRows] = useState<AttendanceRecord[]>([])
 
-  /** How many days in the current range the machine could not read confidently. These block payroll. */
-  const anomalyCount = rows.filter((row) => row.hasAnomaly).length
+  /**
+   * THE DAYS THAT HAVE NO ROW BELOW, AND WHY. Somebody punched on a day the APPROVED roster of the
+   * month does not know: no attendance day exists for it, so the day read can never return it and the
+   * grid used to show nothing at all - the punches were simply "missing". They are read alongside the
+   * days (same range, same filters, same moment) and shown above the grid, where they can be decided.
+   * A failure of this read costs the panel its content, never the grid.
+   */
+  const [unrostered, setUnrostered] = useState<UnrosteredDay[] | null>(null)
+  const [unrosteredError, setUnrosteredError] = useState<string | null>(null)
+
+  /** The company's day (Beirut): today's unpaired day is a shift in progress, not a fault. */
+  const companyDay = companyToday()
+  /** How many days in the current range the machine could not read confidently. These block payroll.
+      A day of TODAY that is still being worked is not one of them (see dayProgress.ts). */
+  const anomalyCount = rows.filter((row) => isOpenAnomaly(row, companyDay)).length
+  const inProgressCount = rows.filter((row) => dayProgress(row, companyDay) !== null).length
   const [employees, setEmployees] = useState<EmployeeListItem[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
@@ -1312,6 +1369,13 @@ export default function DailyAttendancePage() {
   const [correctionRow, setCorrectionRow] = useState<AttendanceRecord | null>(null)
 
   const load = useCallback(async () => {
+    const offRoster = attendanceService
+      .getUnrosteredDays(from, to, { branchId, employeeId })
+      .then((list) => {
+        setUnrostered(list)
+        setUnrosteredError(null)
+      })
+      .catch((err) => setUnrosteredError(getErrorMessage(err)))
     try {
       setRows(
         await attendanceService.get(
@@ -1327,11 +1391,24 @@ export default function DailyAttendancePage() {
     } finally {
       setLoading(false)
     }
+    await offRoster
   }, [from, to, employeeId, branchId])
 
   useEffect(() => {
     let cancelled = false
     async function initialLoad() {
+      // Beside the days, not inside their try: the page opens even if this read fails.
+      attendanceService
+        .getUnrosteredDays(from, to)
+        .then((list) => {
+          if (!cancelled) {
+            setUnrostered(list)
+            setUnrosteredError(null)
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) setUnrosteredError(getErrorMessage(err))
+        })
       try {
         // The employee and branch filters are part of the page, so they load with the data.
         const [records, employeeList, branchList] = await Promise.all([
@@ -1412,14 +1489,27 @@ export default function DailyAttendancePage() {
     }
   }
 
-  async function runMarkAbsentees() {
+  /**
+   * Mark absentees writes an Absent day for everybody rostered who has no day yet. On a day that is
+   * NOT OVER that includes everyone whose shift starts later, so the page asks first and offers the
+   * day that is almost always meant: yesterday. A finished day runs at once, as before.
+   */
+  const [absentAsk, setAbsentAsk] = useState(false)
+  const companyYesterday = dayBefore(companyDay)
+
+  function askMarkAbsentees() {
+    if (day >= companyDay) setAbsentAsk(true)
+    else void runMarkAbsentees(day)
+  }
+
+  async function runMarkAbsentees(target: string) {
     setRunning(true)
     try {
-      const result = await attendanceService.markAbsentees(day)
+      const result = await attendanceService.markAbsentees(target)
       notifications.show({
         message: t('attendance.daily.absenteesDone', {
           count: result.absenteesMarked,
-          date: formatDayLabel(day),
+          date: formatDayLabel(target),
         }),
         color: 'green',
         autoClose: 2500,
@@ -1478,9 +1568,26 @@ export default function DailyAttendancePage() {
       }),
       columnHelper.accessor('lastOutUtc', {
         header: 'Last out',
-        size: 90,
+        size: 110,
         enableGlobalFilter: false,
-        cell: (info) => formatTime(info.row.original.lastOutUtc),
+        // A day of today that is still being worked has no last out yet. The words go HERE, beside
+        // the first in, because this column is on screen at any width: the status column is the
+        // first one a laptop scrolls off, and "on shift" is what today's list is opened for.
+        cell: (info) => {
+          const record = info.row.original
+          const progress = dayProgress(record, companyDay)
+          if (!progress) return formatTime(record.lastOutUtc)
+          return progress.kind === 'onShift' ? (
+            <span className="day-progress" title={progressText(progress)}>
+              {t('attendance.daily.onShift')}
+            </span>
+          ) : (
+            <>
+              {formatTime(record.lastOutUtc)}
+              <div className="day-progress">{progressText(progress)}</div>
+            </>
+          )
+        },
         meta: { filterText: formatTime },
       }),
 
@@ -1600,10 +1707,9 @@ export default function DailyAttendancePage() {
 
       columnHelper.accessor('status', {
         header: 'Status',
-        size: 110,
-        cell: (info) => (
-          <StatusBadge status={info.row.original.status} />
-        ),
+        size: 130,
+        // A day in progress says so in the Last out column (always on screen); the badge stays as it is.
+        cell: (info) => <StatusBadge status={info.row.original.status} />,
         meta: { filterText: statusText, filterOptions: STATUS_OPTIONS.map(statusText) },
       }),
 
@@ -1626,14 +1732,24 @@ export default function DailyAttendancePage() {
         // The REASON, not just the flag. describeAnomaly reads firstIn/lastOut/punchPairs, all of
         // which are already on the row — so hovering says "punched in at 08:04, never punched out"
         // without the grid fetching anything per row to find out.
-        cell: (info) => (
-          <AnomalyIcon
-            has={info.row.original.hasAnomaly}
-            reason={
-              info.row.original.hasAnomaly ? describeAnomaly(info.row.original) : undefined
-            }
-          />
-        ),
+        cell: (info) =>
+          // Today's open day is a shift in progress: a clock, not a warning. From tomorrow the same
+          // record is a missing punch and gets the triangle back.
+          dayProgress(info.row.original, companyDay) ? (
+            <IconClock
+              size={16}
+              className="day-progress-icon"
+              title={t('attendance.daily.inProgressTitle')}
+              aria-label={t('attendance.daily.inProgressTitle')}
+            />
+          ) : (
+            <AnomalyIcon
+              has={info.row.original.hasAnomaly}
+              reason={
+                info.row.original.hasAnomaly ? describeAnomaly(info.row.original) : undefined
+              }
+            />
+          ),
         meta: { noFilter: true },
       }),
 
@@ -1652,6 +1768,7 @@ export default function DailyAttendancePage() {
           // approves. Anything else is HR stating what happened, which is an immediate
           // manual override. Offering the wrong one invites the wrong kind of change.
           const anomaly = row.hasAnomaly
+          const inProgress = dayProgress(row, companyDay) !== null
 
           return (
             <div className="grid-actions">
@@ -1670,12 +1787,14 @@ export default function DailyAttendancePage() {
                   variant="subtle"
                   size="compact-sm"
                   leftSection={
-                    anomaly ? <IconAlertTriangle size={14} /> : <IconPencil size={14} />
+                    anomaly && !inProgress ? <IconAlertTriangle size={14} /> : <IconPencil size={14} />
                   }
                   title={
-                    anomaly
-                      ? 'The punches on this day do not add up. Raise a correction — it is logged and takes effect once approved.'
-                      : 'Enter or override this day by hand. Takes effect immediately and stops the processor touching it.'
+                    inProgress
+                      ? t('attendance.daily.fixInProgressTitle')
+                      : anomaly
+                        ? 'The punches on this day do not add up. Raise a correction — it is logged and takes effect once approved.'
+                        : 'Enter or override this day by hand. Takes effect immediately and stops the processor touching it.'
                   }
                   onClick={() =>
                     anomaly ? setCorrectionRow(row) : setManualRow(row)
@@ -1689,7 +1808,7 @@ export default function DailyAttendancePage() {
         },
       }),
     ],
-    [canCorrect, expandedIds, pairsById, t],
+    [canCorrect, companyDay, expandedIds, pairsById, t],
   )
 
   const table = useReactTable({
@@ -1819,7 +1938,7 @@ export default function DailyAttendancePage() {
               variant="default"
               disabled={running}
               title={t('attendance.daily.absenteesTitle', { date: formatDayLabel(day) })}
-              onClick={() => void runMarkAbsentees()}
+              onClick={askMarkAbsentees}
             >
               {t('attendance.daily.absentees', { date: formatDayLabel(day) })}
             </Button>
@@ -1934,6 +2053,10 @@ export default function DailyAttendancePage() {
         </div>
       )}
 
+      {/* NOT ON ROSTER. Above the Days / Punches switch, in both views: a day that is waiting for a
+          decision must not disappear because the reader went to look at the punches. */}
+      <NotOnRosterPanel days={unrostered} error={unrosteredError} onChanged={load} />
+
       {/* DAYS vs PUNCHES — the processor's interpretation, or what the machines actually said.
           They answer different questions and the second one had no home in the app at all: a day
           that looks wrong sends you to the punches behind it, and a punch missing from there is a
@@ -1953,6 +2076,12 @@ export default function DailyAttendancePage() {
         {view === 'punches' && (
           <span className="hint">
             {t('attendance.daily.punchesHint', { date: formatDayLabel(day) })}
+          </span>
+        )}
+        {view === 'days' && inProgressCount > 0 && (
+          <span className="hint">
+            <IconClock size={14} className="day-progress-icon" aria-hidden="true" />{' '}
+            {t('attendance.daily.inProgressCount', { count: inProgressCount })}
           </span>
         )}
       </div>
@@ -1982,9 +2111,11 @@ export default function DailyAttendancePage() {
             <div className="empty-hint-main">
               No attendance days between {from} and {to}.
             </div>
-            Punches only become days once the processor has run. Widen the dates, or
-            run the processor above and then mark absentees for the days that are
-            finished.
+            {/* With days listed above as "not on roster", "run the processor" would be the wrong
+                advice: those punches WERE processed, and are waiting for a decision, not for a run. */}
+            {(unrostered ?? []).some((day) => day.state === 'Open')
+              ? t('attendance.unrostered.emptyDaysHint')
+              : 'Punches only become days once the processor has run. Widen the dates, or run the processor above and then mark absentees for the days that are finished.'}
           </div>
         </div>
       ) : (
@@ -2111,6 +2242,45 @@ export default function DailyAttendancePage() {
             </Group>
           </Group>
         </div>
+      )}
+
+      {/* MARK ABSENTEES ON A DAY THAT IS NOT OVER — asked, never silent. Yesterday is the filled
+          button because it is the day this is almost always run for. */}
+      {absentAsk && (
+        <Modal
+          opened
+          onClose={() => setAbsentAsk(false)}
+          title={t('attendance.daily.absenteesEarlyTitle', { date: formatDayLabel(day) })}
+          size={520}
+          centered
+        >
+          <p className="hint" style={{ marginTop: 0 }}>
+            {t('attendance.daily.absenteesEarlyText', { date: formatDayLabel(day) })}
+          </p>
+          <div className="form-actions">
+            <Button variant="default" onClick={() => setAbsentAsk(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                setAbsentAsk(false)
+                void runMarkAbsentees(day)
+              }}
+            >
+              {t('attendance.daily.absenteesEarlyAnyway', { date: formatDayLabel(day) })}
+            </Button>
+            <Button
+              onClick={() => {
+                setAbsentAsk(false)
+                setDay(companyYesterday)
+                void runMarkAbsentees(companyYesterday)
+              }}
+            >
+              {t('attendance.daily.absentees', { date: formatDayLabel(companyYesterday) })}
+            </Button>
+          </div>
+        </Modal>
       )}
 
       {openDayId !== null && (

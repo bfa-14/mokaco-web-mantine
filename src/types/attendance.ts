@@ -22,6 +22,13 @@ export const PERMISSIONS = {
   devices: 'DEVICE_MANAGE',
   /** Change the policy values that decide what a working day IS. */
   settings: 'SETTING_MANAGE',
+  /**
+   * Decide a day with punches that the approved roster does not know - a day of TODAY / a PAST day.
+   * The server is the authority (it reads the roles live and checks the branch): the pages show the
+   * decision buttons from each row's `canDecide`, never from these two alone.
+   */
+  offRosterToday: 'OFFROSTER_TODAY',
+  offRosterPast: 'OFFROSTER_PAST',
 } as const
 
 /* ── Settings ── */
@@ -652,6 +659,70 @@ export interface WorkedWithoutRoster {
   workedMinutes: number
 }
 
+/**
+ * GET /api/attendance/unrostered-days — the same days, as the pages show them: with their state and what
+ * the signed-in person may do about each. There is NO attendance record for such a day: nothing is paid
+ * and nothing is deducted until somebody decides what it was.
+ */
+export interface UnrosteredDay {
+  employeeId: number
+  employeeName: string
+  /** The branch the employee belonged to ON that day (D7), not necessarily today's. */
+  branchId: number
+  branchName: string
+  workDate: string
+  /** The terminal's wall clock, like every punch: every raw punch of the day, either direction. */
+  firstPunch: string
+  lastPunch: string
+  punchCount: number
+  /** First punch to last punch. A rough figure, NOT measured work: never print it under "Worked". */
+  workedMinutes: number
+  /** The company's today (Beirut): the permission for today decides it, not the one for past days. */
+  isToday: boolean
+  /** The period is paid for this employee: read-only, a payroll adjustment is the only way. */
+  isPaid: boolean
+  /** Before the hire date or after the termination date: it can be dismissed, not added. */
+  outsideEmployment: boolean
+  holidayName: string | null
+  holidayNameAr: string | null
+  /** The roster of the branch-month is waiting for approval: adding waits for that, dismissing does not. */
+  openRosterRequestId: number | null
+  /** Overtime already approved for the day. A rest day worked is paid only up to it. */
+  approvedOvertimeMinutes: number
+  /** A dismissal stands only while the day's punches are the ones it answered. */
+  state: 'Open' | 'Dismissed'
+  dismissNote: string | null
+  dismissedBy: string | null
+  dismissedAtUtc: string | null
+  /** It was dismissed, and punches have arrived or changed since: open again. */
+  punchesChanged: boolean
+  /** May the signed-in person decide THIS day (permission of its date, their branches, not paid)? */
+  canDecide: boolean
+}
+
+/** What the day was: a shift, a rest day that was worked, or not work at all. */
+export type UnrosteredDecision = 'Shift' | 'RestDay' | 'Dismiss'
+
+/** POST /api/attendance/unrostered-days/decide. */
+export interface UnrosteredDayDecisionRequest {
+  employeeId: number
+  workDate: string
+  decision: UnrosteredDecision
+  /** 'Shift' only. */
+  shiftId: number | null
+  /** Required for 'Dismiss'; kept with the decision otherwise. */
+  note: string | null
+}
+
+/** What the decision left behind: the roster row and the attendance day derived from the punches. */
+export interface UnrosteredDayDecisionResult {
+  employeeId: number
+  workDate: string
+  decision: 'Shift' | 'RestDay' | 'Dismissed'
+  shiftAssignmentId: number | null
+  attendanceId: number | null
+}
+
 /** GET /api/attendance/device-quarantine — one unknown device user: a (device, PIN) enrolled to nobody, with punches waiting. */
 export interface QuarantinedDeviceUser {
   deviceId: number
@@ -935,7 +1006,16 @@ export interface PayrollReadiness {
    * Until each is decided, payroll does not know what the day is worth.
    */
   undecidedAnomalies: number
-  /** True only when every counter is zero. */
+  /**
+   * Completed days with punches that the approved roster does not know and nobody has decided.
+   * Optional: an API on a database without script 108 does not send it.
+   */
+  undecidedUnrosteredDays?: number
+  /** Whether those days block THIS period. False = counted and shown, the month can still be paid. */
+  unrosteredDaysBlock?: boolean
+  /** The month (yyyy-MM) from which an undecided day blocks payroll; null = never. */
+  unrosteredBlocksFrom?: string | null
+  /** True only when every BLOCKING counter is zero. */
   isReady: boolean
 }
 

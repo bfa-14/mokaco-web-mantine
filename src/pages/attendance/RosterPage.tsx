@@ -63,6 +63,7 @@ import {
 } from './attendanceFormat'
 import { useApprovedLeaveDays } from './useApprovedLeaveDays'
 import { gapsOfBranch, oneBranchOf, rederiveBlocked } from './rosterBranch'
+import { rosterFocusOf } from './rosterLink'
 import { RosterApprovalBanner } from './RosterApprovalBanner'
 import type { RosterEditState } from './RosterApprovalBanner'
 import { chevronBack, chevronForward } from '../../i18n/physical'
@@ -359,23 +360,41 @@ function OverwriteField({
   )
 }
 
+/** Scroll one cell of the grid into the middle of the view and flash it. */
+function flashCell(target: HTMLElement) {
+  target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+  // Straight on the element: React leaves a class it did not set alone, and nothing re-renders for it.
+  target.classList.add('roster-flash')
+  window.setTimeout(() => target.classList.remove('roster-flash'), 1800)
+}
+
 export default function RosterPage() {
   const { hasPermission, user } = useAuth()
   // Rostering is an ATTENDANCE_MANAGE job. A viewer sees the month but no way to change it.
   const canManage = hasPermission(PERMISSIONS.manage)
 
-  /* ?period=yyyy-MM opens the page ON that month — the "Worked without roster" list links here for the month the
-     unrostered day is in. Read once: after that the picker owns the month. */
+  /* ?period=yyyy-MM opens the page ON that month — the "Not on roster" list links here for the month the
+     unrostered day is in. Read once: after that the picker owns the month.
+     ?employeeId=&date= (and &branchId=, the branch of that day) also name ONE DAY OF ONE PERSON: the page opens
+     on that branch and month, scrolls the cell into view and flashes it (rosterLink.ts), so nobody hunts for
+     one small cell in a month-wide grid. */
   const [searchParams] = useSearchParams()
+  const pendingFocus = useRef(rosterFocusOf(searchParams))
+  const focusSince = useRef<number | null>(null)
   const [period, setPeriod] = useState(() => {
     const asked = searchParams.get('period')
-    return asked && /^\d{4}-(0[1-9]|1[0-2])$/.test(asked) ? asked : currentPeriod()
+    if (asked && /^\d{4}-(0[1-9]|1[0-2])$/.test(asked)) return asked
+    return rosterFocusOf(searchParams)?.date.slice(0, 7) ?? currentPeriod()
   })
   /* THE BRANCH FILTER. "All branches" by default. One branch = the roster rows of the people who belonged to it ON
      each work date (the API decides that, from the branch history), so a transferred employee's earlier days stay with
      the branch they were in. Remembered per user, in this browser: a branch manager opens the page on their branch. */
   const branchKey = `mokaco.roster.branch.${user?.username ?? ''}`
   const [branchFilter, setBranchFilter] = useState<number | null>(() => {
+    // A link to one person's day carries the branch of that day: it wins over the remembered branch for this
+    // visit (and is not written over it), or the person could be filtered off the grid the link points into.
+    const asked = rosterFocusOf(searchParams)?.branchId
+    if (asked != null) return asked
     try {
       return Number(localStorage.getItem(branchKey)) || null
     } catch {
@@ -1207,11 +1226,29 @@ export default function RosterPage() {
         : null
     const target = shiftCell ?? (selector ? document.querySelector<HTMLElement>(selector) : null)
     if (!target) return
-    target.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
-    // Straight on the element: React leaves a class it did not set alone, and nothing re-renders for it.
-    target.classList.add('roster-flash')
-    window.setTimeout(() => target.classList.remove('roster-flash'), 1800)
+    flashCell(target)
   }
+
+  /* THE DAY A LINK ASKED FOR (pendingFocus, a ref: nothing is drawn from it). Tried each time the people on the
+     grid change until the cell is there - the people of a branch appear only once the branch list has arrived -
+     then never again: the live re-reads of the month must not flash it a second time. Given up ten seconds
+     after the first try, or when the reader has moved to another month: the person is then simply not on this
+     grid, which is not an error. */
+  useEffect(() => {
+    const focus = pendingFocus.current
+    if (!focus || loading) return
+    focusSince.current ??= Date.now()
+    if (focus.date.slice(0, 7) !== period || Date.now() - focusSince.current > 10000) {
+      pendingFocus.current = null
+      return
+    }
+    const target =
+      document.querySelector<HTMLElement>(`[data-cell="${cellKey(focus.employeeId, focus.date)}"]`) ??
+      document.querySelector<HTMLElement>(`[data-emp="${focus.employeeId}"]`)
+    if (!target) return
+    flashCell(target)
+    pendingFocus.current = null
+  }, [loading, period, employees])
 
   /* DAYS THE SAVED ROSTER MOVED UNDER THE DRAFT — counted from the rows, not from the number of
      re-reads. Every 'attendance' signal re-reads the month, the page's own staffing save included,

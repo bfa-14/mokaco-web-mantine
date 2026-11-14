@@ -219,6 +219,15 @@ export interface AttendanceReadiness {
   undecidedExitVariances: number
   /** Late / early / missing-punch anomalies HR has not excused, deducted or corrected. */
   undecidedAnomalies: number
+  /**
+   * Completed days with punches that the approved roster does not know and nobody has decided
+   * (script 108). Optional: an API on a database without that script does not send it.
+   */
+  undecidedUnrosteredDays?: number
+  /** Whether those days block THIS period; false = counted, the run can still be created. */
+  unrosteredDaysBlock?: boolean
+  /** The month (yyyy-MM) from which an undecided day blocks payroll; null = never. */
+  unrosteredBlocksFrom?: string | null
   isReady: boolean
 }
 

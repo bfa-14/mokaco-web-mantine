@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Button, Group, Loader, Select, Table, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
@@ -10,110 +9,11 @@ import { attendanceService } from '../../services/attendanceService'
 import { employeesService } from '../../services/hrService'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSIONS } from '../../types/attendance'
-import type { QuarantinedDeviceUser, QuarantineMapResult, WorkedWithoutRoster } from '../../types/attendance'
+import type { QuarantinedDeviceUser, QuarantineMapResult } from '../../types/attendance'
 import { employeeLabel } from '../../types/hr'
 import type { EmployeeListItem } from '../../types/hr'
-import { formatDate, formatMinutes, formatTime, periodLabel } from './attendanceFormat'
+import { formatDate, formatTime } from './attendanceFormat'
 import { DISMISS_NOTE_MAX, dismissRequestFor } from './quarantineDismiss'
-
-/**
- * WORKED WITHOUT A ROSTER (rule 12). The month's roster is APPROVED and gives this employee no row for the day, yet
- * they punched. Nothing is paid or deducted for such a day — it is not an anomaly to rule on, it is a day the roster
- * does not know about. The list is the prompt to add it to the roster (the next reprocess derives it) or to leave it.
- */
-export function WorkedWithoutRosterList({
-  from,
-  to,
-  branchId,
-  reloadKey,
-}: {
-  from: string
-  to: string
-  branchId: number | null
-  reloadKey: number
-}) {
-  const { t } = useTranslation()
-  const [rows, setRows] = useState<WorkedWithoutRoster[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    attendanceService
-      .getWorkedWithoutRoster(from, to, branchId)
-      .then((data) => {
-        if (cancelled) return
-        setRows(data)
-        setError(null)
-      })
-      .catch((err) => {
-        if (!cancelled) setError(getErrorMessage(err))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [from, to, branchId, reloadKey])
-
-  if (error)
-    return (
-      <div className="alert alert--error" role="alert">
-        {error}
-      </div>
-    )
-  if (rows == null)
-    return (
-      <div className="page-loading">
-        <Loader size={40} />
-      </div>
-    )
-  if (rows.length === 0)
-    return (
-      <div className="card">
-        <div className="empty-hint">
-          <div className="empty-hint-main">{t('attendance.unrostered.emptyTitle', { month: periodLabel(from.slice(0, 7)) })}</div>
-          {t('attendance.unrostered.emptyText')}
-        </div>
-      </div>
-    )
-
-  return (
-    <div className="card">
-      <Table.ScrollContainer minWidth={760}>
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>{t('attendance.unrostered.date')}</Table.Th>
-              <Table.Th>{t('attendance.unrostered.employee')}</Table.Th>
-              <Table.Th>{t('attendance.unrostered.branch')}</Table.Th>
-              <Table.Th>{t('attendance.unrostered.firstPunch')}</Table.Th>
-              <Table.Th>{t('attendance.unrostered.lastPunch')}</Table.Th>
-              <Table.Th style={{ textAlign: 'end' }}>{t('attendance.unrostered.punches')}</Table.Th>
-              <Table.Th style={{ textAlign: 'end' }}>{t('attendance.unrostered.worked')}</Table.Th>
-              <Table.Th />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {rows.map((r) => (
-              <Table.Tr key={`${r.employeeId}:${r.workDate}`}>
-                <Table.Td>{formatDate(r.workDate)}</Table.Td>
-                <Table.Td>{r.employeeName}</Table.Td>
-                <Table.Td>{r.branchName}</Table.Td>
-                <Table.Td>{formatTime(r.firstPunch)}</Table.Td>
-                <Table.Td>{r.punchCount > 1 ? formatTime(r.lastPunch) : '—'}</Table.Td>
-                <Table.Td style={{ textAlign: 'end' }}>{r.punchCount}</Table.Td>
-                <Table.Td style={{ textAlign: 'end' }}>{formatMinutes(r.workedMinutes)}</Table.Td>
-                <Table.Td style={{ textAlign: 'end' }}>
-                  <Link to={`/attendance/roster?period=${r.workDate.slice(0, 7)}`}>
-                    {t('attendance.unrostered.openRoster')}
-                  </Link>
-                </Table.Td>
-              </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-    </div>
-  )
-}
 
 /**
  * UNKNOWN DEVICE USERS (D9). Punches that arrived under a PIN enrolled to nobody are kept, not dropped: one line per

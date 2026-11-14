@@ -474,6 +474,36 @@ export default function PayrollRunsPage() {
                   </span>
                 )
               })}
+              {/* Days with punches that the approved roster does not know (script 108). They block
+                  from the month the setting names; before it they are shown in amber and the run
+                  can still be created. No tile at all from an API without the script. */}
+              {ready.undecidedUnrosteredDays != null && (
+                <span
+                  className={
+                    ready.undecidedUnrosteredDays === 0
+                      ? 'pr-ready-item'
+                      : ready.unrosteredDaysBlock
+                        ? 'pr-ready-item pr-ready-item-bad'
+                        : 'pr-ready-item pr-ready-item-warn'
+                  }
+                  title={
+                    ready.unrosteredDaysBlock
+                      ? 'Each must be decided (added to the roster or dismissed) before the run.'
+                      : ready.unrosteredBlocksFrom
+                        ? `Counted, not blocking this month. They block payroll from ${ready.unrosteredBlocksFrom}.`
+                        : 'Counted, never blocking (setting OffRosterBlocksPayrollFrom is empty).'
+                  }
+                >
+                  {ready.undecidedUnrosteredDays > 0 ? (
+                    <Link to={`/attendance/daily${periodQuery(ready)}`}>
+                      Days not on the roster{ready.unrosteredDaysBlock ? '' : ' (not blocking)'}:{' '}
+                      {ready.undecidedUnrosteredDays}
+                    </Link>
+                  ) : (
+                    <>Days not on the roster: 0</>
+                  )}
+                </span>
+              )}
               <div className="pr-ready-verdict">
                 {ready.isReady
                   ? 'Attendance is ready — the run can be created.'

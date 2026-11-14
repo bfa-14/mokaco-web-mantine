@@ -12,6 +12,7 @@
 .pr-ready-bad { background:#fdf3f0; border:1px solid #f0d5cc; }
 .pr-ready-item { margin-inline-end:14px; }
 .pr-ready-item-bad a { color:#a33; font-weight:600; }
+.pr-ready-item-warn a { color:#a36a12; font-weight:600; }
 .pr-ready-verdict { margin-top:6px; font-weight:600; }
 
 .pr-card { background:#fff; border:1px solid #E3E2DC; border-radius:10px;

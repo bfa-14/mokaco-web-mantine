@@ -28,7 +28,10 @@ import {
 } from '../../types/attendance'
 import type { Branch } from '../../types/hr'
 import { DateRangeField } from '../../components/DateRangeField'
-import { DeviceQuarantineList, WorkedWithoutRosterList } from './AnomalyExtraLists'
+import { bulkTargets, coversWholeMonth, sameRows } from './anomalyBulk'
+import { companyToday, dayProgress } from './dayProgress'
+import { DeviceQuarantineList } from './AnomalyExtraLists'
+import { NotOnRosterSection } from './NotOnRosterPanel'
 import { currentPeriod, formatDate, formatMinutes, formatTime, periodLabel, periodRange } from './attendanceFormat'
 
 /* ── words ── */
@@ -138,15 +141,21 @@ function AnomaliesGrid({
   rows,
   canCorrect,
   onDecide,
+  onVisibleChange,
 }: {
   rows: AttendanceAnomaly[]
   canCorrect: boolean
   onDecide: (target: DecideTarget) => void
+  /** The ids left by THIS list's own search and column filters (every page of them), and whether
+      either is on. The page's bulk buttons act on exactly these rows - see anomalyBulk.ts. */
+  onVisibleChange: (visibleIds: Set<number>, narrowed: boolean) => void
 }) {
   const { t } = useTranslation()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  /** The company's day (Beirut): today's open day is a shift in progress (dayProgress.ts). */
+  const companyDay = companyToday()
 
   const columns = useMemo(
     () => [
@@ -160,7 +169,20 @@ function AnomaliesGrid({
       }),
       columnHelper.accessor('type', {
         header: t('attendance.anomalies.columns.type'),
-        cell: (info) => <TypeBadge type={info.getValue()} />,
+        // A missing punch on TODAY's open day is somebody still at work: said under the badge, so the
+        // row is not corrected in a hurry. From tomorrow it is a missing punch like any other.
+        cell: (info) => (
+          <>
+            <TypeBadge type={info.getValue()} />
+            {info.getValue() === 'MissingPunch' &&
+              info.row.original.decision == null &&
+              dayProgress(info.row.original, companyDay) && (
+                <div className="day-progress" title={t('attendance.daily.inProgressTitle')}>
+                  {t('attendance.daily.dayInProgress')}
+                </div>
+              )}
+          </>
+        ),
         meta: { filterText: typeText, filterOptions: TYPES.map(typeText) },
       }),
       /* Zero for a missing punch is not "zero minutes late" — there is nothing to measure — so it
@@ -265,7 +287,7 @@ function AnomaliesGrid({
         },
       }),
     ],
-    [canCorrect, onDecide, t],
+    [canCorrect, companyDay, onDecide, t],
   )
 
   const table = useReactTable({
@@ -286,6 +308,15 @@ function AnomaliesGrid({
     // attendanceId, so the key has to be the anomaly's own id.
     getRowId: (r) => String(r.anomalyId),
   })
+
+  // Tell the page what is left after the search box and the column filters. The filtered row model
+  // keeps its identity until the rows or a filter change, so this runs on those changes only.
+  const filteredRows = table.getFilteredRowModel().rows
+  // Judged by the result, not by the look of the filter text: a search of spaces still filters.
+  const narrowed = filteredRows.length !== rows.length
+  useEffect(() => {
+    onVisibleChange(new Set(filteredRows.map((row) => row.original.anomalyId)), narrowed)
+  }, [filteredRows, narrowed, onVisibleChange])
 
   const pageCount = table.getPageCount()
   const pageIndex = table.getState().pagination.pageIndex
@@ -506,15 +537,18 @@ export default function AnomaliesPage() {
     [rows, typeFilter, decisionFilter],
   )
 
-  /* The bulk buttons act on the UNDECIDED rows on screen. A missing punch has no minutes to excuse
-     or deduct and is skipped — counted and said, never silently. */
-  const bulkRows = useMemo(
-    () => shown.filter((row) => row.decision == null && row.type !== 'MissingPunch'),
-    [shown],
+  /* The bulk buttons act on the UNDECIDED rows on screen: what the filters above leave AND what the
+     list's own search and column filters leave (anomalyBulk.ts). A missing punch has no minutes to
+     excuse or deduct and is skipped — counted and said, never silently. */
+  const [listVisible, setListVisible] = useState<{ ids: Set<number>; narrowed: boolean } | null>(null)
+  const onListVisible = useCallback(
+    (ids: Set<number>, narrowed: boolean) => setListVisible({ ids, narrowed }),
+    [],
   )
-  const bulkSkipped = useMemo(
-    () => shown.filter((row) => row.decision == null && row.type === 'MissingPunch').length,
-    [shown],
+  const listNarrowed = listVisible?.narrowed ?? false
+  const { rows: bulkRows, skipped: bulkSkipped } = useMemo(
+    () => bulkTargets(shown, listVisible?.ids ?? null),
+    [shown, listVisible],
   )
 
   /* ── one row ── */
@@ -608,7 +642,14 @@ export default function AnomaliesPage() {
    * endpoint's, so each row is decided on its own; the words on the button promised the rows shown.
    */
   const monthRange = periodRange(month)
-  const bulkViaMonthEndpoint = !typeFilter && from === monthRange.from && to === monthRange.to
+  const bulkViaMonthEndpoint = coversWholeMonth({
+    typeFilter,
+    listNarrowed,
+    from,
+    to,
+    monthFrom: monthRange.from,
+    monthTo: monthRange.to,
+  })
 
   async function submitBulk() {
     if (!bulkMode) return
@@ -619,6 +660,23 @@ export default function AnomaliesPage() {
       let decided = 0
       let skipped = bulkSkipped
       if (bulkViaMonthEndpoint) {
+        // The month's one call decides whatever is undecided in the database AT THAT MOMENT. This page
+        // does not refresh by itself, so the list is read again first: when it no longer holds exactly
+        // the rows on screen, nothing is decided and the reader is shown the list as it is now.
+        const fresh = await attendanceService.getAnomalies(from, to, onlyUndecided, branchId)
+        const now = bulkTargets(
+          fresh.filter(
+            (row) =>
+              (!typeFilter || row.type === typeFilter) &&
+              (decisionFilter === 'undecided' ? row.decision == null : decisionFilter === 'all' || row.decision === decisionFilter),
+          ),
+          null,
+        )
+        if (!sameRows(now.rows, bulkRows)) {
+          setRows(fresh)
+          setBulkError(t('attendance.anomalies.bulk.changed'))
+          return
+        }
         const result = await attendanceService.decideAllAnomalies({
           month,
           branchId,
@@ -807,7 +865,7 @@ export default function AnomaliesPage() {
       )}
 
       {view === 'unrostered' ? (
-        <WorkedWithoutRosterList from={from} to={to} branchId={branchId} reloadKey={extraReload} />
+        <NotOnRosterSection from={from} to={to} branchId={branchId} reloadKey={extraReload} />
       ) : view === 'devices' ? (
         /* A mapped PIN replays its punches, which can raise or clear anomalies — the first view is re-read too. */
         <DeviceQuarantineList branchId={branchId} reloadKey={extraReload} onMapped={() => void load()} />
@@ -838,7 +896,12 @@ export default function AnomaliesPage() {
           </div>
         </div>
       ) : (
-        <AnomaliesGrid rows={shown} canCorrect={canCorrect} onDecide={openDecide} />
+        <AnomaliesGrid
+          rows={shown}
+          canCorrect={canCorrect}
+          onDecide={openDecide}
+          onVisibleChange={onListVisible}
+        />
       )}
 
       {/* ONE ROW. Mounted only once `target` exists, so the title needs no fallback. The same
@@ -983,6 +1046,12 @@ export default function AnomaliesPage() {
                 {t(bulkMode === 'Excuse' ? 'attendance.anomalies.bulk.excuseEffect' : 'attendance.anomalies.bulk.deductEffect')}
                 {bulkSkipped > 0 && <> {t('attendance.anomalies.bulk.skipped', { count: bulkSkipped })}</>}
               </p>
+              {/* Said in the dialog, because the search box is out of sight behind it. */}
+              {listNarrowed && (
+                <p className="hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                  {t('attendance.anomalies.bulk.narrowed')}
+                </p>
+              )}
             </div>
 
             <div className="form-field">

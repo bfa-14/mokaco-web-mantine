@@ -62,6 +62,9 @@ import type {
   QuarantineDismissResult,
   QuarantineMapRequest,
   QuarantineMapResult,
+  UnrosteredDay,
+  UnrosteredDayDecisionRequest,
+  UnrosteredDayDecisionResult,
   WorkedWithoutRoster,
 } from '../types/attendance'
 
@@ -315,6 +318,31 @@ export const attendanceService = {
       `/api/attendance/worked-without-roster?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
         (branchId ? `&branchId=${branchId}` : ''),
     ),
+  /**
+   * The same days as the pages show them: state (open / dismissed), what stands in the way of adding
+   * each, and whether the signed-in person may decide it. ATTENDANCE_VIEW, branch-scoped.
+   */
+  getUnrosteredDays: (from: string, to: string, filter?: { branchId?: number | null; employeeId?: number | null }) =>
+    apiRequest<UnrosteredDay[]>(
+      `/api/attendance/unrostered-days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+        (filter?.branchId ? `&branchId=${filter.branchId}` : '') +
+        (filter?.employeeId ? `&employeeId=${filter.employeeId}` : ''),
+    ),
+  /**
+   * What one such day was. Shift / RestDay add the roster row and derive the day at once; Dismiss
+   * needs a note and writes nothing. The server decides who may (two permissions, by the day's date).
+   */
+  decideUnrosteredDay: (request: UnrosteredDayDecisionRequest) =>
+    apiRequest<UnrosteredDayDecisionResult>('/api/attendance/unrostered-days/decide', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+  /** Takes a dismissal back: the day is open again. */
+  reopenUnrosteredDay: (employeeId: number, workDate: string) =>
+    apiRequest<void>('/api/attendance/unrostered-days/reopen', {
+      method: 'POST',
+      body: JSON.stringify({ employeeId, workDate }),
+    }),
   /** D9: unknown device users — punches under a PIN enrolled to nobody, one line per (device, PIN). */
   getDeviceQuarantine: (branchId?: number | null) =>
     apiRequest<QuarantinedDeviceUser[]>(`/api/attendance/device-quarantine${branchId ? `?branchId=${branchId}` : ''}`),

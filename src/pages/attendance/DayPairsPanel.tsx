@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Anchor, Button, Loader, Table } from '@mantine/core'
 import { describeAnomaly, formatMinutes, formatTime } from './attendanceFormat'
+import { companyToday, dayProgress } from './dayProgress'
 import type { AttendanceDetail, AttendanceRecord } from '../../types/attendance'
 
 /**
@@ -129,7 +130,8 @@ export function DayPairsPanel({
           likely to be a swallowed duplicate as a genuine orphan. */}
       {record.hasAnomaly && (
         <div className="pairs-unpaired">
-          {describeAnomaly(record)}{' '}
+          {/* Today's open day is somebody at work, not a punch that went missing (dayProgress.ts). */}
+          {dayProgress(record, companyToday()) ? t('attendance.daily.inProgressTitle') : describeAnomaly(record)}{' '}
           <Anchor component="button" type="button" onClick={onSeePunches}>
             {t('attendance.pairs.seePunches')}
           </Anchor>

@@ -1,4 +1,5 @@
 import { Button, Checkbox, NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core'
+import { MonthPickerInput } from '@mantine/dates'
 import { useTranslation } from 'react-i18next'
 import { SettingRow } from './SettingsCard'
 import { boolValue, isOn } from './settingValues'
@@ -336,6 +337,9 @@ export function SystemSettingRow({
 
   const isBool = setting.dataType === 'bool'
   const isNumber = setting.dataType === 'int' || setting.dataType === 'decimal'
+  // DataType 'month': the value is 'yyyy-MM', or empty for "no month". A picker, because a month typed
+  // free-hand as 12-2026 or 2026/12 is a rule switched off: the reader cannot parse it and says nothing.
+  const isMonth = setting.dataType === 'month'
   const isSecret = SECRET_KEYS.has(setting.settingKey)
 
   const control = isSecret ? (
@@ -373,6 +377,17 @@ export function SystemSettingRow({
       value={draft}
       onChange={(v) => onDraftChange(v ?? '')}
       allowDeselect={false}
+      w={220}
+      disabled={saving}
+    />
+  ) : isMonth ? (
+    <MonthPickerInput
+      id={inputId}
+      value={/^\d{4}-\d{2}$/.test(draft.trim()) ? `${draft.trim()}-01` : null}
+      onChange={(value) => onDraftChange(value ? value.slice(0, 7) : '')}
+      valueFormat="MM/YYYY"
+      placeholder={t('settings.rows.noMonth')}
+      clearable
       w={220}
       disabled={saving}
     />
