@@ -6,9 +6,14 @@ import {
   Checkbox,
   Loader,
   MultiSelect,
+  SegmentedControl,
   Select,
   Tooltip,
 } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
+import { RosterDayList } from './RosterDayList'
+import type { RosterDayCell } from './RosterDayList'
+import { companyToday } from './dayProgress'
 import { Modal } from '../../components/dialogs'
 import { DatePickerInput } from '@mantine/dates'
 import { DateRangeField } from '../../components/DateRangeField'
@@ -511,6 +516,16 @@ export default function RosterPage() {
 
   const days = useMemo(() => daysInPeriod(period), [period])
 
+  /* ON A PHONE the month grid shows five or six days at a time and needs pin-point taps; "By day" lists
+     the people of one day as large rows instead. The grid stays one tap away. */
+  const isCompact = useMediaQuery('(max-width: 560px)', false, { getInitialValueInEffect: false })
+  const [phoneLayout, setPhoneLayout] = useState<'day' | 'grid'>('day')
+  const companyDay = companyToday()
+  const [listDay, setListDay] = useState<string | null>(null)
+  // The day shown: the chosen one while it is in the month, else today when the month holds it, else the 1st.
+  const shownListDay =
+    listDay && days.includes(listDay) ? listDay : days.includes(companyDay) ? companyDay : (days[0] ?? companyDay)
+
   /**
    * Who is on approved leave this month: the approved leave requests, day by day, of the branch on
    * screen by the branch of the day (QA3 ROS-4 / LEV-5). The roster asks the QUESTION and lets one
@@ -674,6 +689,27 @@ export default function RosterPage() {
     cellInfoRef.current = cellInfo
     lookupRef.current = lookup
   }, [shownCell, cellInfo, lookup])
+
+  /** One person-day in words, for the phone's day list: approved leave outranks the shift, as on the grid. */
+  const dayListCell = useCallback(
+    (employeeId: number, date: string): RosterDayCell => {
+      const holiday = holidayByDate.get(date)
+      const note = holiday ? t('attendance.rosterDay.holiday', { name: holiday.name }) : null
+      if (leave.isOnLeave(employeeId, date)) {
+        const half = leave.daysOnLeave(employeeId, date) < 1
+        return { label: t(half ? 'attendance.rosterDay.halfLeave' : 'attendance.rosterDay.leave'), tone: 'leave', note }
+      }
+      const cell = shownCell(cellKey(employeeId, date))
+      if (!cell || cell.state === 'none') return { label: t('attendance.rosterDay.nothing'), tone: 'none', note }
+      if (cell.state === 'rest') return { label: t('attendance.rosterDay.rest'), tone: 'rest', note }
+      const shift = cell.shiftId != null ? shiftById.get(cell.shiftId) : undefined
+      const name = cell.saved?.shiftName ?? shift?.name ?? ''
+      const start = (cell.saved?.startTime ?? shift?.startTime ?? '').slice(0, 5)
+      const end = (cell.saved?.endTime ?? shift?.endTime ?? '').slice(0, 5)
+      return { label: `${name} ${start}–${end}`.trim(), tone: 'work', note: cell.draft ? t('attendance.rosterDay.draft') : note }
+    },
+    [holidayByDate, leave, shownCell, shiftById],
+  )
 
   /* The roster rows are read over the WINDOW — the whole Monday–Sunday weeks around the month — so
      the 6·5 strip can judge the first and last weeks; the grid still draws only the month's days. */
@@ -1768,6 +1804,33 @@ export default function RosterPage() {
         </div>
       ) : (
         <>
+          {isCompact && (
+            <SegmentedControl
+              fullWidth
+              value={phoneLayout}
+              onChange={(value) => setPhoneLayout(value as 'day' | 'grid')}
+              data={[
+                { value: 'day', label: t('attendance.rosterDay.byDay') },
+                { value: 'grid', label: t('attendance.rosterDay.monthGrid') },
+              ]}
+              style={{ marginBottom: 10 }}
+            />
+          )}
+          {isCompact && phoneLayout === 'day' ? (
+            <RosterDayList
+              employees={employees}
+              days={days}
+              date={shownListDay}
+              today={companyDay}
+              onDateChange={setListDay}
+              cellOf={dayListCell}
+              onPick={(employeeId, workDate) => {
+                applySelection(new Set([cellKey(employeeId, workDate)]))
+                openSetDayForSelection()
+              }}
+              editable={editable}
+            />
+          ) : (
           <div className="roster-scroll">
             <table className="roster-table" aria-busy={draftBusy || undefined}>
               <thead>
@@ -2061,6 +2124,7 @@ export default function RosterPage() {
               </tfoot>
             </table>
           </div>
+          )}
 
           <div className="roster-legend">
             {shifts.map((shift) => (
@@ -2150,7 +2214,15 @@ export default function RosterPage() {
           setSetDayVisible(false)
           clearSelection()
         }}
-        title={selectedCount === 1 ? 'Set 1 day' : `Set ${selectedCount} days`}
+        title={
+          selectedCount === 1
+            ? (() => {
+                // Whose day and which: after a tap on a small cell, the title confirms the right one was hit.
+                const { employeeId, workDate } = parseCellKey([...selected][0])
+                return `${employeeName(employeeId)} — ${formatDayLabel(workDate)}`
+              })()
+            : `Set ${selectedCount} days`
+        }
         size={480}
         centered
       >

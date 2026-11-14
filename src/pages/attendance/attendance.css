@@ -1591,3 +1591,302 @@ a.pipeline-stat:hover {
 .disposition-choice:disabled:hover {
   border-color: var(--border);
 }
+
+/* TODAY BOARD (Daily attendance > Today): counters, then one list per question, one card per person. */
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.today-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.today-counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.today-counter {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.today-counter-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.today-counter-label {
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.today-counter--ok .today-counter-value {
+  color: #2f7d4f;
+}
+
+.today-counter--warn .today-counter-value {
+  color: #b5651d;
+}
+
+.today-counter--muted .today-counter-value {
+  color: var(--ink-muted);
+}
+
+.today-group-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.today-group-count {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.today-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.today-person {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.today-person:first-child {
+  border-top: 0;
+}
+
+.today-person-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.today-person-name {
+  font-weight: 600;
+}
+
+.today-person-shift {
+  margin: 0;
+}
+
+.today-person-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.today-foot {
+  margin-top: 4px;
+}
+
+/* Daily attendance: the period shortcuts under the period field, and the quick filters above the grid. */
+.period-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.quick-chip:hover {
+  border-color: var(--accent);
+}
+
+.quick-chip--on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.quick-chip-count {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ROSTER BY DAY (phones): a day strip, then one large row per person. */
+.roster-day-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.roster-day-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.roster-day-date-label {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.roster-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.roster-day-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-inline-start-width: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.roster-day-row:disabled {
+  cursor: default;
+}
+
+.roster-day-row--work {
+  border-inline-start-color: #6b8a4e;
+}
+
+.roster-day-row--rest {
+  border-inline-start-color: #c9c4b8;
+}
+
+.roster-day-row--leave {
+  border-inline-start-color: #7fb8a6;
+}
+
+.roster-day-row--none {
+  border-inline-start-color: #e0a96d;
+  border-style: dashed;
+}
+
+.roster-day-name {
+  font-weight: 600;
+}
+
+.roster-day-plan {
+  font-size: 14px;
+}
+
+.roster-day-note {
+  margin: 0;
+}
+
+/* DAILY ATTENDANCE AS CARDS (phones): one card per employee-day, the reasons printed, not hovered. */
+.day-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+.day-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.day-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.day-card-name {
+  font-weight: 600;
+}
+
+.day-card-times {
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.day-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.day-card-reason {
+  margin: 6px 0 0;
+}
+
+.day-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.day-card-actions > * {
+  flex: 1 1 auto;
+}
+
+/* An icon whose meaning opens on a tap (touch screens show no hover titles). */
+.tap-hint {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.tap-hint-text {
+  font-size: 13px;
+  line-height: 1.45;
+}

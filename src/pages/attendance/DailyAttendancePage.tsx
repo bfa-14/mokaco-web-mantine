@@ -6,9 +6,10 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Loader, NumberInput, Pagination, SegmentedControl, Select, Table, Textarea, TextInput } from '@mantine/core'
 import { Drawer, Modal } from '../../components/dialogs'
 import { DatePickerInput, DateTimePicker } from '@mantine/dates'
+import { useMediaQuery } from '@mantine/hooks'
 import { DateRangeField } from '../../components/DateRangeField'
 import { notifications } from '@mantine/notifications'
-import { IconAlertTriangle, IconBriefcase, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBriefcase, IconDownload, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { dateTimeToPicker, secondsDateTimeFromPicker } from '../../components/date/pickerValue'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
@@ -23,6 +24,7 @@ import { parseBoundedDecimal } from '../../components/decimalInputs'
 import {
   attendanceService,
   correctionsService,
+  rosterService,
 } from '../../services/attendanceService'
 import { branchesService, employeesService } from '../../services/hrService'
 import { PERMISSIONS } from '../../types/attendance'
@@ -30,12 +32,18 @@ import type {
   AttendanceDetail,
   AttendanceInterval,
   AttendanceRecord,
+  ShiftAssignment,
   UnrosteredDay,
 } from '../../types/attendance'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import { AnomalyIcon, DayFractionBar, StatusBadge } from './attendanceShared'
 import { PunchesGrid } from './PunchesGrid'
 import { NotOnRosterPanel } from './NotOnRosterPanel'
+import { TodayBoard } from './TodayBoard'
+import { MissingPunchDialog } from './MissingPunchDialog'
+import { missingSide } from './missingPunch'
+import { applyQuickFilters, hhmmOf, periodShortcut, QUICK_FILTERS, quickFilterCounts, toCsv } from './dailyFilters'
+import type { QuickFilter } from './dailyFilters'
 import { DayPairsPanel } from './DayPairsPanel'
 import type { PairsState } from './DayPairsPanel'
 import {
@@ -826,6 +834,7 @@ function DayDetailPopup({
   branches,
   onHiding,
   onChanged,
+  onEnterMissing,
 }: {
   attendanceId: number
   /** Only needed by the manual-override form the drawer can open. */
@@ -833,6 +842,8 @@ function DayDetailPopup({
   branches: Branch[]
   onHiding: () => void
   onChanged: () => Promise<void>
+  /** The one-step fix of a missing In or Out (the page opens its dialog). */
+  onEnterMissing: (record: AttendanceRecord) => void
 }) {
   const { hasPermission } = useAuth()
   const canCorrect = hasPermission(PERMISSIONS.correct)
@@ -1012,7 +1023,17 @@ function DayDetailPopup({
                   </div>
                   {canCorrect && (
                     <div className="page-head-actions">
+                      {missingSide(detail) && (
+                        <Button
+                          leftSection={<IconClock size={16} />}
+                          title={t('attendance.missingPunch.enterTitle')}
+                          onClick={() => onEnterMissing(detail)}
+                        >
+                          {t(missingSide(detail) === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+                        </Button>
+                      )}
                       <Button
+                        variant={missingSide(detail) ? 'default' : 'filled'}
                         leftSection={<IconPencil size={16} />}
                         onClick={() => setAction('correction')}
                       >
@@ -1149,6 +1170,126 @@ const columnHelper = createColumnHelper<AttendanceRecord>()
 
 const PAGE_SIZES = ['15', '30', '50']
 
+type DailyView = 'today' | 'days' | 'punches'
+
+/**
+ * ONE EMPLOYEE-DAY AS A CARD (phones): name, date and status first, then the times, small chips only when
+ * there is something to say, and the reason in words (a phone shows no hover titles).
+ */
+function DayCard({
+  record,
+  shiftLabel,
+  today,
+  canCorrect,
+  onView,
+  onMissing,
+  onFix,
+  onEdit,
+}: {
+  record: AttendanceRecord
+  shiftLabel: string | null
+  today: string
+  canCorrect: boolean
+  onView: () => void
+  onMissing: () => void
+  onFix: () => void
+  onEdit: () => void
+}) {
+  const progress = dayProgress(record, today)
+  const missing = progress ? null : missingSide(record)
+  return (
+    <div className="day-card">
+      <div className="day-card-head">
+        <div>
+          <div className="day-card-name">{record.fullName}</div>
+          <div className="hint" style={{ margin: 0 }}>
+            {formatDayLabel(record.workDate)}
+            {shiftLabel ? ` · ${shiftLabel}` : ''}
+            {record.branchName ? ` · ${record.branchName}` : ''}
+          </div>
+        </div>
+        <StatusBadge status={record.status} />
+      </div>
+      {(record.firstInUtc || record.lastOutUtc) && (
+        <div className="day-card-times">
+          {translate('attendance.daily.card.times', {
+            in: formatTime(record.firstInUtc),
+            out: progress?.kind === 'onShift' ? translate('attendance.daily.onShift') : formatTime(record.lastOutUtc),
+            worked: formatMinutes(record.workedMinutes),
+          })}
+        </div>
+      )}
+      <div className="day-card-chips">
+        {record.lateMinutes > 0 && (
+          <span className="badge badge--late">{translate('attendance.daily.card.late', { minutes: formatMinutes(record.lateMinutes) })}</span>
+        )}
+        {!progress && record.status === 'Present' && !record.isFullDay && record.shortfallMinutes > 0 && (
+          <span className="badge badge--late">{translate('attendance.daily.card.short', { minutes: formatMinutes(record.shortfallMinutes) })}</span>
+        )}
+        {record.overtimeMinutes > 0 && (
+          <span className="badge badge--muted">{translate('attendance.daily.card.overtime', { minutes: formatMinutes(record.overtimeMinutes) })}</span>
+        )}
+        {record.exitActualMinutes > 0 && (
+          <span className="badge badge--muted">
+            {translate('attendance.daily.card.exit', {
+              actual: formatMinutes(record.exitActualMinutes),
+              approved: formatMinutes(record.exitApprovedMinutes),
+            })}
+          </span>
+        )}
+        {record.isManual && <span className="badge badge--muted">{translate('attendance.daily.quick.manual')}</span>}
+      </div>
+      {progress ? (
+        <p className="hint day-card-reason">
+          <IconClock size={14} className="day-progress-icon" aria-hidden="true" /> {progressText(progress)}
+        </p>
+      ) : record.hasAnomaly ? (
+        <p className="hint day-card-reason">
+          <IconAlertTriangle size={14} className="anomaly-icon" aria-hidden="true" /> {describeAnomaly(record)}
+        </p>
+      ) : null}
+      {record.hrNote && <p className="hint day-card-reason">{record.hrNote}</p>}
+      <div className="day-card-actions">
+        <Button variant="default" leftSection={<IconSearch size={14} />} onClick={onView}>
+          View
+        </Button>
+        {canCorrect && missing && (
+          <Button leftSection={<IconClock size={14} />} onClick={onMissing}>
+            {translate(missing === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+          </Button>
+        )}
+        {canCorrect && !missing && (
+          <Button variant="default" leftSection={<IconPencil size={14} />} onClick={record.hasAnomaly ? onFix : onEdit}>
+            {record.hasAnomaly ? 'Fix' : 'Edit'}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** The key of one employee-day, for the roster's shift of that day. */
+const dayKey = (employeeId: number, workDate: string) => `${employeeId}|${workDate.slice(0, 10)}`
+
+/** "Morning 08:00–16:00", "Rest day", or null when the roster has no row for the day. */
+function shiftLabelOf(row: ShiftAssignment | undefined): string | null {
+  if (!row) return null
+  if (row.isRestDay || !row.shiftId) return translate('attendance.daily.shiftRest')
+  return `${row.shiftName ?? ''} ${(row.startTime ?? '').slice(0, 5)}–${(row.endTime ?? '').slice(0, 5)}`.trim()
+}
+
+/** Saves a text as a file the browser downloads. */
+function downloadText(fileName: string, text: string, type: string) {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 /** A day still being worked, in words: "On shift since 08:04", or "Day in progress" once there are outs too. */
 function progressText(progress: DayProgress): string {
   return progress.kind === 'onShift'
@@ -1252,10 +1393,24 @@ export default function DailyAttendancePage() {
   const navigate = useNavigate()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
   const [branchId, setBranchId] = useState<number | null>(null)
-  /* Which question the page is answering: the processor's days, or the machines' raw punches. */
-  const [view, setView] = useState<'days' | 'punches'>('days')
+  /* Which question the page is answering: who is here today, the processor's days, or the machines'
+     raw punches. A phone opens on Today (the question a manager on the floor has); a link can ask for a
+     view with ?view=. */
+  const [view, setView] = useState<DailyView>(() => {
+    const asked = searchParams.get('view')
+    if (asked === 'today' || asked === 'days' || asked === 'punches') return asked
+    return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 560px)').matches ? 'today' : 'days'
+  })
+  /** Phones get the days as cards (the 15-column grid is four screen-widths wide there). */
+  const isCompact = useMediaQuery('(max-width: 560px)', false, { getInitialValueInEffect: false })
+  /** Bumped after every reload of the page, so the Today board reads again with it. */
+  const [reloadKey, setReloadKey] = useState(0)
 
   const [rows, setRows] = useState<AttendanceRecord[]>([])
+  /** The roster's shift of each listed day (Shift column, export). A failed read leaves the column empty. */
+  const [shiftByDay, setShiftByDay] = useState<Map<string, ShiftAssignment>>(() => new Map())
+  /** The quick filters above the grid: days answering ANY of them. */
+  const [quick, setQuick] = useState<QuickFilter[]>([])
 
   /**
    * THE DAYS THAT HAVE NO ROW BELOW, AND WHY. Somebody punched on a day the APPROVED roster of the
@@ -1367,8 +1522,18 @@ export default function DailyAttendancePage() {
   const [manualRow, setManualRow] = useState<AttendanceRecord | null>(null)
   const [manualNewVisible, setManualNewVisible] = useState(false)
   const [correctionRow, setCorrectionRow] = useState<AttendanceRecord | null>(null)
+  /** The one-step "enter the missing time" of a day with a plain missing In or Out. */
+  const [missingRow, setMissingRow] = useState<AttendanceRecord | null>(null)
+
+  const loadShifts = useCallback((f: string, t2: string, emp: number | null, branch: number | null) => {
+    rosterService
+      .get(f, t2, emp ?? undefined, branch ?? undefined)
+      .then((list) => setShiftByDay(new Map(list.map((r) => [dayKey(r.employeeId, r.workDate), r]))))
+      .catch(() => setShiftByDay(new Map()))
+  }, [])
 
   const load = useCallback(async () => {
+    loadShifts(from, to, employeeId, branchId)
     const offRoster = attendanceService
       .getUnrosteredDays(from, to, { branchId, employeeId })
       .then((list) => {
@@ -1391,12 +1556,14 @@ export default function DailyAttendancePage() {
     } finally {
       setLoading(false)
     }
+    setReloadKey((key) => key + 1)
     await offRoster
-  }, [from, to, employeeId, branchId])
+  }, [from, to, employeeId, branchId, loadShifts])
 
   useEffect(() => {
     let cancelled = false
     async function initialLoad() {
+      loadShifts(from, to, null, null)
       // Beside the days, not inside their try: the page opens even if this read fails.
       attendanceService
         .getUnrosteredDays(from, to)
@@ -1554,8 +1721,16 @@ export default function DailyAttendancePage() {
         },
       }),
       columnHelper.accessor('fullName', { header: 'Employee' }),
+      // The branch of the DAY (the employee may have moved since).
+      columnHelper.accessor((row) => row.branchName ?? '', { id: 'branch', header: 'Branch', size: 120 }),
       // The API sends the day as '2026-08-14T00:00:00'; a day has no time, and the grid was printing the whole stamp.
       columnHelper.accessor((row) => formatDate(row.workDate), { id: 'workDate', header: 'Date', size: 110 }),
+      // What the roster said for the day: the shift the lateness and the short day are measured against.
+      columnHelper.accessor((row) => shiftLabelOf(shiftByDay.get(dayKey(row.employeeId, row.workDate))) ?? '—', {
+        id: 'shift',
+        header: 'Shift',
+        size: 150,
+      }),
 
       // Times and durations sort on the raw value and match on the rendered one — "08:05" is what
       // the user reads, and the timestamp behind it is not something anyone would type.
@@ -1759,7 +1934,7 @@ export default function DailyAttendancePage() {
       columnHelper.display({
         id: 'actions',
         header: 'Actions',
-        size: canCorrect ? 150 : 88,
+        size: canCorrect ? 190 : 88,
         cell: (info) => {
           const row = info.row.original
 
@@ -1769,6 +1944,8 @@ export default function DailyAttendancePage() {
           // manual override. Offering the wrong one invites the wrong kind of change.
           const anomaly = row.hasAnomaly
           const inProgress = dayProgress(row, companyDay) !== null
+          // A plain missing In or Out of a finished day: filled in one step, on the row itself.
+          const missing = !inProgress ? missingSide(row) : null
 
           return (
             <div className="grid-actions">
@@ -1782,7 +1959,18 @@ export default function DailyAttendancePage() {
               >
                 View
               </Button>
-              {canCorrect && (
+              {canCorrect && missing && (
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconClock size={14} />}
+                  title={t('attendance.missingPunch.enterTitle')}
+                  onClick={() => setMissingRow(row)}
+                >
+                  {t(missing === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+                </Button>
+              )}
+              {canCorrect && !missing && (
                 <Button
                   variant="subtle"
                   size="compact-sm"
@@ -1808,11 +1996,63 @@ export default function DailyAttendancePage() {
         },
       }),
     ],
-    [canCorrect, companyDay, expandedIds, pairsById, t],
+    [canCorrect, companyDay, expandedIds, pairsById, shiftByDay, t],
   )
 
+  const quickCounts = useMemo(() => quickFilterCounts(rows, companyDay), [rows, companyDay])
+  const shownRows = useMemo(() => applyQuickFilters(rows, quick, companyDay), [rows, quick, companyDay])
+
+  function toggleQuick(filter: QuickFilter) {
+    setQuick((current) => (current.includes(filter) ? current.filter((f) => f !== filter) : [...current, filter]))
+  }
+
+  /** Every row that passes the filters on screen (all pages, in the grid's order), as a CSV for Excel. */
+  function exportShown() {
+    const header = [
+      'Employee', 'Branch', 'Date', 'Shift', 'First in', 'Last out', 'Worked (min)', 'Worked (h:mm)', 'Day fraction',
+      'Late (min)', 'Short (min)', 'Overtime detected (min)', 'Exit actual (min)', 'Exit approved (min)', 'Status',
+      'Source', 'Manual', 'Problem', 'HR note',
+    ]
+    const data = table.getPrePaginationRowModel().rows.map(({ original: r }) => [
+      r.fullName,
+      r.branchName ?? '',
+      r.workDate.slice(0, 10),
+      shiftLabelOf(shiftByDay.get(dayKey(r.employeeId, r.workDate))) ?? '',
+      r.firstInUtc ? formatTime(r.firstInUtc) : '',
+      r.lastOutUtc ? formatTime(r.lastOutUtc) : '',
+      r.workedMinutes,
+      hhmmOf(r.workedMinutes),
+      r.dayFraction,
+      r.lateMinutes,
+      r.shortfallMinutes,
+      r.overtimeMinutes,
+      r.exitActualMinutes,
+      r.exitApprovedMinutes,
+      statusText(r.status),
+      r.source,
+      r.isManual ? 'Yes' : '',
+      dayProgress(r, companyDay) ? progressText(dayProgress(r, companyDay) as DayProgress) : r.hasAnomaly ? describeAnomaly(r) : '',
+      r.hrNote ?? '',
+    ])
+    downloadText(`attendance_${from}_${to}.csv`, toCsv(header, data), 'text/csv;charset=utf-8')
+  }
+
+  /** A period shortcut: the range changes AND the days are read at once (no Apply needed). */
+  const [pendingApply, setPendingApply] = useState(false)
+  function applyShortcut(kind: 'today' | 'yesterday' | 'week' | 'month') {
+    const range = periodShortcut(kind, companyDay)
+    setRange(range)
+    setPendingApply(true)
+  }
+  useEffect(() => {
+    if (!pendingApply) return
+    setPendingApply(false)
+    setLoading(true)
+    void load()
+  }, [pendingApply, load])
+
   const table = useReactTable({
-    data: rows,
+    data: shownRows,
     columns,
     state: { sorting, globalFilter, columnFilters },
     onSortingChange: setSorting,
@@ -1967,6 +2207,25 @@ export default function DailyAttendancePage() {
               if (nextFrom && nextTo) setRange({ from: nextFrom, to: nextTo })
             }}
           />
+          {/* The four ranges people actually want, applied at once (no Apply needed). The one that IS
+              the current range is lit, so "am I looking at today?" is answered without reading dates. */}
+          <div className="period-shortcuts">
+            {(['today', 'yesterday', 'week', 'month'] as const).map((kind) => {
+              const range = periodShortcut(kind, companyDay)
+              const on = range.from === from && range.to === to
+              return (
+                <Button
+                  key={kind}
+                  size="compact-xs"
+                  variant={on ? 'light' : 'subtle'}
+                  aria-pressed={on}
+                  onClick={() => applyShortcut(kind)}
+                >
+                  {t(`attendance.daily.shortcut.${kind}`)}
+                </Button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="filter-field">
@@ -2067,8 +2326,9 @@ export default function DailyAttendancePage() {
       <div className="tab-toolbar">
         <SegmentedControl
           value={view}
-          onChange={(value) => setView(value as 'days' | 'punches')}
+          onChange={(value) => setView(value as DailyView)}
           data={[
+            { value: 'today', label: t('attendance.daily.viewToday') },
             { value: 'days', label: 'Days' },
             { value: 'punches', label: 'Punches' },
           ]}
@@ -2095,7 +2355,9 @@ export default function DailyAttendancePage() {
         </div>
       )}
 
-      {view === 'punches' ? (
+      {view === 'today' ? (
+        <TodayBoard branchId={branchId} reloadKey={reloadKey} onOpenDay={setOpenDayId} />
+      ) : view === 'punches' ? (
         <PunchesGrid
           date={day}
           branchId={branchId}
@@ -2122,17 +2384,71 @@ export default function DailyAttendancePage() {
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           {/* PORT NOTE: the DevExtreme FilterRow + HeaderFilter are approximated by one global
               search box; only the columns the original allowed filtering on take part in it. */}
-          <Group justify="flex-end" p="xs">
-            <TextInput
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search"
-              leftSection={<IconSearch size={14} />}
-              w={240}
-              size="xs"
-            />
+          <Group justify="space-between" p="xs" gap="xs" wrap="wrap">
+            {/* QUICK FILTERS, each with its count for the loaded period. A day shows when it answers ANY
+                chosen chip; chips with nothing to show are left out unless chosen. */}
+            <div className="quick-filters" role="group" aria-label={t('attendance.daily.quick.label')}>
+              {QUICK_FILTERS.filter((f) => quickCounts[f] > 0 || quick.includes(f)).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={quick.includes(f) ? 'quick-chip quick-chip--on' : 'quick-chip'}
+                  aria-pressed={quick.includes(f)}
+                  title={t(`attendance.daily.quick.${f}Title`)}
+                  onClick={() => toggleQuick(f)}
+                >
+                  {t(`attendance.daily.quick.${f}`)} <span className="quick-chip-count">{quickCounts[f]}</span>
+                </button>
+              ))}
+              {quick.length > 0 && (
+                <Button variant="subtle" size="compact-xs" onClick={() => setQuick([])}>
+                  {t('attendance.daily.quick.clear')}
+                </Button>
+              )}
+            </div>
+            <Group gap="xs">
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<IconDownload size={14} />}
+                title={t('attendance.daily.exportTitle')}
+                disabled={total === 0}
+                onClick={exportShown}
+              >
+                {t('attendance.daily.export')}
+              </Button>
+              <TextInput
+                value={globalFilter}
+                onChange={(e) => setGlobalFilter(e.currentTarget.value)}
+                placeholder="Search"
+                leftSection={<IconSearch size={14} />}
+                w={200}
+                size="xs"
+              />
+            </Group>
           </Group>
 
+          {isCompact ? (
+            <div className="day-cards">
+              {table.getRowModel().rows.length === 0 ? (
+                <div className="empty-hint">No attendance days match these filters.</div>
+              ) : (
+                table.getRowModel().rows.map(({ original: record }) => (
+                  <DayCard
+                    key={record.attendanceId}
+                    record={record}
+                    shiftLabel={shiftLabelOf(shiftByDay.get(dayKey(record.employeeId, record.workDate)))}
+                    today={companyDay}
+                    canCorrect={canCorrect}
+                    onView={() => setOpenDayId(record.attendanceId)}
+                    onMissing={() => setMissingRow(record)}
+                    onFix={() => setCorrectionRow(record)}
+                    onEdit={() => setManualRow(record)}
+                  />
+                ))
+              )}
+            </div>
+          ) : (
           <div className="table-scroll">
             <Table striped withColumnBorders={false} verticalSpacing="xs" fz="sm">
               <Table.Thead>
@@ -2219,6 +2535,7 @@ export default function DailyAttendancePage() {
               </Table.Tbody>
             </Table>
           </div>
+          )}
 
           <Group justify="space-between" p="xs">
             <span className="hint" style={{ margin: 0 }}>
@@ -2290,6 +2607,22 @@ export default function DailyAttendancePage() {
           branches={branches}
           onHiding={() => setOpenDayId(null)}
           onChanged={load}
+          onEnterMissing={(record) => {
+            setOpenDayId(null)
+            setMissingRow(record)
+          }}
+        />
+      )}
+
+      {missingRow !== null && (
+        <MissingPunchDialog
+          record={missingRow}
+          onClose={() => setMissingRow(null)}
+          onSaved={load}
+          onUseCorrection={() => {
+            setCorrectionRow(missingRow)
+            setMissingRow(null)
+          }}
         />
       )}
 

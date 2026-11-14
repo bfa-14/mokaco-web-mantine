@@ -1012,7 +1012,44 @@
       "inProgressCount_other": "{{count}} days of today are still in progress. They are not counted as problems.",
       "inProgressCardText": "Today's day is judged once it is over, so it does not hold up payroll today. If the person has already left without punching out, raise a correction.",
       "inProgressFix": "Raise a correction",
-      "fixInProgressTitle": "This day is still in progress. Raise a correction only if the person has left and forgot to punch out. It is logged and takes effect once approved."
+      "fixInProgressTitle": "This day is still in progress. Raise a correction only if the person has left and forgot to punch out. It is logged and takes effect once approved.",
+      "viewToday": "Today",
+      "shortcut": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "week": "This week",
+        "month": "This month"
+      },
+      "shiftRest": "Rest day",
+      "export": "Export",
+      "exportTitle": "Download every day that passes the filters on screen (all pages) as a file Excel opens.",
+      "quick": {
+        "label": "Quick filters",
+        "clear": "Clear",
+        "late": "Late",
+        "lateTitle": "Arrived after the shift start plus its grace.",
+        "short": "Short day",
+        "shortTitle": "Worked less than a full day (finished days only).",
+        "absent": "Absent",
+        "absentTitle": "Rostered and never punched.",
+        "missing": "Missing punch",
+        "missingTitle": "The punches do not pair up. These block payroll until fixed.",
+        "inProgress": "In progress",
+        "inProgressTitle": "Today's days still being worked.",
+        "overtime": "Overtime detected",
+        "overtimeTitle": "Detected only: paid only up to an approved overtime request.",
+        "manual": "Manual",
+        "manualTitle": "Entered or overridden by HR.",
+        "off": "Rest / leave / holiday",
+        "offTitle": "Days with no work expected."
+      },
+      "card": {
+        "times": "In {{in}} · Out {{out}} · Worked {{worked}}",
+        "late": "Late {{minutes}}",
+        "short": "Short {{minutes}}",
+        "overtime": "Overtime detected {{minutes}}",
+        "exit": "Exit {{actual}} of {{approved}} approved"
+      }
     },
     "pairs": {
       "expand": "Show the punch pairs behind this day",
@@ -1458,6 +1495,75 @@
         "totals_one": "Totals — {{count}} employee",
         "totals_other": "Totals — {{count}} employees"
       }
+    },
+    "today": {
+      "title": "Today, {{date}}",
+      "refresh": "Refresh",
+      "loadFailed": "Today's list could not be read: {{error}}",
+      "counter": {
+        "arrived": "Arrived",
+        "notYet": "Not in yet",
+        "off": "Off or on leave",
+        "offRoster": "Not on roster"
+      },
+      "group": {
+        "notYet": "Not in yet",
+        "in": "At work",
+        "left": "Left",
+        "offRoster": "Punched, not on today's roster",
+        "leave": "On leave",
+        "rest": "Rest day"
+      },
+      "offRosterHint": "These punches count for nothing until somebody decides the day (the list above).",
+      "shift": "{{name}} {{start}}–{{end}}",
+      "state": {
+        "in": "In since {{time}}",
+        "backIn": "Back in, first in {{time}}",
+        "left": "{{from}}–{{to}}, worked {{worked}}",
+        "started": "Shift started {{minutes}} ago",
+        "startsAt": "Starts at {{time}}",
+        "shiftOver": "Shift over, no punch",
+        "leave": "Approved leave",
+        "halfLeave": "Half day of leave",
+        "rest": "Rest day",
+        "offRosterSince": "In since {{time}}",
+        "offRosterRange": "{{from}}–{{to}}"
+      },
+      "late": "Late {{minutes}}",
+      "onRestDay": "On a rest day",
+      "view": "View",
+      "emptyTitle": "Nobody is rostered today",
+      "emptyText": "Nobody has a roster row for today in this branch, and nobody has punched yet.",
+      "lastPunch": "Last punch received today at {{time}}. A person shown as not in yet may have punched on a machine that has not been read since.",
+      "noPunchYet": "No punch has been received today yet. If people are at work, the machine may not have been read."
+    },
+    "missingPunch": {
+      "titleOut": "Enter the time out — {{name}}, {{date}}",
+      "titleIn": "Enter the time in — {{name}}, {{date}}",
+      "shift": "Shift that day: {{start}}–{{end}}.",
+      "timeHint": "Opened on the shift's time. Change it to the real time. The machine's punches are kept; the day is worked out again at once.",
+      "notePlaceholder": "For example: the manager confirmed she left at 23:00.",
+      "save": "Save the time",
+      "noAnomaly": "This day has no open missing punch to fill in (it may already be corrected, or the punches are uneven in the middle of the day). Use a correction instead: it is logged and applies once approved.",
+      "useCorrection": "Raise a correction",
+      "enterOut": "Enter time out",
+      "enterIn": "Enter time in",
+      "enterTitle": "Fill in the missing punch in one step. The day is worked out again at once."
+    },
+    "rosterDay": {
+      "byDay": "By day",
+      "monthGrid": "Month grid",
+      "previous": "Previous day",
+      "next": "Next day",
+      "goToday": "Go to today",
+      "onDuty": "On duty: {{count}} of {{total}}.",
+      "tapHint": "Tap a person to set the day.",
+      "leave": "Approved leave",
+      "halfLeave": "Half day of approved leave",
+      "nothing": "Nothing assigned",
+      "rest": "Rest day",
+      "holiday": "Public holiday: {{name}}",
+      "draft": "Draft, not saved yet"
     }
   },
   "payroll": {
