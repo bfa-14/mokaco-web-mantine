@@ -31,6 +31,7 @@ import AttendanceHomePage from './pages/attendance/AttendanceHomePage'
 import DailyAttendancePage from './pages/attendance/DailyAttendancePage'
 import RosterPage from './pages/attendance/RosterPage'
 import WeeklyShiftsPage from './pages/attendance/WeeklyShiftsPage'
+import MyShiftsPage from './pages/attendance/MyShiftsPage'
 import ImportPage from './pages/attendance/ImportPage'
 import UnresolvedPinsPage from './pages/attendance/UnresolvedPinsPage'
 import AnomaliesPage from './pages/attendance/AnomaliesPage'
@@ -328,6 +329,7 @@ export default function App() {
                     <Route path="/my-payslips" element={<MyPayslipsPage />} />
                     {/* Open on purpose (OPEN_ROUTES): everybody has attendance, and the API returns only their own. */}
                     <Route path="/my-attendance" element={<MyAttendancePage />} />
+                    <Route path="/my-shifts" element={guard('/my-shifts', <MyShiftsPage />)} />
                     {/* Open on purpose (OPEN_ROUTES): the Preferences tab — the language switch —
                         must reach everybody. The page renders No access for its system tabs. */}
                     <Route path="/settings" element={<SettingsPage />} />

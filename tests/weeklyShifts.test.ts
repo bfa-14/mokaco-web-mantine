@@ -1,7 +1,7 @@
 /** The weekly shifts poster built from the roster. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildWeeklyPoster, clock12, daysBetween, weekStart } from '../src/pages/attendance/weeklyShifts.ts'
+import { addDays, buildWeeklyPoster, clock12, daysBetween, weekStart } from '../src/pages/attendance/weeklyShifts.ts'
 
 const am = { shiftId: 1, shiftName: 'AM', startTime: '07:00:00', endTime: '14:00:00' }
 const pm = { shiftId: 2, shiftName: 'PM', startTime: '14:00:00', endTime: '21:00:00' }
@@ -48,4 +48,10 @@ test('dates and clocks', () => {
   assert.equal(clock12('14:00'), '2:00 PM')
   assert.equal(clock12('00:30'), '12:30 AM')
   assert.equal(clock12('12:00'), '12:00 PM')
+})
+
+test('addDays steps over month and year ends', () => {
+  assert.equal(addDays('2026-11-30', 1), '2026-12-01')
+  assert.equal(addDays('2027-01-01', -1), '2026-12-31')
+  assert.equal(addDays('2026-11-16', 6), '2026-11-22')
 })
