@@ -103,3 +103,23 @@ test('open days come first, newest first; dismissed ones after', () => {
     'Dismissed 09 Ali',
   ])
 })
+
+import { bulkCandidates, selectedByDefault } from '../src/pages/attendance/unrosteredDay.ts'
+
+test('several at once: only the open days this person may add', () => {
+  const base = { state: 'Open' as const, canDecide: true, isPaid: false, outsideEmployment: false, openRosterRequestId: null }
+  const days = [
+    { ...base, id: 1 },
+    { ...base, id: 2, canDecide: false },
+    { ...base, id: 3, isPaid: true },
+    { ...base, id: 4, outsideEmployment: true },
+    { ...base, id: 5, openRosterRequestId: 12 },
+    { ...base, id: 6, state: 'Dismissed' as const },
+  ]
+  assert.deepEqual(bulkCandidates(days).map((d) => d.id), [1])
+})
+
+test('a single punch is not ticked at first', () => {
+  assert.equal(selectedByDefault({ punchCount: 2 }), true)
+  assert.equal(selectedByDefault({ punchCount: 1 }), false)
+})

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Button, Loader, Select, Table, Textarea } from '@mantine/core'
+import { Button, Checkbox, Loader, Select, Table, Textarea } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconCalendarQuestion, IconCheck, IconListDetails, IconRotate } from '@tabler/icons-react'
+import { IconCalendarQuestion, IconCheck, IconChecks, IconListDetails, IconRotate } from '@tabler/icons-react'
 import { Modal } from '../../components/dialogs'
 import { ApiError } from '../../api/client'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -15,11 +15,13 @@ import { rosterDayLink } from './rosterLink'
 import {
   DECISION_NOTE_MAX,
   addBlockedBy,
+  bulkCandidates,
   decisionNote,
   decisionProblem,
   inWorkOrder,
   punchDates,
   punchesOfDay,
+  selectedByDefault,
   suggestShift,
 } from './unrosteredDay'
 
@@ -90,8 +92,63 @@ export function NotOnRosterPanel({
   /* The shifts are read once, the first time a decision dialog opens: most visits decide nothing. */
   const [shifts, setShifts] = useState<Shift[] | null>(null)
   const [shiftsError, setShiftsError] = useState<string | null>(null)
+  /* SEVERAL AT ONCE: every day this person may add, ticked when it has an in and an out. */
+  const candidates = bulkCandidates(open)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkPicked, setBulkPicked] = useState<Set<string>>(() => new Set())
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [bulkDone, setBulkDone] = useState(0)
+  const [bulkFailures, setBulkFailures] = useState<{ day: UnrosteredDay; reason: string }[]>([])
+  const dayKey = (day: UnrosteredDay) => `${day.employeeId}:${day.workDate}`
+  /** The ticked days that are still in the list (a day decided meanwhile leaves it). */
+  const pickedCount = candidates.filter((day) => bulkPicked.has(dayKey(day))).length
+
+  function openBulk() {
+    setBulkPicked(new Set(candidates.filter(selectedByDefault).map(dayKey)))
+    setBulkFailures([])
+    setBulkDone(0)
+    setBulkOpen(true)
+  }
+
+  async function submitBulk() {
+    const chosen = candidates.filter((day) => bulkPicked.has(dayKey(day)))
+    setBulkSaving(true)
+    setBulkFailures([])
+    setBulkDone(0)
+    const failures: { day: UnrosteredDay; reason: string }[] = []
+    let added = 0
+    // One after the other: each is its own decision, checked by the server like a single one.
+    for (const day of chosen) {
+      const shift = suggestShift(day.firstPunch, activeShifts)
+      if (shift === null) {
+        failures.push({ day, reason: t('attendance.unrostered.bulk.noShift') })
+        continue
+      }
+      try {
+        await attendanceService.decideUnrosteredDay({
+          employeeId: day.employeeId,
+          workDate: day.workDate.slice(0, 10),
+          decision: 'Shift',
+          shiftId: shift,
+          note: decisionNote(t('attendance.unrostered.bulk.note')),
+        })
+        added += 1
+        setBulkDone(added)
+      } catch (err) {
+        failures.push({ day, reason: refusalText(err) })
+      }
+    }
+    setBulkSaving(false)
+    setBulkFailures(failures)
+    if (added > 0) {
+      notifications.show({ message: t('attendance.unrostered.bulk.done', { count: added }), color: 'green', autoClose: 5000 })
+      await onChanged()
+    }
+    if (failures.length === 0) setBulkOpen(false)
+  }
+
   useEffect(() => {
-    if (!target || shifts !== null) return
+    if ((!target && !bulkOpen) || shifts !== null) return
     let cancelled = false
     shiftsService
       .getAll()
@@ -104,14 +161,12 @@ export function NotOnRosterPanel({
     return () => {
       cancelled = true
     }
-  }, [target, shifts])
+  }, [target, bulkOpen, shifts])
 
-  const activeShifts = useMemo(() => (shifts ?? []).filter((shift) => shift.isActive), [shifts])
+  // Plain values: a handful of shifts, recomputed cheaply (the bulk loop reads them too).
+  const activeShifts = (shifts ?? []).filter((shift) => shift.isActive)
   /** Proposed from the first punch. Only a proposal: it is pre-selected, and the person confirms it. */
-  const proposed = useMemo(
-    () => (target ? suggestShift(target.firstPunch, activeShifts) : null),
-    [target, activeShifts],
-  )
+  const proposed = target ? suggestShift(target.firstPunch, activeShifts) : null
   const chosenShift = shiftId ?? proposed
 
   function openDecision(day: UnrosteredDay) {
@@ -239,13 +294,20 @@ export function NotOnRosterPanel({
             {t('attendance.unrostered.bandHint')}
           </p>
         </div>
-        {dismissed.length > 0 && (
+        {(dismissed.length > 0 || candidates.length > 1) && (
           <div className="page-head-actions">
+            {candidates.length > 1 && (
+              <Button size="compact-sm" leftSection={<IconChecks size={14} />} onClick={openBulk}>
+                {t('attendance.unrostered.bulk.open', { count: candidates.length })}
+              </Button>
+            )}
+            {dismissed.length > 0 && (
             <Button variant="subtle" size="compact-sm" onClick={() => setShowDismissed((shown) => !shown)}>
               {showDismissed
                 ? t('attendance.unrostered.hideDismissed')
                 : t('attendance.unrostered.showDismissed', { count: dismissed.length })}
             </Button>
+            )}
           </div>
         )}
       </div>
@@ -495,6 +557,108 @@ export function NotOnRosterPanel({
       )}
 
       {/* THE PUNCHES BEHIND THE DAY, exactly as the machine sent them. Read-only. */}
+      {/* SEVERAL AT ONCE: each ticked day added as a working day on its proposed shift. */}
+      {bulkOpen && (
+        <Modal
+          opened
+          onClose={() => !bulkSaving && setBulkOpen(false)}
+          title={t('attendance.unrostered.bulk.title')}
+          size={620}
+          centered
+          closeOnClickOutside={!bulkSaving}
+        >
+          <p className="hint" style={{ marginTop: 0 }}>
+            {t('attendance.unrostered.bulk.hint')}
+          </p>
+          {shiftsError && (
+            <div className="alert alert--error" role="alert">
+              {shiftsError}
+            </div>
+          )}
+          {shifts === null && !shiftsError ? (
+            <div className="page-loading">
+              <Loader size={28} />
+            </div>
+          ) : (
+            <>
+              <div className="bulk-pick-head">
+                <Button variant="subtle" size="compact-xs" disabled={bulkSaving}
+                  onClick={() => setBulkPicked(new Set(candidates.map(dayKey)))}>
+                  {t('attendance.unrostered.bulk.all')}
+                </Button>
+                <Button variant="subtle" size="compact-xs" disabled={bulkSaving} onClick={() => setBulkPicked(new Set())}>
+                  {t('attendance.unrostered.bulk.none')}
+                </Button>
+              </div>
+              <div className="bulk-pick-list">
+                {candidates.map((day) => {
+                  const key = dayKey(day)
+                  const shift = activeShifts.find((x) => x.shiftId === suggestShift(day.firstPunch, activeShifts))
+                  const failure = bulkFailures.find((f) => dayKey(f.day) === key)
+                  return (
+                    <label key={key} className={failure ? 'bulk-pick bulk-pick--failed' : 'bulk-pick'}>
+                      <Checkbox
+                        checked={bulkPicked.has(key)}
+                        disabled={bulkSaving}
+                        onChange={(e) => {
+                          const checked = e.currentTarget.checked
+                          setBulkPicked((current) => {
+                            const next = new Set(current)
+                            if (checked) next.add(key)
+                            else next.delete(key)
+                            return next
+                          })
+                        }}
+                      />
+                      <span className="bulk-pick-text">
+                        <b>{day.employeeName}</b> · {formatDayLabel(day.workDate)} ·{' '}
+                        {day.punchCount > 1
+                          ? `${formatTime(day.firstPunch)} – ${formatTime(day.lastPunch)}`
+                          : t('attendance.unrostered.bulk.onePunch', { time: formatTime(day.firstPunch) })}
+                        <span className="hint" style={{ display: 'block', margin: 0 }}>
+                          {shift ? t('attendance.unrostered.bulk.onShift', { shift: shiftLabel(shift) }) : t('attendance.unrostered.bulk.noShift')}
+                          {holidayOf(day) ? ` · ${t('attendance.unrostered.badgeHoliday', { name: holidayOf(day) })}` : ''}
+                        </span>
+                        {failure && <span className="bulk-pick-error">{failure.reason}</span>}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              {bulkSaving && (
+                <p className="hint">{t('attendance.unrostered.bulk.progress', { done: bulkDone, total: pickedCount })}</p>
+              )}
+              {bulkFailures.length > 0 && !bulkSaving && (
+                // Listed here, not only on their rows: a day decided meanwhile has left the list by now.
+                <div className="alert alert--error" role="alert">
+                  {t('attendance.unrostered.bulk.failed', { count: bulkFailures.length })}
+                  <ul className="bulk-failures">
+                    {bulkFailures.map((f) => (
+                      <li key={dayKey(f.day)}>
+                        <b>{f.day.employeeName}</b>, {formatDayLabel(f.day.workDate)}: {f.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+          <div className="form-actions">
+            <Button variant="default" onClick={() => setBulkOpen(false)} disabled={bulkSaving}>
+              {t('common.close')}
+            </Button>
+            <Button
+              leftSection={<IconChecks size={16} />}
+              loading={bulkSaving}
+              disabled={pickedCount === 0 || shifts === null}
+              onClick={() => void submitBulk()}
+            >
+              {t('attendance.unrostered.bulk.submit', { count: pickedCount })}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {punchDay && (
         <Modal
           opened

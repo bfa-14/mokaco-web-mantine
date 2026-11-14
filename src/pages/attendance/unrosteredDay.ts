@@ -110,3 +110,22 @@ export function inWorkOrder<T extends Pick<UnrosteredDay, 'state' | 'workDate' |
     return a.employeeName.localeCompare(b.employeeName)
   })
 }
+
+/**
+ * DECIDING SEVERAL AT ONCE ("add as working days"): the open days this person may add to the roster -
+ * decidable for them, not paid, not outside the employment, no roster request waiting. The server checks
+ * each one again when it is sent.
+ */
+export function bulkCandidates<
+  T extends Pick<UnrosteredDay, 'state' | 'canDecide' | 'isPaid' | 'outsideEmployment' | 'openRosterRequestId'>,
+>(days: readonly T[]): T[] {
+  return days.filter((day) => day.state === 'Open' && day.canDecide && !day.isPaid && addBlockedBy(day) === null)
+}
+
+/**
+ * Ticked at first: a day with an in and an out. A single punch is more often a visit or a mistake than a
+ * day's work, so it waits for a person to tick it.
+ */
+export function selectedByDefault(day: Pick<UnrosteredDay, 'punchCount'>): boolean {
+  return day.punchCount >= 2
+}
