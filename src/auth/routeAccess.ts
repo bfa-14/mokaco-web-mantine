@@ -32,6 +32,9 @@ export const PERMISSION = {
      lets a receptionist see today without being able to cancel it. */
   BOOKING_VIEW: 'BOOKING_VIEW',
   BOOKING_MANAGE: 'BOOKING_MANAGE',
+  /* Script 111: the rooms catalogue and the bookings report (revenue), each its own code. */
+  BOOKING_ROOMS: 'BOOKING_ROOMS',
+  BOOKING_REPORT: 'BOOKING_REPORT',
   /* The two attendance WRITE trusts. Neither opens a page of its own — they gate the affordances
      inside pages ATTENDANCE_VIEW already opened, which is what lets a viewer read a roster they may
      not edit instead of being turned away from it. */
@@ -199,8 +202,9 @@ export const ROUTE_ACCESS: RouteRule[] = [
      room — it is the PAGE that is restricted here, not the data. */
   { path: '/bookings/calendar', anyOf: [PERMISSION.BOOKING_VIEW] },
   { path: '/bookings/list', anyOf: [PERMISSION.BOOKING_VIEW] },
-  { path: '/bookings/rooms', anyOf: [PERMISSION.BOOKING_MANAGE] },
-  { path: '/bookings/report', anyOf: [PERMISSION.BOOKING_VIEW] },
+  // Script 111: hidden from the booking desk unless their role is given these on Role permissions.
+  { path: '/bookings/rooms', anyOf: [PERMISSION.BOOKING_ROOMS] },
+  { path: '/bookings/report', anyOf: [PERMISSION.BOOKING_REPORT] },
 
   // ── Security ──────────────────────────────────────────────────────────────────────────────────
   { path: '/security/users', anyOf: [PERMISSION.USER_MANAGE] },

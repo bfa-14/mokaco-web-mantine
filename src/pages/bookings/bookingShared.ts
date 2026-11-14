@@ -28,7 +28,10 @@ export const BOOKING_VIEW = 'BOOKING_VIEW'
 /** Take, decide and collect against bookings; block rooms; edit the catalogue. */
 export const BOOKING_MANAGE = 'BOOKING_MANAGE'
 
-export const PERMISSIONS = { view: BOOKING_VIEW, manage: BOOKING_MANAGE } as const
+/** Script 111: the rooms catalogue (prices, hours, add-ons) and the bookings report (revenue) have their own codes. */
+export const BOOKING_ROOMS = 'BOOKING_ROOMS'
+export const BOOKING_REPORT = 'BOOKING_REPORT'
+export const PERMISSIONS = { view: BOOKING_VIEW, manage: BOOKING_MANAGE, rooms: BOOKING_ROOMS, report: BOOKING_REPORT } as const
 
 /**
  * The address that opens one booking's drawer: the list, narrowed to the booking's day (it may be

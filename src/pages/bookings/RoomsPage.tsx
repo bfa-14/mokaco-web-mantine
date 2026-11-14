@@ -52,7 +52,8 @@ import type { NumberInputValue } from '../../components/numeric'
 export default function RoomsPage() {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
-  const canManage = hasPermission(PERMISSIONS.manage)
+  // Script 111: the catalogue is its own permission, not every booking-desk account's.
+  const canManage = hasPermission(PERMISSIONS.rooms)
 
   const [catalog, setCatalog] = useState<RoomCatalog>({ rooms: [], hours: [], addons: [] })
   const [loading, setLoading] = useState(true)

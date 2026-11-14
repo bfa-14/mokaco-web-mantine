@@ -29,7 +29,8 @@ import './bookings.css'
 export default function BookingReportPage() {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
-  const canView = hasPermission(PERMISSIONS.view)
+  // Script 111: the report shows revenue - its own permission, not the booking desk's.
+  const canView = hasPermission(PERMISSIONS.report)
 
   /* The period lives in the URL (?from=&to=). The last 30 days are the default. */
   const defaultRange = useMemo(() => ({ from: addDays(today(), -30), to: today() }), [])

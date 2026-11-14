@@ -2197,7 +2197,9 @@
       "REPORT_VIEW": "View reports",
       "ACCESS_MANAGE": "Turn Google sign-in on or off and manage who can open the HRMS",
       "OFFROSTER_TODAY": "Decide a day that is not on the roster: today",
-      "OFFROSTER_PAST": "Decide a day that is not on the roster: past days"
+      "OFFROSTER_PAST": "Decide a day that is not on the roster: past days",
+      "BOOKING_ROOMS": "Edit rooms: prices, opening hours, add-ons",
+      "BOOKING_REPORT": "See the bookings report (revenue)"
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",
