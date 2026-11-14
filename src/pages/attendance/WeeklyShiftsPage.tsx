@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Button, Checkbox, Loader, MultiSelect, Select, TextInput } from '@mantine/core'
 import { IconChevronLeft, IconChevronRight, IconPrinter } from '@tabler/icons-react'
-import { BrandWordmark } from '../../components/Brand'
 import { DateRangeField } from '../../components/DateRangeField'
 import { getErrorMessage } from '../../api/errorMessage'
 import { rosterService } from '../../services/attendanceService'
@@ -11,31 +9,13 @@ import { branchesService } from '../../services/hrService'
 import type { RosterLeaveDay, ShiftAssignment } from '../../types/attendance'
 import type { Branch } from '../../types/hr'
 import { useLanguage } from '../../i18n/useLanguage'
-import { formatDayLabel } from './attendanceFormat'
 import { companyToday } from './dayProgress'
-import { buildWeeklyPoster, clock12, daysBetween, weekStart } from './weeklyShifts'
+import { addDays, buildWeeklyPoster, daysBetween, weekStart } from './weeklyShifts'
+import { WeeklyPosterSheet } from './WeeklyPosterSheet'
 import './weeklyShifts.css'
 
 const BRANCH_KEY = 'mokaco.weeklyShifts.branch'
 const MAX_DAYS = 14
-/**
- * A4 with no margin, only while this page is open: the stylesheets of other pages (reports, bookings, requests) stay
- * loaded once visited and give @page 14-15mm margins, which would frame the poster in white. A rule in a stylesheet
- * of this page would outlive it the same way, so it is a <style> the page renders and takes away.
- */
-const PRINT_PAGE = '@page { size: A4 portrait; margin: 0 !important; }'
-
-function addDays(day: string, n: number): string {
-  const d = new Date(`${day}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-
-/** 'yyyy-MM-dd' -> ISO weekday 1..7, the keys of common.weekday. */
-function isoWeekday(day: string): number {
-  const d = new Date(`${day}T00:00:00Z`).getUTCDay()
-  return d === 0 ? 7 : d
-}
 
 /**
  * WEEKLY SHIFTS — the roster of one branch as a poster to pin up or send: one column per shift, one row per day,
@@ -124,95 +104,8 @@ export default function WeeklyShiftsPage() {
     setTo(addDays(start, 6))
   }
 
-  const posterView =
-    poster && !tooLong ? (
-    <div className="ws-poster">
-      <header className="ws-head">
-        <BrandWordmark className="ws-logo" />
-        <span className="ws-branch">{(branch?.name ?? '').toUpperCase().replace(/\s*-\s*/g, ' · ')}</span>
-      </header>
-      <div className="ws-body">
-        <div className="ws-eyebrow">
-          <span className="ws-rule" /> {t('attendance.weekly.eyebrow')}
-        </div>
-        <h2 className="ws-title">{isWeek ? t('attendance.weekly.posterTitle') : t('attendance.weekly.posterTitlePeriod')}</h2>
-        <div className="ws-dates">
-          {formatDayLabel(from)} – {formatDayLabel(to)}
-        </div>
-
-        {poster.columns.length === 0 ? (
-          <p className="ws-empty">{t('attendance.weekly.empty')}</p>
-        ) : (
-          <>
-            <div className="ws-chips" style={{ gridTemplateColumns: `repeat(${poster.columns.length}, minmax(0, 1fr))` }}>
-              {poster.columns.map((c, i) => (
-                <div key={c.shiftId} className={i % 2 === 1 ? 'ws-chip ws-chip--dark' : 'ws-chip'}>
-                  <b>{c.name.toUpperCase()}</b>
-                  <span>
-                    {clock12(c.start)} – {clock12(c.end)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <table className="ws-table">
-              <thead>
-                <tr>
-                  <th>{t('attendance.weekly.day')}</th>
-                  {poster.columns.map((c) => (
-                    <th key={c.shiftId}>
-                      {c.name.toUpperCase()} · {clock12(c.start).replace(':00', '')} – {clock12(c.end).replace(':00', '')}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {poster.rows.map((row) =>
-                  row.off ? (
-                    <tr key={row.date} className="ws-off">
-                      <td>
-                        {t(`common.weekday.${isoWeekday(row.date)}`)}
-                        {!isWeek && <span className="ws-date">{formatDayLabel(row.date)}</span>}
-                      </td>
-                      <td colSpan={poster.columns.length}>{t('attendance.weekly.off')}</td>
-                    </tr>
-                  ) : (
-                    <tr key={row.date}>
-                      <td className="ws-day">
-                        {t(`common.weekday.${isoWeekday(row.date)}`)}
-                        {!isWeek && <span className="ws-date">{formatDayLabel(row.date)}</span>}
-                      </td>
-                      {poster.columns.map((c) => (
-                        <td key={c.shiftId}>
-                          {row.cells[c.shiftId].length === 0
-                            ? '—'
-                            : row.cells[c.shiftId].map((name) => <div key={name}>{name}</div>)}
-                        </td>
-                      ))}
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </>
-        )}
-
-        <footer className="ws-foot">
-          <div>
-            <div className="ws-slogan">Grounded in History.</div>
-            {note && <div className="ws-note">{note}</div>}
-          </div>
-          <div className="ws-contact">
-            <div>mokanco.com.lb</div>
-            <div>@mokacocoffee.lbn</div>
-          </div>
-        </footer>
-      </div>
-    </div>
-    ) : null
-
   return (
     <div>
-      <style>{PRINT_PAGE}</style>
       <div className="page-head ws-no-print">
         <div>
           <h1 className="page-title">{t('attendance.weekly.title')}</h1>
@@ -323,11 +216,7 @@ export default function WeeklyShiftsPage() {
           <Loader size={36} />
         </div>
       ) : poster && !tooLong ? (
-        <>
-          <div className="ws-print-root">{posterView}</div>
-          {/* Printed from a copy at the top of the page, outside the app layout: one clean A4 sheet. */}
-          {createPortal(<div className="ws-print-only">{posterView}</div>, document.body)}
-        </>
+        <WeeklyPosterSheet poster={poster} branchName={branch?.name ?? ''} from={from} to={to} isWeek={isWeek} note={note} />
       ) : null}
     </div>
   )

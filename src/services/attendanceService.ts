@@ -4,6 +4,7 @@ import type {
   DayReport,
   DayReportCreateRequest,
   MyAttendance,
+  TeamShifts,
   AnomalyDecideAllResult,
   AnomalyDecisionRequest,
   AnomalyDecisionResult,
@@ -556,6 +557,17 @@ export const myAttendanceService = {
   get: async (month?: string) =>
     (await apiRequest<MyAttendance | undefined>(
       `/api/me/attendance${month ? `?month=${encodeURIComponent(month)}` : ''}`,
+    )) ?? null,
+}
+
+/**
+ * My branch's weekly shifts (GET /api/me/team-shifts, SHIFTS_VIEW_BRANCH): the token's employee's branch only.
+ * Resolves to null for an account that is not linked to an employee (the API answers 204).
+ */
+export const teamShiftsService = {
+  get: async (from: string, to: string) =>
+    (await apiRequest<TeamShifts | undefined>(
+      `/api/me/team-shifts?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     )) ?? null,
 }
 

@@ -1483,3 +1483,23 @@ export interface DayReportCreateRequest {
   claimedOut: string | null
   message: string
 }
+
+/** GET /api/me/team-shifts (script 112): who works which shift in the signed-in employee's branch. Working days only. */
+export interface TeamShift {
+  employeeId: number
+  fullName: string
+  workDate: string
+  shiftId: number
+  shiftName: string
+  /** 'HH:mm:ss' */
+  startTime: string | null
+  endTime: string | null
+}
+
+export interface TeamShifts {
+  branchId: number
+  branchName: string
+  from: string
+  to: string
+  shifts: TeamShift[]
+}

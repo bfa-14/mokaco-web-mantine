@@ -47,6 +47,13 @@ export interface WeeklyPoster {
   rows: WeeklyRow[]
 }
 
+/** 'yyyy-MM-dd' plus `n` days (negative goes back). */
+export function addDays(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
 /** Every day from `from` to `to` ('yyyy-MM-dd'), in order. */
 export function daysBetween(from: string, to: string): string[] {
   const out: string[] = []

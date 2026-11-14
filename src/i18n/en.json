@@ -174,7 +174,8 @@
       "rooms": "Rooms",
       "report": "Report"
     },
-    "myAttendance": "My attendance"
+    "myAttendance": "My attendance",
+    "myShifts": "My branch's shifts"
   },
   "common": {
     "dash": "—",
@@ -2040,6 +2041,11 @@
       "day": "DAY",
       "off": "OFF",
       "empty": "Nobody is on a shift in this period. Fill the roster first (Attendance > Roster)."
+    },
+    "myShifts": {
+      "title": "My branch's shifts",
+      "subtitle": "Who works which shift this week in your branch. Print it or save it as a PDF.",
+      "noEmployee": "This account is not linked to an employee, so there is no branch to show."
     }
   },
   "payroll": {
@@ -2221,7 +2227,8 @@
       "OFFROSTER_TODAY": "Decide a day that is not on the roster: today",
       "OFFROSTER_PAST": "Decide a day that is not on the roster: past days",
       "BOOKING_ROOMS": "Edit rooms: prices, opening hours, add-ons",
-      "BOOKING_REPORT": "See the bookings report (revenue)"
+      "BOOKING_REPORT": "See the bookings report (revenue)",
+      "SHIFTS_VIEW_BRANCH": "See my branch's weekly shifts"
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",
