@@ -189,7 +189,8 @@
       "rooms": "الغرف",
       "report": "التقرير"
     },
-    "myAttendance": "حضوري"
+    "myAttendance": "حضوري",
+    "prepBook": "دليل التحضير"
   },
   "common": {
     "dash": "—",
@@ -3482,6 +3483,37 @@
       "confirmBody": "سيحتاج الجميع إلى تسجيل الدخول عبر Google من جديد. تبقى أنت مسجّلًا في هذا المتصفح.",
       "confirmButton": "تسجيل خروج الجميع",
       "done": "تم تسجيل خروج الجميع من Google."
+    }
+  },
+  "prepBook": {
+    "title": "دليل التحضير",
+    "subtitle": "اكتب اسم المشروب لترى طريقة تحضيره. الكميات كما هي مطبوعة في دليل التحضير وملصقات البار.",
+    "searchPlaceholder": "ابحث عن مشروب… مثلاً spanish latte أو قشر أو mango",
+    "clear": "مسح البحث",
+    "category": "الفئة",
+    "searchingAll": "{{count}} نتيجة في الدليل كله",
+    "noneTitle": "لا يوجد مشروب بهذا الاسم",
+    "noneText": "تأكد من الإملاء، أو جرّب كلمة واحدة مثل \"pistachio\" أو \"matcha\".",
+    "ingredients": "المكونات",
+    "steps": "الخطوات",
+    "showGuidePage": "صفحة الدليل الأصلية {{page}}",
+    "showLabel": "الملصق الأصلي",
+    "showRecipe": "العودة إلى الوصفة",
+    "sourceGuide": "دليل تحضير المشروبات، الإصدار 2، صفحة {{page}}",
+    "sourceLabels": "ملصقات MC MIX، الملصق {{page}}",
+    "categories": {
+      "all": "الكل",
+      "coffee": "قهوة ولاتيه",
+      "matcha": "ماتشا",
+      "refreshers": "مشروبات منعشة",
+      "frozen": "مثلجات",
+      "traditional": "تقليدي",
+      "basics": "رغوة وشراب وسكر"
+    },
+    "temp": {
+      "all": "الكل",
+      "hot": "ساخن",
+      "iced": "مثلج"
     }
   }
 }
