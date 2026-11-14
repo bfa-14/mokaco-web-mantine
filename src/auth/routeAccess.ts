@@ -245,6 +245,8 @@ export const OPEN_ROUTES: readonly string[] = [
   // answers 403 for anybody else's (QA3 PAY-12 / WEB-15).
   '/my-payslips',
   '/payroll/payslips/:id',
+  // One's own attendance (GET /api/me/attendance: the token's employee only, no HR notes).
+  '/my-attendance',
   // Settings — see the note at the end of ROUTE_ACCESS: the page gates its system tabs itself so
   // that the Preferences tab (the language switch) reaches everybody.
   '/settings',

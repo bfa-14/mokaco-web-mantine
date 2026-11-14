@@ -5,6 +5,7 @@
  * exports both components and plain functions breaks Fast Refresh, so the two are kept apart.
  */
 
+import { Popover } from '@mantine/core'
 import { IconAlertTriangle } from '@tabler/icons-react'
 import { t } from '../../i18n/t'
 import { statusText } from './attendanceFormat'
@@ -66,13 +67,20 @@ export function StatusBadge({ status }: { status: string }) {
 export function AnomalyIcon({ has, reason }: { has: boolean; reason?: string }) {
   if (!has) return null
 
+  const text = reason ?? t('attendance.anomalyTitle')
   return (
-    /* PORT: dx-icon-warning glyph → Tabler triangle; anomaly-icon class kept for the CSS color. */
-    <IconAlertTriangle
-      size={16}
-      className="anomaly-icon"
-      title={reason ?? t('attendance.anomalyTitle')}
-      aria-label={reason ?? t('attendance.anomalyAria')}
-    />
+    /* The reason on hover (title) AND on a tap: a phone or tablet never shows a hover title, and the
+       reason is the whole point of the icon. */
+    <Popover width={260} position="top" withArrow shadow="md">
+      <Popover.Target>
+        <button type="button" className="tap-hint" title={text} aria-label={reason ?? t('attendance.anomalyAria')}>
+          {/* PORT: dx-icon-warning glyph → Tabler triangle; anomaly-icon class kept for the CSS color. */}
+          <IconAlertTriangle size={16} className="anomaly-icon" aria-hidden="true" />
+        </button>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <span className="tap-hint-text">{text}</span>
+      </Popover.Dropdown>
+    </Popover>
   )
 }

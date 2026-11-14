@@ -6,6 +6,7 @@ import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { attendanceService, devicesService, importService } from '../../services/attendanceService'
 import { formatDate, formatTime } from './attendanceFormat'
+import { companyToday, dayProgress, isOpenAnomaly } from './dayProgress'
 import type { Device, RawPunch } from '../../types/attendance'
 
 /**
@@ -75,6 +76,7 @@ export function PunchPipelineCard() {
   const [devices, setDevices] = useState<Device[]>([])
   const [processedDays, setProcessedDays] = useState(0)
   const [anomalyDays, setAnomalyDays] = useState(0)
+  const [inProgressDays, setInProgressDays] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -96,7 +98,11 @@ export function PunchPipelineCard() {
       setUnmapped(unresolved)
       setDevices(machines)
       setProcessedDays(days.length)
-      setAnomalyDays(days.filter((d) => d.hasAnomaly).length)
+      // Today's open days are people at work, not faults (dayProgress.ts): counted on their own,
+      // so "Anomaly days" is the number somebody actually has to look at.
+      const companyDay = companyToday()
+      setAnomalyDays(days.filter((d) => isOpenAnomaly(d, companyDay)).length)
+      setInProgressDays(days.filter((d) => dayProgress(d, companyDay) !== null).length)
       setError(null)
     } catch (err) {
       setError(getErrorMessage(err))
@@ -156,11 +162,17 @@ export function PunchPipelineCard() {
           hint="Days the processor has built from today's punches. Zero with punches landed is normal before the nightly run."
         />
         <Stat
+          value={inProgressDays}
+          label="Days in progress"
+          to="/attendance/daily"
+          hint="People who punched in today and whose punches do not pair yet: they are at work. Not a problem, and not judged until the day is over."
+        />
+        <Stat
           value={anomalyDays}
           label="Anomaly days"
           to="/attendance/anomalies"
           tone="warn"
-          hint="Days the processor could not read confidently — usually a missing punch-out. These block payroll until somebody resolves them."
+          hint="Days the processor could not read confidently — usually a missing punch. A day still in progress is not one of them. These block payroll until somebody resolves them."
         />
       </div>
 

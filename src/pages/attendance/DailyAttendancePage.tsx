@@ -6,9 +6,10 @@ import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Loader, NumberInput, Pagination, SegmentedControl, Select, Table, Textarea, TextInput } from '@mantine/core'
 import { Drawer, Modal } from '../../components/dialogs'
 import { DatePickerInput, DateTimePicker } from '@mantine/dates'
+import { useMediaQuery } from '@mantine/hooks'
 import { DateRangeField } from '../../components/DateRangeField'
 import { notifications } from '@mantine/notifications'
-import { IconAlertTriangle, IconBriefcase, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBriefcase, IconDownload, IconMessageReport, IconCalendar, IconCheck, IconChevronDown, IconChevronRight, IconClock, IconPencil, IconPlus, IconPrinter, IconRefresh, IconSearch, IconSquareX, IconX } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { dateTimeToPicker, secondsDateTimeFromPicker } from '../../components/date/pickerValue'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
@@ -23,6 +24,7 @@ import { parseBoundedDecimal } from '../../components/decimalInputs'
 import {
   attendanceService,
   correctionsService,
+  rosterService,
 } from '../../services/attendanceService'
 import { branchesService, employeesService } from '../../services/hrService'
 import { PERMISSIONS } from '../../types/attendance'
@@ -30,10 +32,19 @@ import type {
   AttendanceDetail,
   AttendanceInterval,
   AttendanceRecord,
+  ShiftAssignment,
+  UnrosteredDay,
 } from '../../types/attendance'
 import type { Branch, EmployeeListItem } from '../../types/hr'
 import { AnomalyIcon, DayFractionBar, StatusBadge } from './attendanceShared'
 import { PunchesGrid } from './PunchesGrid'
+import { NotOnRosterPanel } from './NotOnRosterPanel'
+import { TodayBoard } from './TodayBoard'
+import { MissingPunchDialog } from './MissingPunchDialog'
+import { ReportDayDialog } from './DayReports'
+import { missingSide } from './missingPunch'
+import { applyQuickFilters, hhmmOf, periodShortcut, QUICK_FILTERS, quickFilterCounts, toCsv } from './dailyFilters'
+import type { QuickFilter } from './dailyFilters'
 import { DayPairsPanel } from './DayPairsPanel'
 import type { PairsState } from './DayPairsPanel'
 import {
@@ -48,7 +59,10 @@ import {
   statusText,
   toDateString,
 } from './attendanceFormat'
+import { companyToday, dayBefore, dayProgress, isOpenAnomaly } from './dayProgress'
+import type { DayProgress } from './dayProgress'
 import { alignEnd } from '../../i18n/physical'
+import { t as translate } from '../../i18n/t'
 import { useLanguage } from '../../i18n/useLanguage'
 
 /** The four values ATTENDANCE_RECORD.status can hold. A correction may only move a day between these. */
@@ -58,26 +72,14 @@ const STATUS_OPTIONS = ['Present', 'Absent', 'RestDay', 'Leave']
  * HR's three possible rulings on an exit that ran longer than what was authorised. Payroll
  * is blocked until one of them is chosen, so each states its consequence rather than its name.
  */
-const DISPOSITIONS = [
-  {
-    value: 'UnpaidAbsence',
-    title: 'Unpaid absence',
-    consequence:
-      'The extra minutes come off pay as unpaid time. Choose this when nobody authorised the time away and there is nothing to offset it against.',
-  },
-  {
-    value: 'Overtime',
-    title: 'Offset against overtime',
-    consequence:
-      'The extra minutes are cancelled against overtime detected on the same day. Nothing is deducted — and nothing is paid for that overtime either, because it was used up here.',
-  },
-  {
-    value: 'Ignore',
-    title: 'Ignore it',
-    consequence:
-      'Nothing is deducted and nothing is paid. The day is closed exactly as the punches left it. Choose this when the difference is too small to act on.',
-  },
-]
+const DISPOSITION_VALUES = ['UnpaidAbsence', 'Overtime', 'Ignore'] as const
+/** Read when drawn, so the words follow the language. */
+const dispositions = () =>
+  DISPOSITION_VALUES.map((value) => ({
+    value,
+    title: translate(`attendance.dailyPage.disposition.${value}.title`),
+    consequence: translate(`attendance.dailyPage.disposition.${value}.consequence`),
+  }))
 
 /** Today as 'yyyy-MM-dd' — where the Day control starts, because it is the day being worked on. */
 function today(): string {
@@ -132,12 +134,11 @@ function DayTimeline({ detail }: { detail: AttendanceDetail }) {
   if (segments.length === 0) {
     return (
       <div className="day-empty">
-        <div className="day-empty-main">Nothing to draw for this day.</div>
-        {describeAnomaly(detail)} There is no complete in-and-out pair, so there are no
-        worked intervals to show.{' '}
+        <div className="day-empty-main">{translate('attendance.dailyPage.timeline.empty')}</div>
+        {describeAnomaly(detail)} {translate('attendance.dailyPage.timeline.noPair')}{' '}
         {detail.status === 'Absent' || detail.status === 'RestDay'
-          ? 'That is expected for a day nobody was due to work.'
-          : 'Use “Edit this day” to state what happened, or “Request a correction” if the punches are simply wrong.'}
+          ? translate('attendance.dailyPage.timeline.expected')
+          : translate('attendance.dailyPage.timeline.useEdit')}
       </div>
     )
   }
@@ -161,8 +162,8 @@ function DayTimeline({ detail }: { detail: AttendanceDetail }) {
                 "gap 45m" needs no legend, and the whole point of the drawing is that the gap is
                 NOT worked time. */}
             {segment.kind === 'worked'
-              ? `worked ${formatMinutes(segment.minutes)}`
-              : `gap ${formatMinutes(segment.minutes)}`}
+              ? translate('attendance.dailyPage.timeline.worked', { minutes: formatMinutes(segment.minutes) })
+              : translate('attendance.dailyPage.timeline.gap', { minutes: formatMinutes(segment.minutes) })}
           </div>
         ))}
       </div>
@@ -182,30 +183,30 @@ function DayTimeline({ detail }: { detail: AttendanceDetail }) {
       <div className="timeline-summary">
         <span
           className="metric"
-          title="The sum of the intervals actually clocked. Time away in the middle of the day is not worked time."
+          title={translate('attendance.dailyPage.timeline.workedTitle')}
         >
-          Worked {formatMinutes(detail.workedMinutes)}
+          {translate('attendance.dailyPage.timeline.workedTotal', { minutes: formatMinutes(detail.workedMinutes) })}
         </span>
         <span className="sep">·</span>
         <span
           className="metric"
-          title="The unpaid break, charged once. If they punched out for it, the gap already covers it."
+          title={translate('attendance.dailyPage.timeline.breakTitle')}
         >
-          break {formatMinutes(detail.breakApplied)} taken from the gap
+          {translate('attendance.dailyPage.timeline.break', { minutes: formatMinutes(detail.breakApplied) })}
         </span>
         <span className="sep">·</span>
         <span
           className="metric"
-          title="Time away beyond the break. This is what needs an exit permission."
+          title={translate('attendance.dailyPage.timeline.exitTitle')}
         >
-          exit {formatMinutes(detail.exitActualMinutes)}
+          {translate('attendance.dailyPage.timeline.exit', { minutes: formatMinutes(detail.exitActualMinutes) })}
         </span>
         <span className="sep">·</span>
         <span
           className="metric"
-          title="Worked divided by the standard day for this person on this date, capped at 1."
+          title={translate('attendance.dailyPage.timeline.fractionTitle')}
         >
-          {formatDayFraction(detail.dayFraction)} of a day
+          {translate('attendance.dailyPage.timeline.fraction', { value: formatDayFraction(detail.dayFraction) })}
         </span>
       </div>
     </div>
@@ -251,61 +252,61 @@ function DayNumbers({ detail }: { detail: AttendanceDetail }) {
   return (
     <div className="day-numbers">
       <Metric
-        label="Worked"
+        label={translate('attendance.dailyPage.metric.worked')}
         value={formatMinutes(detail.workedMinutes)}
-        rule="The sum of the intervals actually clocked, minus any break not already taken as a gap. NOT first-in to last-out — time away in the middle of the day is not worked time."
+        rule={translate('attendance.dailyPage.metric.workedRule')}
       />
       <Metric
-        label="Standard"
+        label={translate('attendance.dailyPage.metric.standard')}
         value={formatMinutes(detail.standardMinutes)}
-        rule="What a full day means for this person on this date: their rostered shift's length minus its break, or the configured standard day when nothing was rostered."
+        rule={translate('attendance.dailyPage.metric.standardRule')}
       />
       <Metric
-        label="Day fraction"
+        label={translate('attendance.dailyPage.metric.fraction')}
         value={formatDayFraction(detail.dayFraction)}
-        rule="Worked divided by standard, capped at 1.00. Payroll sums these, so somebody who left two hours early counts 0.75 of a day, not 1."
+        rule={translate('attendance.dailyPage.metric.fractionRule')}
       />
       <Metric
-        label="Late"
+        label={translate('attendance.dailyPage.metric.late')}
         value={formatMinutes(detail.lateMinutes)}
         muted={detail.lateMinutes === 0}
-        rule="Minutes past the shift's start plus its grace period. Zero when no shift was rostered — you cannot be late for a shift nobody assigned."
+        rule={translate('attendance.dailyPage.metric.lateRule')}
       />
       <Metric
-        label="Overtime"
+        label={translate('attendance.dailyPage.metric.overtime')}
         value={formatMinutes(detail.overtimeMinutes)}
         muted={detail.overtimeMinutes === 0}
-        rule="Minutes over the standard day. DETECTED ONLY — attendance never pays this. Pay only what an approved overtime request authorises."
+        rule={translate('attendance.dailyPage.metric.overtimeRule')}
       />
       <Metric
-        label="Exit actual"
+        label={translate('attendance.dailyPage.metric.exitActual')}
         value={formatMinutes(detail.exitActualMinutes)}
         muted={detail.exitActualMinutes === 0}
-        rule="What the punches SHOW they were away for, beyond their break. An observed fact."
+        rule={translate('attendance.dailyPage.metric.exitActualRule')}
       />
       <Metric
-        label="Exit approved"
+        label={translate('attendance.dailyPage.metric.exitApproved')}
         value={formatMinutes(detail.exitApprovedMinutes)}
         muted={detail.exitApprovedMinutes === 0}
-        rule="What was AUTHORISED. Independent of the actual — neither one ever overwrites the other."
+        rule={translate('attendance.dailyPage.metric.exitApprovedRule')}
       />
       <Metric
-        label="Exit variance"
+        label={translate('attendance.dailyPage.metric.exitVariance')}
         value={
           detail.exitVarianceMinutes === 0
             ? '—'
             : detail.exitVarianceMinutes > 0
-              ? `${formatMinutes(detail.exitVarianceMinutes)} more`
-              : `${formatMinutes(Math.abs(detail.exitVarianceMinutes))} less`
+              ? translate('attendance.dailyPage.metric.more', { minutes: formatMinutes(detail.exitVarianceMinutes) })
+              : translate('attendance.dailyPage.metric.less', { minutes: formatMinutes(Math.abs(detail.exitVarianceMinutes)) })
         }
         muted={detail.exitVarianceMinutes === 0}
-        rule="Actual minus approved. MORE means they were away longer than allowed; LESS means they came back early. Payroll is blocked until HR rules on it."
+        rule={translate('attendance.dailyPage.metric.exitVarianceRule')}
       />
       <Metric
-        label="Exit leave"
+        label={translate('attendance.dailyPage.metric.exitLeave')}
         value={formatMinutes(detail.exitLeaveMinutes)}
         muted={detail.exitLeaveMinutes === 0}
-        rule="What comes off the leave balance for the mid-day absence. By default the time actually taken, which the Settings page can change."
+        rule={translate('attendance.dailyPage.metric.exitLeaveRule')}
       />
     </div>
   )
@@ -339,7 +340,7 @@ function ExitApprovalForm({
         hrNote: note.trim() || null,
       })
       notifications.show({
-        message: `Approved exit set to ${formatMinutes(minutes)} for ${detail.fullName}.`,
+        message: translate('attendance.dailyPage.exitForm.saved', { minutes: formatMinutes(minutes), name: detail.fullName }),
         color: 'green',
         autoClose: 2500,
       })
@@ -353,14 +354,11 @@ function ExitApprovalForm({
 
   return (
     <div>
-      <p className="hint">
-        This records what was AUTHORISED. It does not change what the punches
-        observed — the two are kept apart on purpose.
-      </p>
+      <p className="hint">{translate('attendance.dailyPage.exitForm.intro')}</p>
 
       <div className="form-field">
         <label className="form-label" htmlFor="exit-approved-minutes">
-          Approved exit minutes
+          {translate('attendance.dailyPage.exitForm.minutes')}
         </label>
         <NumberInput
           id="exit-approved-minutes"
@@ -370,8 +368,7 @@ function ExitApprovalForm({
           onChange={(v) => setMinutes(typeof v === 'number' ? v : 0)}
         />
         <p className="hint">
-          The punches show {formatMinutes(detail.exitActualMinutes)} of exit time
-          actually taken.
+          {translate('attendance.dailyPage.exitForm.actual', { minutes: formatMinutes(detail.exitActualMinutes) })}
         </p>
       </div>
 
@@ -379,18 +376,15 @@ function ExitApprovalForm({
         <Checkbox
           checked={alsoSetActual}
           disabled={saving}
-          label="Also count this as actually taken"
+          label={translate('attendance.dailyPage.exitForm.alsoActual')}
           onChange={(e) => setAlsoSetActual(e.currentTarget.checked)}
         />
-        <p className="hint">
-          The exit was approved but they never punched for it, so attendance sees no
-          gap. Tick this to count the approved time as actually taken.
-        </p>
+        <p className="hint">{translate('attendance.dailyPage.exitForm.alsoActualHint')}</p>
       </div>
 
       <div className="form-field">
         <label className="form-label" htmlFor="exit-approval-note">
-          Note (optional)
+          {translate('attendance.dailyPage.noteOptional')}
         </label>
         <Textarea
           id="exit-approval-note"
@@ -403,10 +397,10 @@ function ExitApprovalForm({
 
       <div className="form-actions">
         <Button variant="default" onClick={onCancel} disabled={saving}>
-          Cancel
+          {translate('common.cancel')}
         </Button>
         <Button onClick={() => void submit()} disabled={saving}>
-          {saving ? 'Saving…' : 'Save approval'}
+          {saving ? translate('common.saving') : translate('attendance.dailyPage.exitForm.save')}
         </Button>
       </div>
     </div>
@@ -435,7 +429,12 @@ function DispositionForm({
         hrNote: note.trim() || null,
       })
       notifications.show({
-        message: `${detail.fullName}, ${formatDate(detail.workDate)}: variance of ${formatMinutes(detail.exitVarianceMinutes)} ruled “${title}”.`,
+        message: translate('attendance.dailyPage.dispositionForm.saved', {
+          name: detail.fullName,
+          date: formatDate(detail.workDate),
+          minutes: formatMinutes(detail.exitVarianceMinutes),
+          title,
+        }),
         color: 'green',
         autoClose: 2500,
       })
@@ -450,16 +449,17 @@ function DispositionForm({
   return (
     <div>
       <p className="hint">
-        They were away {formatMinutes(detail.exitActualMinutes)} and{' '}
-        {formatMinutes(detail.exitApprovedMinutes)} was approved — a difference of{' '}
-        {formatMinutes(detail.exitVarianceMinutes)}. Overtime detected the same day:{' '}
-        {formatMinutes(detail.overtimeMinutes)}. Pick what should happen to that
-        difference.
+        {translate('attendance.dailyPage.dispositionForm.intro', {
+          actual: formatMinutes(detail.exitActualMinutes),
+          approved: formatMinutes(detail.exitApprovedMinutes),
+          variance: formatMinutes(detail.exitVarianceMinutes),
+          overtime: formatMinutes(detail.overtimeMinutes),
+        })}
       </p>
 
       <div className="form-field">
         <label className="form-label" htmlFor="disposition-note">
-          Note (optional)
+          {translate('attendance.dailyPage.noteOptional')}
         </label>
         <Textarea
           id="disposition-note"
@@ -471,7 +471,7 @@ function DispositionForm({
       </div>
 
       <div className="disposition-actions">
-        {DISPOSITIONS.map((option) => (
+        {dispositions().map((option) => (
           <button
             key={option.value}
             type="button"
@@ -491,7 +491,7 @@ function DispositionForm({
 
       <div className="form-actions">
         <Button variant="default" onClick={onCancel} disabled={saving}>
-          Cancel
+          {translate('common.cancel')}
         </Button>
       </div>
     </div>
@@ -527,7 +527,7 @@ function AdjustDayForm({
       return
     }
     if (!note.trim()) {
-      setNoteError("A reason is required — this changes somebody's pay.")
+      setNoteError(translate('attendance.dailyPage.adjustForm.noteRequired'))
       return
     }
 
@@ -540,7 +540,7 @@ function AdjustDayForm({
         hrNote: note.trim(),
       })
       notifications.show({
-        message: `${detail.fullName}, ${formatDate(detail.workDate)} adjusted. The processor will not touch this day again.`,
+        message: translate('attendance.dailyPage.adjustForm.saved', { name: detail.fullName, date: formatDate(detail.workDate) }),
         color: 'green',
         autoClose: 2500,
       })
@@ -554,29 +554,25 @@ function AdjustDayForm({
 
   return (
     <div>
-      <p className="hint">
-        This changes what this person is paid for the day. The note is required and is
-        kept forever. Set worked minutes OR the day fraction — leave the other blank
-        and the system keeps what it computed.
-      </p>
+      <p className="hint">{translate('attendance.dailyPage.adjustForm.intro')}</p>
 
       <div className="form-field">
         <label className="form-label" htmlFor="adjust-worked">
-          Worked minutes
+          {translate('attendance.dailyPage.adjustForm.worked')}
         </label>
         <NumberInput
           id="adjust-worked"
           value={workedMinutes ?? ''}
           min={0}
           disabled={saving}
-          placeholder={`Currently ${formatMinutes(detail.workedMinutes)}`}
+          placeholder={translate('attendance.dailyPage.currently', { value: formatMinutes(detail.workedMinutes) })}
           onChange={(v) => setWorkedMinutes(typeof v === 'number' ? v : null)}
         />
       </div>
 
       <div className="form-field">
         <label className="form-label" htmlFor="adjust-fraction">
-          Day fraction
+          {translate('attendance.dailyPage.metric.fraction')}
         </label>
         <NumberInput
           id="adjust-fraction"
@@ -586,7 +582,7 @@ function AdjustDayForm({
           step={0.05}
           disabled={saving}
           error={fractionError}
-          placeholder={`Currently ${formatDayFraction(detail.dayFraction)}`}
+          placeholder={translate('attendance.dailyPage.currently', { value: formatDayFraction(detail.dayFraction) })}
           onChange={(v) => {
             setDayFractionRaw(v)
             setFractionError(null)
@@ -596,7 +592,7 @@ function AdjustDayForm({
 
       <div className="form-field">
         <label className="form-label" htmlFor="adjust-note">
-          Why (required)
+          {translate('attendance.dailyPage.whyRequired')}
         </label>
         <Textarea
           id="adjust-note"
@@ -613,10 +609,10 @@ function AdjustDayForm({
 
       <div className="form-actions">
         <Button variant="default" onClick={onCancel} disabled={saving}>
-          Cancel
+          {translate('common.cancel')}
         </Button>
         <Button onClick={() => void submit()} disabled={saving}>
-          {saving ? 'Saving…' : 'Adjust day'}
+          {saving ? translate('common.saving') : translate('attendance.dailyPage.adjustForm.save')}
         </Button>
       </div>
     </div>
@@ -654,9 +650,7 @@ function CorrectionForm({
 
   async function submit() {
     if (!reason.trim()) {
-      setReasonError(
-        "A reason is required — a correction without one is an unexplained change to somebody's pay.",
-      )
+      setReasonError(translate('attendance.dailyPage.correction.reasonRequired'))
       return
     }
 
@@ -673,7 +667,7 @@ function CorrectionForm({
       // A correction does NOT take effect on submission — it waits for approval. Saying so is
       // what stops somebody raising one, seeing the day unchanged, and raising it again.
       notifications.show({
-        message: 'Correction raised. It will apply once approved on the Corrections page.',
+        message: translate('attendance.dailyPage.correction.saved'),
         color: 'green',
         autoClose: 4000,
       })
@@ -700,15 +694,12 @@ function CorrectionForm({
         </div>
       )}
 
-      <p className="hint">
-        This records what you changed and why. The original punches from the machine
-        are never overwritten.
-      </p>
+      <p className="hint">{translate('attendance.dailyPage.correction.intro')}</p>
 
       <div className="form-grid">
         <div className="form-field">
           <label className="form-label" htmlFor="correction-first-in">
-            First in
+            {translate('attendance.dailyPage.col.firstIn')}
           </label>
           {/* A correction may deliberately blank a punch, so both are clearable and clearing
               stores null. The state keeps its 'yyyy-MM-ddTHH:mm:ss' shape. */}
@@ -725,7 +716,7 @@ function CorrectionForm({
 
         <div className="form-field">
           <label className="form-label" htmlFor="correction-last-out">
-            Last out
+            {translate('attendance.dailyPage.col.lastOut')}
           </label>
           <DateTimePicker
             id="correction-last-out"
@@ -740,7 +731,7 @@ function CorrectionForm({
 
         <div className="form-field">
           <label className="form-label" htmlFor="correction-exit">
-            Exit minutes
+            {translate('attendance.dailyPage.correction.exitMinutes')}
           </label>
           <NumberInput
             id="correction-exit"
@@ -753,11 +744,11 @@ function CorrectionForm({
 
         <div className="form-field">
           <label className="form-label" htmlFor="correction-status">
-            Status
+            {translate('attendance.dailyPage.col.status')}
           </label>
           <Select
             id="correction-status"
-            data={STATUS_OPTIONS}
+            data={STATUS_OPTIONS.map((value) => ({ value, label: statusText(value) }))}
             value={status}
             clearable
             disabled={saving}
@@ -768,7 +759,7 @@ function CorrectionForm({
 
       <div className="form-field">
         <label className="form-label" htmlFor="correction-reason">
-          Why (required)
+          {translate('attendance.dailyPage.whyRequired')}
         </label>
         <Textarea
           id="correction-reason"
@@ -785,10 +776,10 @@ function CorrectionForm({
 
       <div className="form-actions">
         <Button variant="default" onClick={onCancel} disabled={saving}>
-          Cancel
+          {translate('common.cancel')}
         </Button>
         <Button onClick={() => void submit()} disabled={saving}>
-          {saving ? 'Saving…' : 'Request correction'}
+          {saving ? translate('common.saving') : translate('attendance.dailyPage.correction.save')}
         </Button>
       </div>
     </div>
@@ -802,13 +793,8 @@ type ActionKind =
   | 'correction'
   | 'manual'
 
-const ACTION_TITLES: Record<ActionKind, string> = {
-  approval: 'Set exit approval',
-  disposition: 'Dispose the exit variance',
-  adjust: 'Adjust the day',
-  correction: 'Request a correction',
-  manual: 'Edit / override this day',
-}
+/** The dialog title of each action, read when drawn so it follows the language. */
+const actionTitle = (action: ActionKind) => translate(`attendance.dailyPage.action.${action}`)
 
 /**
  * The day-detail drawer: what the punches actually say, drawn rather than tabulated, plus
@@ -821,6 +807,8 @@ function DayDetailPopup({
   branches,
   onHiding,
   onChanged,
+  onEnterMissing,
+  onReport,
 }: {
   attendanceId: number
   /** Only needed by the manual-override form the drawer can open. */
@@ -828,6 +816,10 @@ function DayDetailPopup({
   branches: Branch[]
   onHiding: () => void
   onChanged: () => Promise<void>
+  /** The one-step fix of a missing In or Out (the page opens its dialog). */
+  onEnterMissing: (record: AttendanceRecord) => void
+  /** "Something is wrong with this day" for somebody who cannot correct it. */
+  onReport: (record: AttendanceRecord) => void
 }) {
   const { hasPermission } = useAuth()
   const canCorrect = hasPermission(PERMISSIONS.correct)
@@ -839,10 +831,13 @@ function DayDetailPopup({
   const { isRtl } = useLanguage()
   const edge = isRtl ? 'left' : 'right'
 
+  const { t } = useTranslation()
   const [detail, setDetail] = useState<AttendanceDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [action, setAction] = useState<ActionKind | null>(null)
+  /** Today's open day is a shift in progress, not a fault (dayProgress.ts). */
+  const progress = detail ? dayProgress(detail, companyToday()) : null
 
   const loadDetail = useCallback(async () => {
     try {
@@ -904,7 +899,7 @@ function DayDetailPopup({
             only thing saying WHOSE day this is, and the numbers below are meaningless without it. */}
         <div className="day-drawer-head">
           <div>
-            <h2 className="day-drawer-title">{detail?.fullName ?? 'Day detail'}</h2>
+            <h2 className="day-drawer-title">{detail?.fullName ?? t('attendance.dailyPage.drawer.title')}</h2>
             <div className="day-drawer-sub">
               {detail && (
                 <>
@@ -913,9 +908,9 @@ function DayDetailPopup({
                   {detail.isManual && (
                     <span
                       className="badge badge--muted"
-                      title="HR entered or corrected this day by hand. The processor will not touch it again."
+                      title={t('attendance.dailyPage.drawer.manualTitle')}
                     >
-                      Manual
+                      {t('attendance.daily.quick.manual')}
                     </span>
                   )}
                 </>
@@ -925,19 +920,15 @@ function DayDetailPopup({
           <ActionIcon
             variant="subtle"
             color="gray"
-            title="Close"
-            aria-label="Close"
+            title={t('common.close')}
+            aria-label={t('common.close')}
             onClick={onHiding}
           >
             <IconX size={18} />
           </ActionIcon>
         </div>
 
-        <PageHelp>
-          The timeline shows what the punches actually say. The break is taken out of
-          the first gap; anything beyond that is time away that needs an exit
-          permission.
-        </PageHelp>
+        <PageHelp>{t('attendance.dailyPage.drawer.help')}</PageHelp>
 
         {error && (
           <div className="alert alert--error" role="alert">
@@ -957,7 +948,35 @@ function DayDetailPopup({
                 these days block payroll, so the way out has to be obvious.
                 Shown for ANY anomalous day, including one that still has a timeline (a sensor
                 double-tap leaves a valid interval AND an unmatched punch). */}
-            {detail.hasAnomaly && (
+            {detail.hasAnomaly && progress && (
+              /* TODAY's open day: the person is at work. Said as that, with the correction still
+                 one click away for the case it is really for - somebody who left without punching out. */
+              <div className="card" style={{ marginBottom: 14 }}>
+                <div className="tab-toolbar">
+                  <div>
+                    <div className="empty-hint-main">
+                      <IconClock size={16} className="day-progress-icon" aria-hidden="true" />{' '}
+                      {progressText(progress)}
+                    </div>
+                    <p className="hint" style={{ marginTop: 4 }}>
+                      {t('attendance.daily.inProgressCardText')}
+                    </p>
+                  </div>
+                  {canCorrect && (
+                    <div className="page-head-actions">
+                      <Button
+                        variant="default"
+                        leftSection={<IconPencil size={16} />}
+                        onClick={() => setAction('correction')}
+                      >
+                        {t('attendance.daily.inProgressFix')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {detail.hasAnomaly && !progress && (
               <div className="card" style={{ marginBottom: 14 }}>
                 <div className="tab-toolbar">
                   <div>
@@ -967,23 +986,43 @@ function DayDetailPopup({
                         className="anomaly-icon"
                         aria-hidden="true"
                       />{' '}
-                      This day could not be read confidently
+                      {t('attendance.dailyPage.drawer.anomalyTitle')}
                     </div>
                     <p className="hint" style={{ marginTop: 4 }}>
-                      {describeAnomaly(detail)} The hours on it are not trustworthy, and it
-                      blocks payroll until it is fixed.
+                      {describeAnomaly(detail)} {t('attendance.dailyPage.drawer.anomalyText')}
                     </p>
                   </div>
                   {canCorrect && (
                     <div className="page-head-actions">
+                      {missingSide(detail) && (
+                        <Button
+                          leftSection={<IconClock size={16} />}
+                          title={t('attendance.missingPunch.enterTitle')}
+                          onClick={() => onEnterMissing(detail)}
+                        >
+                          {t(missingSide(detail) === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+                        </Button>
+                      )}
                       <Button
+                        variant={missingSide(detail) ? 'default' : 'filled'}
                         leftSection={<IconPencil size={16} />}
                         onClick={() => setAction('correction')}
                       >
-                        Fix this
+                        {t('attendance.dailyPage.drawer.fixThis')}
                       </Button>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {!canCorrect && (
+              <div className="card" style={{ marginBottom: 14 }}>
+                <div className="tab-toolbar">
+                  <p className="hint" style={{ margin: 0 }}>{t('attendance.dayReport.drawerHint')}</p>
+                  <Button variant="default" leftSection={<IconMessageReport size={16} />} onClick={() => onReport(detail)}>
+                    {t('attendance.dayReport.reportToHr')}
+                  </Button>
                 </div>
               </div>
             )}
@@ -994,16 +1033,16 @@ function DayDetailPopup({
 
             {canCorrect && (
               <div className="day-actions">
-                <p className="day-actions-title">Change this day</p>
+                <p className="day-actions-title">{t('attendance.dailyPage.drawer.changeTitle')}</p>
 
                 {/* Ordered by how far-reaching they are, not alphabetically. Each says what it does
                     rather than naming a database operation. */}
                 <Button
                   leftSection={<IconPencil size={16} />}
-                  title="State what happened, by hand. Takes effect immediately and stops the processor touching this day."
+                  title={t('attendance.dailyPage.drawer.editTitle')}
                   onClick={() => setAction('manual')}
                 >
-                  Edit day
+                  {t('attendance.dailyPage.drawer.edit')}
                 </Button>
 
                 {/* ONLY on an anomalous day. A correction is the tool for punches that do not add
@@ -1013,36 +1052,36 @@ function DayDetailPopup({
                   <Button
                     variant="default"
                     leftSection={<IconBriefcase size={16} />}
-                    title="The punches do not add up. Raise a correction — logged, with an old-to-new trail, and it changes nothing until somebody approves it."
+                    title={t('attendance.dailyPage.drawer.fixTitle')}
                     onClick={() => setAction('correction')}
                   >
-                    Fix
+                    {t('attendance.dailyPage.fix')}
                   </Button>
                 )}
 
                 <Button
                   variant="default"
                   leftSection={<IconClock size={16} />}
-                  title="Record how many minutes of the mid-day absence were authorised."
+                  title={t('attendance.dailyPage.drawer.approvalTitle')}
                   onClick={() => setAction('approval')}
                 >
-                  Set exit approval
+                  {t('attendance.dailyPage.action.approval')}
                 </Button>
                 <Button
                   variant="default"
                   leftSection={<IconCheck size={16} />}
-                  title="Rule on the difference between the exit that was approved and the one the punches show."
+                  title={t('attendance.dailyPage.drawer.dispositionTitle')}
                   onClick={() => setAction('disposition')}
                 >
-                  Dispose variance
+                  {t('attendance.dailyPage.drawer.disposition')}
                 </Button>
                 <Button
                   variant="default"
                   leftSection={<IconSquareX size={16} />}
-                  title="Add or remove worked time on this day, with a mandatory note."
+                  title={t('attendance.dailyPage.drawer.adjustTitle')}
                   onClick={() => setAction('adjust')}
                 >
-                  Adjust hours
+                  {t('attendance.dailyPage.drawer.adjust')}
                 </Button>
               </div>
             )}
@@ -1051,7 +1090,7 @@ function DayDetailPopup({
               <Modal
                 opened
                 onClose={() => setAction(null)}
-                title={ACTION_TITLES[action]}
+                title={actionTitle(action)}
                 // The manual form is a two-column grid of nine fields; the others are three fields.
                 // Both are fluid with a ceiling — a fixed pixel width is wider than a phone, and the
                 // manual form grows again once its computed result appears.
@@ -1112,6 +1151,144 @@ function DayDetailPopup({
 const columnHelper = createColumnHelper<AttendanceRecord>()
 
 const PAGE_SIZES = ['15', '30', '50']
+
+type DailyView = 'today' | 'days' | 'punches'
+
+/**
+ * ONE EMPLOYEE-DAY AS A CARD (phones): name, date and status first, then the times, small chips only when
+ * there is something to say, and the reason in words (a phone shows no hover titles).
+ */
+function DayCard({
+  record,
+  shiftLabel,
+  today,
+  canCorrect,
+  onView,
+  onMissing,
+  onFix,
+  onEdit,
+  onReport,
+}: {
+  record: AttendanceRecord
+  shiftLabel: string | null
+  today: string
+  canCorrect: boolean
+  onView: () => void
+  onMissing: () => void
+  onFix: () => void
+  onEdit: () => void
+  /** For somebody who cannot correct (a branch manager): send the real times to HR. */
+  onReport: () => void
+}) {
+  const progress = dayProgress(record, today)
+  const missing = progress ? null : missingSide(record)
+  return (
+    <div className="day-card">
+      <div className="day-card-head">
+        <div>
+          <div className="day-card-name">{record.fullName}</div>
+          <div className="hint" style={{ margin: 0 }}>
+            {formatDayLabel(record.workDate)}
+            {shiftLabel ? ` · ${shiftLabel}` : ''}
+            {record.branchName ? ` · ${record.branchName}` : ''}
+          </div>
+        </div>
+        <StatusBadge status={record.status} />
+      </div>
+      {(record.firstInUtc || record.lastOutUtc) && (
+        <div className="day-card-times">
+          {translate('attendance.daily.card.times', {
+            in: formatTime(record.firstInUtc),
+            out: progress?.kind === 'onShift' ? translate('attendance.daily.onShift') : formatTime(record.lastOutUtc),
+            worked: formatMinutes(record.workedMinutes),
+          })}
+        </div>
+      )}
+      <div className="day-card-chips">
+        {record.lateMinutes > 0 && (
+          <span className="badge badge--late">{translate('attendance.daily.card.late', { minutes: formatMinutes(record.lateMinutes) })}</span>
+        )}
+        {!progress && record.status === 'Present' && !record.isFullDay && record.shortfallMinutes > 0 && (
+          <span className="badge badge--late">{translate('attendance.daily.card.short', { minutes: formatMinutes(record.shortfallMinutes) })}</span>
+        )}
+        {record.overtimeMinutes > 0 && (
+          <span className="badge badge--muted">{translate('attendance.daily.card.overtime', { minutes: formatMinutes(record.overtimeMinutes) })}</span>
+        )}
+        {record.exitActualMinutes > 0 && (
+          <span className="badge badge--muted">
+            {translate('attendance.daily.card.exit', {
+              actual: formatMinutes(record.exitActualMinutes),
+              approved: formatMinutes(record.exitApprovedMinutes),
+            })}
+          </span>
+        )}
+        {record.isManual && <span className="badge badge--muted">{translate('attendance.daily.quick.manual')}</span>}
+      </div>
+      {progress ? (
+        <p className="hint day-card-reason">
+          <IconClock size={14} className="day-progress-icon" aria-hidden="true" /> {progressText(progress)}
+        </p>
+      ) : record.hasAnomaly ? (
+        <p className="hint day-card-reason">
+          <IconAlertTriangle size={14} className="anomaly-icon" aria-hidden="true" /> {describeAnomaly(record)}
+        </p>
+      ) : null}
+      {record.hrNote && <p className="hint day-card-reason">{record.hrNote}</p>}
+      <div className="day-card-actions">
+        <Button variant="default" leftSection={<IconSearch size={14} />} onClick={onView}>
+          {translate('attendance.dailyPage.view')}
+        </Button>
+        {canCorrect && missing && (
+          <Button leftSection={<IconClock size={14} />} onClick={onMissing}>
+            {translate(missing === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+          </Button>
+        )}
+        {!canCorrect && (
+          <Button variant="default" leftSection={<IconMessageReport size={14} />} onClick={onReport}>
+            {translate('attendance.dayReport.reportToHr')}
+          </Button>
+        )}
+        {canCorrect && !missing && (
+          <Button variant="default" leftSection={<IconPencil size={14} />} onClick={record.hasAnomaly ? onFix : onEdit}>
+            {translate(record.hasAnomaly ? 'attendance.dailyPage.fix' : 'attendance.dailyPage.edit')}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Device / Excel / Manual / Pull, in the reader's language (the value itself is data). */
+const sourceText = (source: string) => translate(`attendance.source.${source}`, { defaultValue: source })
+
+/** The key of one employee-day, for the roster's shift of that day. */
+const dayKey = (employeeId: number, workDate: string) => `${employeeId}|${workDate.slice(0, 10)}`
+
+/** "Morning 08:00–16:00", "Rest day", or null when the roster has no row for the day. */
+function shiftLabelOf(row: ShiftAssignment | undefined): string | null {
+  if (!row) return null
+  if (row.isRestDay || !row.shiftId) return translate('attendance.daily.shiftRest')
+  return `${row.shiftName ?? ''} ${(row.startTime ?? '').slice(0, 5)}–${(row.endTime ?? '').slice(0, 5)}`.trim()
+}
+
+/** Saves a text as a file the browser downloads. */
+function downloadText(fileName: string, text: string, type: string) {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/** A day still being worked, in words: "On shift since 08:04", or "Day in progress" once there are outs too. */
+function progressText(progress: DayProgress): string {
+  return progress.kind === 'onShift'
+    ? translate('attendance.daily.onShiftSince', { time: formatTime(progress.since) })
+    : translate('attendance.daily.dayInProgress')
+}
 
 /**
  * THE DAY CONTROL — one date, labelled, with the two days anybody actually wants one click away.
@@ -1209,13 +1386,41 @@ export default function DailyAttendancePage() {
   const navigate = useNavigate()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
   const [branchId, setBranchId] = useState<number | null>(null)
-  /* Which question the page is answering: the processor's days, or the machines' raw punches. */
-  const [view, setView] = useState<'days' | 'punches'>('days')
+  /* Which question the page is answering: who is here today, the processor's days, or the machines'
+     raw punches. A phone opens on Today (the question a manager on the floor has); a link can ask for a
+     view with ?view=. */
+  const [view, setView] = useState<DailyView>(() => {
+    const asked = searchParams.get('view')
+    if (asked === 'today' || asked === 'days' || asked === 'punches') return asked
+    return typeof window !== 'undefined' && window.matchMedia?.('(max-width: 560px)').matches ? 'today' : 'days'
+  })
+  /** Phones get the days as cards (the 15-column grid is four screen-widths wide there). */
+  const isCompact = useMediaQuery('(max-width: 560px)', false, { getInitialValueInEffect: false })
+  /** Bumped after every reload of the page, so the Today board reads again with it. */
+  const [reloadKey, setReloadKey] = useState(0)
 
   const [rows, setRows] = useState<AttendanceRecord[]>([])
+  /** The roster's shift of each listed day (Shift column, export). A failed read leaves the column empty. */
+  const [shiftByDay, setShiftByDay] = useState<Map<string, ShiftAssignment>>(() => new Map())
+  /** The quick filters above the grid: days answering ANY of them. */
+  const [quick, setQuick] = useState<QuickFilter[]>([])
 
-  /** How many days in the current range the machine could not read confidently. These block payroll. */
-  const anomalyCount = rows.filter((row) => row.hasAnomaly).length
+  /**
+   * THE DAYS THAT HAVE NO ROW BELOW, AND WHY. Somebody punched on a day the APPROVED roster of the
+   * month does not know: no attendance day exists for it, so the day read can never return it and the
+   * grid used to show nothing at all - the punches were simply "missing". They are read alongside the
+   * days (same range, same filters, same moment) and shown above the grid, where they can be decided.
+   * A failure of this read costs the panel its content, never the grid.
+   */
+  const [unrostered, setUnrostered] = useState<UnrosteredDay[] | null>(null)
+  const [unrosteredError, setUnrosteredError] = useState<string | null>(null)
+
+  /** The company's day (Beirut): today's unpaired day is a shift in progress, not a fault. */
+  const companyDay = companyToday()
+  /** How many days in the current range the machine could not read confidently. These block payroll.
+      A day of TODAY that is still being worked is not one of them (see dayProgress.ts). */
+  const anomalyCount = rows.filter((row) => isOpenAnomaly(row, companyDay)).length
+  const inProgressCount = rows.filter((row) => dayProgress(row, companyDay) !== null).length
   const [employees, setEmployees] = useState<EmployeeListItem[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
@@ -1310,8 +1515,27 @@ export default function DailyAttendancePage() {
   const [manualRow, setManualRow] = useState<AttendanceRecord | null>(null)
   const [manualNewVisible, setManualNewVisible] = useState(false)
   const [correctionRow, setCorrectionRow] = useState<AttendanceRecord | null>(null)
+  /** The one-step "enter the missing time" of a day with a plain missing In or Out. */
+  const [missingRow, setMissingRow] = useState<AttendanceRecord | null>(null)
+  /** "Something is wrong with this day", for somebody who cannot correct it (a branch manager). */
+  const [reportRow, setReportRow] = useState<AttendanceRecord | null>(null)
+
+  const loadShifts = useCallback((f: string, t2: string, emp: number | null, branch: number | null) => {
+    rosterService
+      .get(f, t2, emp ?? undefined, branch ?? undefined)
+      .then((list) => setShiftByDay(new Map(list.map((r) => [dayKey(r.employeeId, r.workDate), r]))))
+      .catch(() => setShiftByDay(new Map()))
+  }, [])
 
   const load = useCallback(async () => {
+    loadShifts(from, to, employeeId, branchId)
+    const offRoster = attendanceService
+      .getUnrosteredDays(from, to, { branchId, employeeId })
+      .then((list) => {
+        setUnrostered(list)
+        setUnrosteredError(null)
+      })
+      .catch((err) => setUnrosteredError(getErrorMessage(err)))
     try {
       setRows(
         await attendanceService.get(
@@ -1327,11 +1551,26 @@ export default function DailyAttendancePage() {
     } finally {
       setLoading(false)
     }
-  }, [from, to, employeeId, branchId])
+    setReloadKey((key) => key + 1)
+    await offRoster
+  }, [from, to, employeeId, branchId, loadShifts])
 
   useEffect(() => {
     let cancelled = false
     async function initialLoad() {
+      loadShifts(from, to, null, null)
+      // Beside the days, not inside their try: the page opens even if this read fails.
+      attendanceService
+        .getUnrosteredDays(from, to)
+        .then((list) => {
+          if (!cancelled) {
+            setUnrostered(list)
+            setUnrosteredError(null)
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) setUnrosteredError(getErrorMessage(err))
+        })
       try {
         // The employee and branch filters are part of the page, so they load with the data.
         const [records, employeeList, branchList] = await Promise.all([
@@ -1374,7 +1613,7 @@ export default function DailyAttendancePage() {
     try {
       const result = await attendanceService.process()
       notifications.show({
-        message: `Processed ${result.employeeDaysProcessed} employee-day(s).`,
+        message: t('attendance.dailyPage.processed', { count: result.employeeDaysProcessed }),
         color: 'green',
         autoClose: 2500,
       })
@@ -1412,14 +1651,27 @@ export default function DailyAttendancePage() {
     }
   }
 
-  async function runMarkAbsentees() {
+  /**
+   * Mark absentees writes an Absent day for everybody rostered who has no day yet. On a day that is
+   * NOT OVER that includes everyone whose shift starts later, so the page asks first and offers the
+   * day that is almost always meant: yesterday. A finished day runs at once, as before.
+   */
+  const [absentAsk, setAbsentAsk] = useState(false)
+  const companyYesterday = dayBefore(companyDay)
+
+  function askMarkAbsentees() {
+    if (day >= companyDay) setAbsentAsk(true)
+    else void runMarkAbsentees(day)
+  }
+
+  async function runMarkAbsentees(target: string) {
     setRunning(true)
     try {
-      const result = await attendanceService.markAbsentees(day)
+      const result = await attendanceService.markAbsentees(target)
       notifications.show({
         message: t('attendance.daily.absenteesDone', {
           count: result.absenteesMarked,
-          date: formatDayLabel(day),
+          date: formatDayLabel(target),
         }),
         color: 'green',
         autoClose: 2500,
@@ -1463,29 +1715,54 @@ export default function DailyAttendancePage() {
           )
         },
       }),
-      columnHelper.accessor('fullName', { header: 'Employee' }),
+      columnHelper.accessor('fullName', { header: () => t('attendance.dailyPage.col.employee') }),
+      // The branch of the DAY (the employee may have moved since).
+      columnHelper.accessor((row) => row.branchName ?? '', { id: 'branch', header: () => t('attendance.dailyPage.col.branch'), size: 120 }),
       // The API sends the day as '2026-08-14T00:00:00'; a day has no time, and the grid was printing the whole stamp.
-      columnHelper.accessor((row) => formatDate(row.workDate), { id: 'workDate', header: 'Date', size: 110 }),
+      columnHelper.accessor((row) => formatDate(row.workDate), { id: 'workDate', header: () => t('attendance.dailyPage.col.date'), size: 110 }),
+      // What the roster said for the day: the shift the lateness and the short day are measured against.
+      columnHelper.accessor((row) => shiftLabelOf(shiftByDay.get(dayKey(row.employeeId, row.workDate))) ?? '—', {
+        id: 'shift',
+        header: () => t('attendance.dailyPage.col.shift'),
+        size: 150,
+      }),
 
       // Times and durations sort on the raw value and match on the rendered one — "08:05" is what
       // the user reads, and the timestamp behind it is not something anyone would type.
       columnHelper.accessor('firstInUtc', {
-        header: 'First in',
+        header: () => t('attendance.dailyPage.col.firstIn'),
         size: 90,
         enableGlobalFilter: false,
         cell: (info) => formatTime(info.row.original.firstInUtc),
         meta: { filterText: formatTime },
       }),
       columnHelper.accessor('lastOutUtc', {
-        header: 'Last out',
-        size: 90,
+        header: () => t('attendance.dailyPage.col.lastOut'),
+        size: 110,
         enableGlobalFilter: false,
-        cell: (info) => formatTime(info.row.original.lastOutUtc),
+        // A day of today that is still being worked has no last out yet. The words go HERE, beside
+        // the first in, because this column is on screen at any width: the status column is the
+        // first one a laptop scrolls off, and "on shift" is what today's list is opened for.
+        cell: (info) => {
+          const record = info.row.original
+          const progress = dayProgress(record, companyDay)
+          if (!progress) return formatTime(record.lastOutUtc)
+          return progress.kind === 'onShift' ? (
+            <span className="day-progress" title={progressText(progress)}>
+              {t('attendance.daily.onShift')}
+            </span>
+          ) : (
+            <>
+              {formatTime(record.lastOutUtc)}
+              <div className="day-progress">{progressText(progress)}</div>
+            </>
+          )
+        },
         meta: { filterText: formatTime },
       }),
 
       columnHelper.accessor('workedMinutes', {
-        header: 'Worked',
+        header: () => t('attendance.dailyPage.col.worked'),
         size: 95,
         enableGlobalFilter: false,
         cell: (info) => formatMinutes(info.row.original.workedMinutes),
@@ -1504,8 +1781,8 @@ export default function DailyAttendancePage() {
          detail the chevron reveals in full. */
       columnHelper.accessor('punchPairs', {
         header: () => (
-          <span title="Complete in→out stretches. Worked time is the sum of these — expand the row to see them.">
-            Pairs
+          <span title={t('attendance.dailyPage.colTitle.pairs')}>
+            {t('attendance.dailyPage.col.pairs')}
           </span>
         ),
         size: 160,
@@ -1547,8 +1824,8 @@ export default function DailyAttendancePage() {
 
       columnHelper.accessor('dayFraction', {
         header: () => (
-          <span title="How much of a full day was earned. Worked time divided by the standard day, capped at 1.">
-            Day fraction
+          <span title={t('attendance.dailyPage.colTitle.fraction')}>
+            {t('attendance.dailyPage.col.fraction')}
           </span>
         ),
         size: 150,
@@ -1562,8 +1839,8 @@ export default function DailyAttendancePage() {
 
       columnHelper.accessor('lateMinutes', {
         header: () => (
-          <span title="Minutes past the shift start plus its grace period.">
-            Late
+          <span title={t('attendance.dailyPage.colTitle.late')}>
+            {t('attendance.dailyPage.col.late')}
           </span>
         ),
         size: 85,
@@ -1574,8 +1851,8 @@ export default function DailyAttendancePage() {
 
       columnHelper.accessor('overtimeMinutes', {
         header: () => (
-          <span title="Detected only. Attendance never pays this — pay only what an approved overtime request authorises.">
-            Overtime
+          <span title={t('attendance.dailyPage.colTitle.overtime')}>
+            {t('attendance.dailyPage.col.overtime')}
           </span>
         ),
         size: 95,
@@ -1587,8 +1864,8 @@ export default function DailyAttendancePage() {
       columnHelper.display({
         id: 'exitActualApproved',
         header: () => (
-          <span title="Actual is what the punches show. Approved is what was authorised. They are independent.">
-            Exit actual / approved
+          <span title={t('attendance.dailyPage.colTitle.exit')}>
+            {t('attendance.dailyPage.col.exit')}
           </span>
         ),
         size: 150,
@@ -1599,21 +1876,22 @@ export default function DailyAttendancePage() {
       }),
 
       columnHelper.accessor('status', {
-        header: 'Status',
-        size: 110,
-        cell: (info) => (
-          <StatusBadge status={info.row.original.status} />
-        ),
+        header: () => t('attendance.dailyPage.col.status'),
+        size: 130,
+        // A day in progress says so in the Last out column (always on screen); the badge stays as it is.
+        cell: (info) => <StatusBadge status={info.row.original.status} />,
         meta: { filterText: statusText, filterOptions: STATUS_OPTIONS.map(statusText) },
       }),
 
       columnHelper.accessor('source', {
         header: () => (
-          <span title="Device, Excel, or Manual — how this day's data arrived.">
-            Source
+          <span title={t('attendance.dailyPage.colTitle.source')}>
+            {t('attendance.dailyPage.col.source')}
           </span>
         ),
         size: 95,
+        cell: (info) => sourceText(info.row.original.source),
+        meta: { filterText: (v) => sourceText(String(v)) },
       }),
 
       // A 44px unlabelled icon strip: there is no room for a control and nothing to type. The
@@ -1626,14 +1904,24 @@ export default function DailyAttendancePage() {
         // The REASON, not just the flag. describeAnomaly reads firstIn/lastOut/punchPairs, all of
         // which are already on the row — so hovering says "punched in at 08:04, never punched out"
         // without the grid fetching anything per row to find out.
-        cell: (info) => (
-          <AnomalyIcon
-            has={info.row.original.hasAnomaly}
-            reason={
-              info.row.original.hasAnomaly ? describeAnomaly(info.row.original) : undefined
-            }
-          />
-        ),
+        cell: (info) =>
+          // Today's open day is a shift in progress: a clock, not a warning. From tomorrow the same
+          // record is a missing punch and gets the triangle back.
+          dayProgress(info.row.original, companyDay) ? (
+            <IconClock
+              size={16}
+              className="day-progress-icon"
+              title={t('attendance.daily.inProgressTitle')}
+              aria-label={t('attendance.daily.inProgressTitle')}
+            />
+          ) : (
+            <AnomalyIcon
+              has={info.row.original.hasAnomaly}
+              reason={
+                info.row.original.hasAnomaly ? describeAnomaly(info.row.original) : undefined
+              }
+            />
+          ),
         meta: { noFilter: true },
       }),
 
@@ -1642,8 +1930,8 @@ export default function DailyAttendancePage() {
           how somebody ends up one button away from editing a day they never meant to open. */
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
-        size: canCorrect ? 150 : 88,
+        header: () => t('attendance.dailyPage.col.actions'),
+        size: canCorrect ? 190 : 170,
         cell: (info) => {
           const row = info.row.original
 
@@ -1652,6 +1940,9 @@ export default function DailyAttendancePage() {
           // approves. Anything else is HR stating what happened, which is an immediate
           // manual override. Offering the wrong one invites the wrong kind of change.
           const anomaly = row.hasAnomaly
+          const inProgress = dayProgress(row, companyDay) !== null
+          // A plain missing In or Out of a finished day: filled in one step, on the row itself.
+          const missing = !inProgress ? missingSide(row) : null
 
           return (
             <div className="grid-actions">
@@ -1660,28 +1951,52 @@ export default function DailyAttendancePage() {
                 variant="subtle"
                 size="compact-sm"
                 leftSection={<IconSearch size={14} />}
-                title="See the punches behind this day."
+                title={t('attendance.dailyPage.viewTitle')}
                 onClick={() => setOpenDayId(row.attendanceId)}
               >
-                View
+                {t('attendance.dailyPage.view')}
               </Button>
-              {canCorrect && (
+              {!canCorrect && (
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconMessageReport size={14} />}
+                  title={t('attendance.dayReport.reportTitle')}
+                  onClick={() => setReportRow(row)}
+                >
+                  {t('attendance.dayReport.report')}
+                </Button>
+              )}
+              {canCorrect && missing && (
+                <Button
+                  variant="subtle"
+                  size="compact-sm"
+                  leftSection={<IconClock size={14} />}
+                  title={t('attendance.missingPunch.enterTitle')}
+                  onClick={() => setMissingRow(row)}
+                >
+                  {t(missing === 'in' ? 'attendance.missingPunch.enterIn' : 'attendance.missingPunch.enterOut')}
+                </Button>
+              )}
+              {canCorrect && !missing && (
                 <Button
                   variant="subtle"
                   size="compact-sm"
                   leftSection={
-                    anomaly ? <IconAlertTriangle size={14} /> : <IconPencil size={14} />
+                    anomaly && !inProgress ? <IconAlertTriangle size={14} /> : <IconPencil size={14} />
                   }
                   title={
-                    anomaly
-                      ? 'The punches on this day do not add up. Raise a correction — it is logged and takes effect once approved.'
-                      : 'Enter or override this day by hand. Takes effect immediately and stops the processor touching it.'
+                    inProgress
+                      ? t('attendance.daily.fixInProgressTitle')
+                      : anomaly
+                        ? t('attendance.dailyPage.rowFixTitle')
+                        : t('attendance.dailyPage.rowEditTitle')
                   }
                   onClick={() =>
                     anomaly ? setCorrectionRow(row) : setManualRow(row)
                   }
                 >
-                  {anomaly ? 'Fix' : 'Edit'}
+                  {t(anomaly ? 'attendance.dailyPage.fix' : 'attendance.dailyPage.edit')}
                 </Button>
               )}
             </div>
@@ -1689,11 +2004,63 @@ export default function DailyAttendancePage() {
         },
       }),
     ],
-    [canCorrect, expandedIds, pairsById, t],
+    [canCorrect, companyDay, expandedIds, pairsById, shiftByDay, t],
   )
 
+  const quickCounts = useMemo(() => quickFilterCounts(rows, companyDay), [rows, companyDay])
+  const shownRows = useMemo(() => applyQuickFilters(rows, quick, companyDay), [rows, quick, companyDay])
+
+  function toggleQuick(filter: QuickFilter) {
+    setQuick((current) => (current.includes(filter) ? current.filter((f) => f !== filter) : [...current, filter]))
+  }
+
+  /** Every row that passes the filters on screen (all pages, in the grid's order), as a CSV for Excel. */
+  function exportShown() {
+    const header = [
+      ...(['employee', 'branch', 'date', 'shift', 'firstIn', 'lastOut', 'workedMin', 'workedHm', 'fraction', 'lateMin',
+        'shortMin', 'overtimeMin', 'exitActualMin', 'exitApprovedMin', 'status', 'source', 'manual', 'problem', 'hrNote'] as const)
+        .map((key) => t(`attendance.dailyPage.csv.${key}`)),
+    ]
+    const data = table.getPrePaginationRowModel().rows.map(({ original: r }) => [
+      r.fullName,
+      r.branchName ?? '',
+      r.workDate.slice(0, 10),
+      shiftLabelOf(shiftByDay.get(dayKey(r.employeeId, r.workDate))) ?? '',
+      r.firstInUtc ? formatTime(r.firstInUtc) : '',
+      r.lastOutUtc ? formatTime(r.lastOutUtc) : '',
+      r.workedMinutes,
+      hhmmOf(r.workedMinutes),
+      r.dayFraction,
+      r.lateMinutes,
+      r.shortfallMinutes,
+      r.overtimeMinutes,
+      r.exitActualMinutes,
+      r.exitApprovedMinutes,
+      statusText(r.status),
+      sourceText(r.source),
+      r.isManual ? t('common.yes') : '',
+      dayProgress(r, companyDay) ? progressText(dayProgress(r, companyDay) as DayProgress) : r.hasAnomaly ? describeAnomaly(r) : '',
+      r.hrNote ?? '',
+    ])
+    downloadText(`attendance_${from}_${to}.csv`, toCsv(header, data), 'text/csv;charset=utf-8')
+  }
+
+  /** A period shortcut: the range changes AND the days are read at once (no Apply needed). */
+  const [pendingApply, setPendingApply] = useState(false)
+  function applyShortcut(kind: 'today' | 'yesterday' | 'week' | 'month') {
+    const range = periodShortcut(kind, companyDay)
+    setRange(range)
+    setPendingApply(true)
+  }
+  useEffect(() => {
+    if (!pendingApply) return
+    setPendingApply(false)
+    setLoading(true)
+    void load()
+  }, [pendingApply, load])
+
   const table = useReactTable({
-    data: rows,
+    data: shownRows,
     columns,
     state: { sorting, globalFilter, columnFilters },
     onSortingChange: setSorting,
@@ -1721,17 +2088,15 @@ export default function DailyAttendancePage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Daily attendance</h1>
-          <p className="page-subtitle">
-            One row per employee per day. Use View to see the punches behind a day.
-          </p>
+          <h1 className="page-title">{t('attendance.dailyPage.title')}</h1>
+          <p className="page-subtitle">{t('attendance.dailyPage.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={16} />
@@ -1766,18 +2131,13 @@ export default function DailyAttendancePage() {
               leftSection={<IconPlus size={16} />}
               onClick={() => setManualNewVisible(true)}
             >
-              Add manual entry
+              {t('attendance.dailyPage.addManual')}
             </Button>
           )}
         </div>
       </div>
 
-      <PageHelp>
-        One row per employee per day. Worked time is the sum of the intervals actually
-        clocked — if someone leaves for two hours and comes back, those two hours are
-        not worked time. &lsquo;Day fraction&rsquo; is how much of a full day they
-        earned.
-      </PageHelp>
+      <PageHelp>{t('attendance.dailyPage.help')}</PageHelp>
 
       {error && (
         <div className="alert alert--error" role="alert">
@@ -1787,7 +2147,7 @@ export default function DailyAttendancePage() {
 
       {canManage && (
         <div className="card">
-          <div className="card-title">Build the days</div>
+          <div className="card-title">{t('attendance.dailyPage.buildTitle')}</div>
 
           {/* The day first, the actions under it: two of the three buttons below NAME this date,
               so it has to be settled before either is a sensible thing to press. */}
@@ -1799,7 +2159,7 @@ export default function DailyAttendancePage() {
               disabled={running}
               onClick={() => void runProcessor()}
             >
-              Run processor (all unprocessed punches)
+              {t('attendance.dailyPage.runProcessor')}
             </Button>
 
             {/* Beside the processor because they look similar and are not: that one consumes what
@@ -1819,7 +2179,7 @@ export default function DailyAttendancePage() {
               variant="default"
               disabled={running}
               title={t('attendance.daily.absenteesTitle', { date: formatDayLabel(day) })}
-              onClick={() => void runMarkAbsentees()}
+              onClick={askMarkAbsentees}
             >
               {t('attendance.daily.absentees', { date: formatDayLabel(day) })}
             </Button>
@@ -1848,11 +2208,30 @@ export default function DailyAttendancePage() {
               if (nextFrom && nextTo) setRange({ from: nextFrom, to: nextTo })
             }}
           />
+          {/* The four ranges people actually want, applied at once (no Apply needed). The one that IS
+              the current range is lit, so "am I looking at today?" is answered without reading dates. */}
+          <div className="period-shortcuts">
+            {(['today', 'yesterday', 'week', 'month'] as const).map((kind) => {
+              const range = periodShortcut(kind, companyDay)
+              const on = range.from === from && range.to === to
+              return (
+                <Button
+                  key={kind}
+                  size="compact-xs"
+                  variant={on ? 'light' : 'subtle'}
+                  aria-pressed={on}
+                  onClick={() => applyShortcut(kind)}
+                >
+                  {t(`attendance.daily.shortcut.${kind}`)}
+                </Button>
+              )
+            })}
+          </div>
         </div>
 
         <div className="filter-field">
           <label className="filter-field-label" htmlFor="filter-employee">
-            Employee
+            {t('attendance.dailyPage.col.employee')}
           </label>
           <Select
             id="filter-employee"
@@ -1861,7 +2240,7 @@ export default function DailyAttendancePage() {
               label: item.fullName,
             }))}
             value={employeeId != null ? String(employeeId) : null}
-            placeholder="Everyone"
+            placeholder={t('attendance.dailyPage.everyone')}
             w={220}
             searchable
             clearable
@@ -1871,7 +2250,7 @@ export default function DailyAttendancePage() {
 
         <div className="filter-field">
           <label className="filter-field-label" htmlFor="filter-branch">
-            Branch
+            {t('attendance.dailyPage.col.branch')}
           </label>
           <Select
             id="filter-branch"
@@ -1879,7 +2258,7 @@ export default function DailyAttendancePage() {
               .filter((b) => b.isActive)
               .map((b) => ({ value: String(b.branchId), label: b.name }))}
             value={branchId != null ? String(branchId) : null}
-            placeholder="All branches"
+            placeholder={t('attendance.dailyPage.allBranches')}
             w={200}
             clearable
             onChange={(v) => setBranchId(v != null ? Number(v) : null)}
@@ -1892,7 +2271,7 @@ export default function DailyAttendancePage() {
             leftSection={<IconSearch size={16} />}
             onClick={refresh}
           >
-            Apply
+            {t('attendance.dailyPage.apply')}
           </Button>
         </div>
       </div>
@@ -1912,13 +2291,10 @@ export default function DailyAttendancePage() {
                   className="anomaly-icon"
                   aria-hidden="true"
                 />{' '}
-                {anomalyCount} day{anomalyCount === 1 ? '' : 's'} in this range could
-                not be read confidently
+                {t('attendance.dailyPage.anomalyBand', { count: anomalyCount })}
               </div>
               <p className="hint" style={{ marginTop: 4 }}>
-                The hours on {anomalyCount === 1 ? 'it' : 'them'} are not trustworthy,
-                and the month cannot be paid while any are left open. Fix them with a
-                correction — the original punches are never edited.
+                {t('attendance.dailyPage.anomalyBandText', { count: anomalyCount })}
               </p>
             </div>
             <div className="page-head-actions">
@@ -1927,12 +2303,16 @@ export default function DailyAttendancePage() {
                 variant="default"
                 to={`/attendance/anomalies?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`}
               >
-                Fix these anomalies
+                {t('attendance.dailyPage.fixAnomalies')}
               </Button>
             </div>
           </div>
         </div>
       )}
+
+      {/* NOT ON ROSTER. Above the Days / Punches switch, in both views: a day that is waiting for a
+          decision must not disappear because the reader went to look at the punches. */}
+      <NotOnRosterPanel days={unrostered} error={unrosteredError} onChanged={load} />
 
       {/* DAYS vs PUNCHES — the processor's interpretation, or what the machines actually said.
           They answer different questions and the second one had no home in the app at all: a day
@@ -1944,15 +2324,22 @@ export default function DailyAttendancePage() {
       <div className="tab-toolbar">
         <SegmentedControl
           value={view}
-          onChange={(value) => setView(value as 'days' | 'punches')}
+          onChange={(value) => setView(value as DailyView)}
           data={[
-            { value: 'days', label: 'Days' },
-            { value: 'punches', label: 'Punches' },
+            { value: 'today', label: t('attendance.daily.viewToday') },
+            { value: 'days', label: t('attendance.dailyPage.viewDays') },
+            { value: 'punches', label: t('attendance.dailyPage.viewPunches') },
           ]}
         />
         {view === 'punches' && (
           <span className="hint">
             {t('attendance.daily.punchesHint', { date: formatDayLabel(day) })}
+          </span>
+        )}
+        {view === 'days' && inProgressCount > 0 && (
+          <span className="hint">
+            <IconClock size={14} className="day-progress-icon" aria-hidden="true" />{' '}
+            {t('attendance.daily.inProgressCount', { count: inProgressCount })}
           </span>
         )}
       </div>
@@ -1966,7 +2353,9 @@ export default function DailyAttendancePage() {
         </div>
       )}
 
-      {view === 'punches' ? (
+      {view === 'today' ? (
+        <TodayBoard branchId={branchId} reloadKey={reloadKey} onOpenDay={setOpenDayId} />
+      ) : view === 'punches' ? (
         <PunchesGrid
           date={day}
           branchId={branchId}
@@ -1980,28 +2369,85 @@ export default function DailyAttendancePage() {
         <div className="card">
           <div className="empty-hint">
             <div className="empty-hint-main">
-              No attendance days between {from} and {to}.
+              {t('attendance.dailyPage.noDays', { from: formatDayLabel(from), to: formatDayLabel(to) })}
             </div>
-            Punches only become days once the processor has run. Widen the dates, or
-            run the processor above and then mark absentees for the days that are
-            finished.
+            {/* With days listed above as "not on roster", "run the processor" would be the wrong
+                advice: those punches WERE processed, and are waiting for a decision, not for a run. */}
+            {(unrostered ?? []).some((day) => day.state === 'Open')
+              ? t('attendance.unrostered.emptyDaysHint')
+              : t('attendance.dailyPage.noDaysHint')}
           </div>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           {/* PORT NOTE: the DevExtreme FilterRow + HeaderFilter are approximated by one global
               search box; only the columns the original allowed filtering on take part in it. */}
-          <Group justify="flex-end" p="xs">
-            <TextInput
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search"
-              leftSection={<IconSearch size={14} />}
-              w={240}
-              size="xs"
-            />
+          <Group justify="space-between" p="xs" gap="xs" wrap="wrap">
+            {/* QUICK FILTERS, each with its count for the loaded period. A day shows when it answers ANY
+                chosen chip; chips with nothing to show are left out unless chosen. */}
+            <div className="quick-filters" role="group" aria-label={t('attendance.daily.quick.label')}>
+              {QUICK_FILTERS.filter((f) => quickCounts[f] > 0 || quick.includes(f)).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  className={quick.includes(f) ? 'quick-chip quick-chip--on' : 'quick-chip'}
+                  aria-pressed={quick.includes(f)}
+                  title={t(`attendance.daily.quick.${f}Title`)}
+                  onClick={() => toggleQuick(f)}
+                >
+                  {t(`attendance.daily.quick.${f}`)} <span className="quick-chip-count">{quickCounts[f]}</span>
+                </button>
+              ))}
+              {quick.length > 0 && (
+                <Button variant="subtle" size="compact-xs" onClick={() => setQuick([])}>
+                  {t('attendance.daily.quick.clear')}
+                </Button>
+              )}
+            </div>
+            <Group gap="xs">
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<IconDownload size={14} />}
+                title={t('attendance.daily.exportTitle')}
+                disabled={total === 0}
+                onClick={exportShown}
+              >
+                {t('attendance.daily.export')}
+              </Button>
+              <TextInput
+                value={globalFilter}
+                onChange={(e) => setGlobalFilter(e.currentTarget.value)}
+                placeholder={t('common.search')}
+                leftSection={<IconSearch size={14} />}
+                w={200}
+                size="xs"
+              />
+            </Group>
           </Group>
 
+          {isCompact ? (
+            <div className="day-cards">
+              {table.getRowModel().rows.length === 0 ? (
+                <div className="empty-hint">{t('attendance.dailyPage.noMatch')}</div>
+              ) : (
+                table.getRowModel().rows.map(({ original: record }) => (
+                  <DayCard
+                    key={record.attendanceId}
+                    record={record}
+                    shiftLabel={shiftLabelOf(shiftByDay.get(dayKey(record.employeeId, record.workDate)))}
+                    today={companyDay}
+                    canCorrect={canCorrect}
+                    onView={() => setOpenDayId(record.attendanceId)}
+                    onMissing={() => setMissingRow(record)}
+                    onFix={() => setCorrectionRow(record)}
+                    onEdit={() => setManualRow(record)}
+                    onReport={() => setReportRow(record)}
+                  />
+                ))
+              )}
+            </div>
+          ) : (
           <div className="table-scroll">
             <Table striped withColumnBorders={false} verticalSpacing="xs" fz="sm">
               <Table.Thead>
@@ -2037,7 +2483,7 @@ export default function DailyAttendancePage() {
                   <Table.Tr>
                     <Table.Td colSpan={columns.length}>
                       <div className="empty-hint" style={{ padding: 16 }}>
-                        No attendance days match these filters.
+                        {t('attendance.dailyPage.noMatch')}
                       </div>
                     </Table.Td>
                   </Table.Tr>
@@ -2088,11 +2534,15 @@ export default function DailyAttendancePage() {
               </Table.Tbody>
             </Table>
           </div>
+          )}
 
           <Group justify="space-between" p="xs">
             <span className="hint" style={{ margin: 0 }}>
-              {total === 0 ? 0 : pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, total)} of {total}
+              {t('common.pageInfo', {
+                from: total === 0 ? 0 : pageIndex * pageSize + 1,
+                to: Math.min((pageIndex + 1) * pageSize, total),
+                total,
+              })}
             </span>
             <Group gap="xs">
               <Select
@@ -2113,6 +2563,45 @@ export default function DailyAttendancePage() {
         </div>
       )}
 
+      {/* MARK ABSENTEES ON A DAY THAT IS NOT OVER — asked, never silent. Yesterday is the filled
+          button because it is the day this is almost always run for. */}
+      {absentAsk && (
+        <Modal
+          opened
+          onClose={() => setAbsentAsk(false)}
+          title={t('attendance.daily.absenteesEarlyTitle', { date: formatDayLabel(day) })}
+          size={520}
+          centered
+        >
+          <p className="hint" style={{ marginTop: 0 }}>
+            {t('attendance.daily.absenteesEarlyText', { date: formatDayLabel(day) })}
+          </p>
+          <div className="form-actions">
+            <Button variant="default" onClick={() => setAbsentAsk(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="default"
+              onClick={() => {
+                setAbsentAsk(false)
+                void runMarkAbsentees(day)
+              }}
+            >
+              {t('attendance.daily.absenteesEarlyAnyway', { date: formatDayLabel(day) })}
+            </Button>
+            <Button
+              onClick={() => {
+                setAbsentAsk(false)
+                setDay(companyYesterday)
+                void runMarkAbsentees(companyYesterday)
+              }}
+            >
+              {t('attendance.daily.absentees', { date: formatDayLabel(companyYesterday) })}
+            </Button>
+          </div>
+        </Modal>
+      )}
+
       {openDayId !== null && (
         <DayDetailPopup
           attendanceId={openDayId}
@@ -2120,6 +2609,38 @@ export default function DailyAttendancePage() {
           branches={branches}
           onHiding={() => setOpenDayId(null)}
           onChanged={load}
+          onEnterMissing={(record) => {
+            setOpenDayId(null)
+            setMissingRow(record)
+          }}
+          onReport={(record) => {
+            setOpenDayId(null)
+            setReportRow(record)
+          }}
+        />
+      )}
+
+      {reportRow !== null && (
+        <ReportDayDialog
+          employeeId={reportRow.employeeId}
+          employeeName={reportRow.fullName}
+          workDate={reportRow.workDate}
+          currentIn={reportRow.firstInUtc}
+          currentOut={reportRow.lastOutUtc}
+          onClose={() => setReportRow(null)}
+          onSent={() => undefined}
+        />
+      )}
+
+      {missingRow !== null && (
+        <MissingPunchDialog
+          record={missingRow}
+          onClose={() => setMissingRow(null)}
+          onSaved={load}
+          onUseCorrection={() => {
+            setCorrectionRow(missingRow)
+            setMissingRow(null)
+          }}
         />
       )}
 
@@ -2136,8 +2657,8 @@ export default function DailyAttendancePage() {
           }}
           title={
             manualRow
-              ? `Override ${manualRow.fullName} — ${formatDate(manualRow.workDate)}`
-              : 'Add manual entry'
+              ? t('attendance.dailyPage.overrideTitle', { name: manualRow.fullName, date: formatDate(manualRow.workDate) })
+              : t('attendance.dailyPage.addManual')
           }
           // Fluid, with 640 as a CEILING rather than a fixed size: 640px is wider than a phone,
           // and this form also GROWS after saving when the computed result appears. Mantine's
@@ -2174,7 +2695,7 @@ export default function DailyAttendancePage() {
         <Modal
           opened
           onClose={() => setCorrectionRow(null)}
-          title={`Fix ${correctionRow.fullName} — ${formatDate(correctionRow.workDate)}`}
+          title={t('attendance.dailyPage.fixTitle', { name: correctionRow.fullName, date: formatDate(correctionRow.workDate) })}
           size={560}
           centered
         >

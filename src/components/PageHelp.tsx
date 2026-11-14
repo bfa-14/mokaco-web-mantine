@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { IconChevronDown, IconInfoCircle } from '@tabler/icons-react'
 import { useSettings } from '../settings/useSettings'
+import { t as translate } from '../i18n/t'
 
 /**
  * The "What is this page for?" panel that sits at the top of every Attendance page.
@@ -35,7 +36,7 @@ export function PageHelp({ children }: { children: ReactNode }) {
         {/* PORT: dx-icon-info / dx-icon-spf glyphs → Tabler equivalents; the page-help-chevron
             class (and its --open rotation) is CSS-driven and carries over unchanged. */}
         <IconInfoCircle size={16} aria-hidden="true" />
-        <span>What is this page for?</span>
+        <span>{translate('common.pageHelpTitle')}</span>
         <IconChevronDown
           size={16}
           className={`page-help-chevron${open ? ' page-help-chevron--open' : ''}`}

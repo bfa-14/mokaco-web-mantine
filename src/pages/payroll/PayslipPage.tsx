@@ -1,5 +1,6 @@
 /* src/pages/payroll/PayslipPage.tsx — the document, on screen and on paper. */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
 import { Button, Select, TextInput } from '@mantine/core'
 import { IconPrinter } from '@tabler/icons-react'
@@ -9,7 +10,9 @@ import { PERMISSION } from '../../auth/routeAccess'
 import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { payslipsService } from '../../services/payrollService'
-import type { PayslipDetail, PayslipLine } from '../../types/payroll'
+import type { PayslipDetail, PayslipLine, PayslipShortDays } from '../../types/payroll'
+import { isShortDaysLine, listDiffersFromLine } from './payslipShortDays'
+import { formatDayLabel, formatMinutes, formatTime, statusText } from '../attendance/attendanceFormat'
 import { fmtLocalDate } from '../hr/hrFormat'
 import { canRecordPayment } from './payrollRunRules'
 import './payroll.css'
@@ -47,7 +50,86 @@ function sourceBadge(l: PayslipLine, period: string, canLink: boolean) {
   }
 }
 
+/**
+ * THE DAYS BEHIND "N DAY(S) SHORT" (script 109): opened under the line on request, by the same rule as the line.
+ * If attendance changed after the run was generated the total differs from the line, and the table says so.
+ */
+function ShortDaysPanel({ payslipId, colSpan }: { payslipId: number; colSpan: number }) {
+  const { t } = useTranslation()
+  const [data, setData] = useState<PayslipShortDays | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    payslipsService
+      .shortDays(payslipId)
+      .then((d) => !cancelled && setData(d))
+      .catch((e) => !cancelled && setError(getErrorMessage(e)))
+    return () => {
+      cancelled = true
+    }
+  }, [payslipId])
+  return (
+    <tr className="pr-shortdays-row">
+      <td colSpan={colSpan}>
+        {error ? (
+          <div className="wf-balance-warn">{error}</div>
+        ) : !data ? (
+          <div className="pr-muted">{t('payroll.shortDays.loading')}</div>
+        ) : !data.available ? (
+          <div className="pr-muted">{t('payroll.shortDays.unavailable')}</div>
+        ) : data.days.length === 0 ? (
+          <div className="pr-muted">{t('payroll.shortDays.none')}</div>
+        ) : (
+          <>
+            <div className="pr-muted">
+              {t('payroll.shortDays.counted', {
+                from: formatDayLabel(data.countedFrom),
+                to: formatDayLabel(data.countedUpTo),
+              })}
+            </div>
+            <table className="pr-lines pr-shortdays">
+              <thead>
+                <tr>
+                  <th>{t('payroll.shortDays.date')}</th>
+                  <th>{t('payroll.shortDays.status')}</th>
+                  <th>{t('payroll.shortDays.times')}</th>
+                  <th className="num">{t('payroll.shortDays.worked')}</th>
+                  <th className="num">{t('payroll.shortDays.counts')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.days.map((d) => (
+                  <tr key={d.workDate}>
+                    <td>{formatDayLabel(d.workDate)}</td>
+                    <td>{statusText(d.status)}</td>
+                    <td>{d.firstInUtc || d.lastOutUtc ? `${formatTime(d.firstInUtc)}–${formatTime(d.lastOutUtc)}` : '—'}</td>
+                    <td className="num">
+                      {t('payroll.shortDays.workedOf', { worked: formatMinutes(d.workedMinutes), standard: formatMinutes(d.standardMinutes) })}
+                    </td>
+                    <td className="num">{d.missingDays.toFixed(2)}</td>
+                  </tr>
+                ))}
+                <tr className="pr-shortdays-total">
+                  <td colSpan={4}>{t('payroll.shortDays.total', { count: data.days.length })}</td>
+                  <td className="num">{data.totalMissingDays.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+            {listDiffersFromLine(data.totalMissingDays, data.lineQuantity) && (
+              <div className="wf-balance-warn">
+                {t('payroll.shortDays.differs', { line: (data.lineQuantity ?? 0).toFixed(2), now: data.totalMissingDays.toFixed(2) })}
+              </div>
+            )}
+          </>
+        )}
+      </td>
+    </tr>
+  )
+}
+
 export default function PayslipPage() {
+  const { t } = useTranslation()
+  const [openShortDays, setOpenShortDays] = useState(false)
   const { id } = useParams()
   const payslipId = Number(id)
   /* TWO READERS (QA3 WEB-15). A PAYROLL_VIEW holder reads any payslip and may follow it into the run,
@@ -152,15 +234,33 @@ export default function PayslipPage() {
                 </thead>
                 <tbody>
                   {rows.map((l) => (
-                    <tr key={l.payslipLineId}>
+                    <Fragment key={l.payslipLineId}>
+                    <tr>
                       <td>{l.componentName}</td>
-                      <td className="pr-muted">{l.note ?? ''}</td>
+                      <td className="pr-muted">
+                        {l.note ?? ''}
+                        {isShortDaysLine(l) && (
+                          <>
+                            {' '}
+                            <button
+                              type="button"
+                              className="pr-link-button no-print"
+                              aria-expanded={openShortDays}
+                              onClick={() => setOpenShortDays((v) => !v)}
+                            >
+                              {t(openShortDays ? 'payroll.shortDays.hide' : 'payroll.shortDays.show')}
+                            </button>
+                          </>
+                        )}
+                      </td>
                       <td className="num">{l.quantity ?? ''}</td>
                       <td className="num">{l.unitAmount != null ? fmt(l.unitAmount) : ''}</td>
                       <td className="num">{fmt(l.amount)}</td>
                       <td>{l.currencyCode}</td>
                       <td className="no-print">{sourceBadge(l, p.periodYearMonth, canViewPayroll)}</td>
                     </tr>
+                    {isShortDaysLine(l) && openShortDays && <ShortDaysPanel payslipId={payslipId} colSpan={7} />}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

@@ -219,6 +219,15 @@ export interface AttendanceReadiness {
   undecidedExitVariances: number
   /** Late / early / missing-punch anomalies HR has not excused, deducted or corrected. */
   undecidedAnomalies: number
+  /**
+   * Completed days with punches that the approved roster does not know and nobody has decided
+   * (script 108). Optional: an API on a database without that script does not send it.
+   */
+  undecidedUnrosteredDays?: number
+  /** Whether those days block THIS period; false = counted, the run can still be created. */
+  unrosteredDaysBlock?: boolean
+  /** The month (yyyy-MM) from which an undecided day blocks payroll; null = never. */
+  unrosteredBlocksFrom?: string | null
   isReady: boolean
 }
 
@@ -662,3 +671,28 @@ export interface NssfRateUpsertRequest {
  * ceiling of its own — see NssfRate.ceilingAmount.
  */
 export const NSSF_CEILING_USD_KEY = 'NssfCeilingUsd'
+
+/** GET /api/payroll/payslips/{id}/short-days (script 109): the days behind the "N day(s) short" line. */
+export interface PayslipShortDay {
+  workDate: string
+  status: string
+  firstInUtc: string | null
+  lastOutUtc: string | null
+  workedMinutes: number
+  standardMinutes: number
+  shortfallMinutes: number
+  lateMinutes: number
+  dayFraction: number | null
+  /** The part of a day this date deducts (1 = a whole day not worked). */
+  missingDays: number
+}
+
+export interface PayslipShortDays {
+  /** False when the database lacks script 109. */
+  available: boolean
+  countedFrom: string | null
+  countedUpTo: string | null
+  lineQuantity: number | null
+  totalMissingDays: number
+  days: PayslipShortDay[]
+}

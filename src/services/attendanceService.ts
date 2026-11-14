@@ -1,6 +1,9 @@
 import { apiRequest } from '../api/client'
 import type {
   AnomalyDecideAllRequest,
+  DayReport,
+  DayReportCreateRequest,
+  MyAttendance,
   AnomalyDecideAllResult,
   AnomalyDecisionRequest,
   AnomalyDecisionResult,
@@ -62,6 +65,9 @@ import type {
   QuarantineDismissResult,
   QuarantineMapRequest,
   QuarantineMapResult,
+  UnrosteredDay,
+  UnrosteredDayDecisionRequest,
+  UnrosteredDayDecisionResult,
   WorkedWithoutRoster,
 } from '../types/attendance'
 
@@ -315,6 +321,31 @@ export const attendanceService = {
       `/api/attendance/worked-without-roster?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
         (branchId ? `&branchId=${branchId}` : ''),
     ),
+  /**
+   * The same days as the pages show them: state (open / dismissed), what stands in the way of adding
+   * each, and whether the signed-in person may decide it. ATTENDANCE_VIEW, branch-scoped.
+   */
+  getUnrosteredDays: (from: string, to: string, filter?: { branchId?: number | null; employeeId?: number | null }) =>
+    apiRequest<UnrosteredDay[]>(
+      `/api/attendance/unrostered-days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+        (filter?.branchId ? `&branchId=${filter.branchId}` : '') +
+        (filter?.employeeId ? `&employeeId=${filter.employeeId}` : ''),
+    ),
+  /**
+   * What one such day was. Shift / RestDay add the roster row and derive the day at once; Dismiss
+   * needs a note and writes nothing. The server decides who may (two permissions, by the day's date).
+   */
+  decideUnrosteredDay: (request: UnrosteredDayDecisionRequest) =>
+    apiRequest<UnrosteredDayDecisionResult>('/api/attendance/unrostered-days/decide', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+  /** Takes a dismissal back: the day is open again. */
+  reopenUnrosteredDay: (employeeId: number, workDate: string) =>
+    apiRequest<void>('/api/attendance/unrostered-days/reopen', {
+      method: 'POST',
+      body: JSON.stringify({ employeeId, workDate }),
+    }),
   /** D9: unknown device users — punches under a PIN enrolled to nobody, one line per (device, PIN). */
   getDeviceQuarantine: (branchId?: number | null) =>
     apiRequest<QuarantinedDeviceUser[]>(`/api/attendance/device-quarantine${branchId ? `?branchId=${branchId}` : ''}`),
@@ -501,5 +532,40 @@ export const correctionsService = {
   reject: (id: number) =>
     apiRequest<void>(`/api/attendance/corrections/${id}/reject`, {
       method: 'POST',
+    }),
+}
+
+/**
+ * The signed-in employee's OWN attendance (GET /api/me/attendance). Authentication only: the employee is the
+ * token's. Resolves to null for an account that is not linked to an employee (the API answers 204).
+ */
+export const myAttendanceService = {
+  get: async (month?: string) =>
+    (await apiRequest<MyAttendance | undefined>(
+      `/api/me/attendance${month ? `?month=${encodeURIComponent(month)}` : ''}`,
+    )) ?? null,
+}
+
+/**
+ * "Something is wrong with this day" (script 110). Reporting and reading one's own: sign-in only (the procedure lets
+ * the employee report their own days and a branch manager the days of their branches). Queue and decide:
+ * ATTENDANCE_CORRECT. Accepting is an approved correction with the reported times.
+ */
+export const dayReportsService = {
+  create: (request: DayReportCreateRequest) =>
+    apiRequest<{ reportId: number }>('/api/day-reports', { method: 'POST', body: JSON.stringify(request) }),
+  mine: (from?: string, to?: string) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    return apiRequest<DayReport[]>(`/api/day-reports/mine${params.size ? `?${params.toString()}` : ''}`)
+  },
+  withdraw: (reportId: number) => apiRequest<void>(`/api/day-reports/${reportId}/withdraw`, { method: 'POST' }),
+  queue: (status?: string) =>
+    apiRequest<DayReport[]>(`/api/day-reports${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  decide: (reportId: number, accept: boolean, note?: string | null) =>
+    apiRequest<{ reportId: number; status: string; correctionId: number | null }>(`/api/day-reports/${reportId}/decide`, {
+      method: 'POST',
+      body: JSON.stringify({ accept, note: note ?? null }),
     }),
 }
