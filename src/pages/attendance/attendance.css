@@ -1890,3 +1890,72 @@ a.pipeline-stat:hover {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/* MY ATTENDANCE */
+.my-punches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.my-next {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.my-next-day {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.my-next-date {
+  font-weight: 600;
+}
+
+.my-month-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.my-days {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-day {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.my-day--future {
+  opacity: 0.7;
+}
+
+.my-day-date {
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+}
+
+.my-day-label {
+  font-weight: 600;
+}
+
+.my-day-actual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}

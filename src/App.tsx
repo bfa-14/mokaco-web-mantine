@@ -50,6 +50,7 @@ import PayrollRunsPage from './pages/payroll/PayrollRunsPage'
 import PayrollRunDetailPage from './pages/payroll/PayrollRunDetailPage'
 import PayslipPage from './pages/payroll/PayslipPage'
 import MyPayslipsPage from './pages/payroll/MyPayslipsPage'
+import MyAttendancePage from './pages/attendance/MyAttendancePage'
 import AdvancesPage from './pages/payroll/AdvancesPage'
 import AdjustmentsPage from './pages/payroll/AdjustmentsPage'
 import TiersCeilingsPage from './pages/payroll/TiersCeilingsPage'
@@ -320,6 +321,8 @@ export default function App() {
                     <Route path="/profile" element={<MyProfilePage />} />
                     {/* Open on purpose (OPEN_ROUTES): everybody is paid, so everybody may look. */}
                     <Route path="/my-payslips" element={<MyPayslipsPage />} />
+                    {/* Open on purpose (OPEN_ROUTES): everybody has attendance, and the API returns only their own. */}
+                    <Route path="/my-attendance" element={<MyAttendancePage />} />
                     {/* Open on purpose (OPEN_ROUTES): the Preferences tab — the language switch —
                         must reach everybody. The page renders No access for its system tabs. */}
                     <Route path="/settings" element={<SettingsPage />} />

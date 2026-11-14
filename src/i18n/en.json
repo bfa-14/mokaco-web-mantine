@@ -172,7 +172,8 @@
       "list": "All bookings",
       "rooms": "Rooms",
       "report": "Report"
-    }
+    },
+    "myAttendance": "My attendance"
   },
   "common": {
     "dash": "—",
@@ -1900,6 +1901,55 @@
       "Excel": "Excel",
       "Manual": "Manual",
       "Pull": "Pull"
+    },
+    "my": {
+      "title": "My attendance",
+      "subtitle": "Your punches, your shifts and your days, with what HR decided on each.",
+      "noEmployeeTitle": "This account has no employee record",
+      "noEmployeeText": "Attendance belongs to an employee. Ask HR to link your account to your employee record.",
+      "todayTitle": "Today, {{date}}",
+      "noPunchToday": "No punch received today yet.",
+      "punchIn": "In {{time}}",
+      "punchOut": "Out {{time}}",
+      "punchKey": "Key {{time}}",
+      "punchHint": "Punches appear here as soon as the machine has been read. If one is missing, tell your manager.",
+      "nextTitle": "Your next 7 days",
+      "prevMonth": "Previous month",
+      "nextMonth": "Next month",
+      "monthTitle": "{{month}}",
+      "totals": {
+        "days": "Days worked",
+        "worked": "Hours worked",
+        "late": "Late days ({{minutes}})",
+        "absent": "Absences",
+        "waiting": "Waiting for HR"
+      },
+      "plan": {
+        "leave": "Approved leave",
+        "halfLeave": "half day of leave",
+        "none": "Not on the roster",
+        "rest": "Rest day",
+        "shift": "{{name}} {{start}}–{{end}}"
+      },
+      "times": "In {{in}} · Out {{out}} · Worked {{worked}}",
+      "noRecord": "No attendance day yet",
+      "manual": "Entered by HR",
+      "short": "Short by {{minutes}}",
+      "type": {
+        "LateArrival": "Late {{minutes}}",
+        "EarlyDeparture": "Left early {{minutes}}",
+        "MissingPunch": "Missing punch",
+        "HalfDayAbsence": "Half-day absence"
+      },
+      "decision": {
+        "waiting": "waiting for HR",
+        "Excused": "excused by HR",
+        "Deducted": "deducted",
+        "Corrected": "time corrected by HR"
+      },
+      "offRosterOpen": "Punched, not on the roster — waiting for HR",
+      "offRosterDismissed": "Punched, not on the roster — HR decided it was not work",
+      "footnote": "Late minutes waiting for HR are not deducted while they wait. Hours worked are the time between your punches, minus the break."
     }
   },
   "payroll": {

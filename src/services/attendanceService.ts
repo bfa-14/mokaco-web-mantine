@@ -1,6 +1,7 @@
 import { apiRequest } from '../api/client'
 import type {
   AnomalyDecideAllRequest,
+  MyAttendance,
   AnomalyDecideAllResult,
   AnomalyDecisionRequest,
   AnomalyDecisionResult,
@@ -530,4 +531,15 @@ export const correctionsService = {
     apiRequest<void>(`/api/attendance/corrections/${id}/reject`, {
       method: 'POST',
     }),
+}
+
+/**
+ * The signed-in employee's OWN attendance (GET /api/me/attendance). Authentication only: the employee is the
+ * token's. Resolves to null for an account that is not linked to an employee (the API answers 204).
+ */
+export const myAttendanceService = {
+  get: async (month?: string) =>
+    (await apiRequest<MyAttendance | undefined>(
+      `/api/me/attendance${month ? `?month=${encodeURIComponent(month)}` : ''}`,
+    )) ?? null,
 }

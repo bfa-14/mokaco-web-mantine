@@ -1381,3 +1381,64 @@ export interface RosterPinRequest {
   workDate: string
   isPinned: boolean
 }
+
+/* ── GET /api/me/attendance: the signed-in employee's own attendance (no HR notes) ── */
+
+export interface MyPunch {
+  /** The terminal's own wall clock. */
+  punchTime: string
+  /** 0 = in, 1 = out, anything else = a device key. */
+  punchType: number
+  source: string
+}
+
+export interface MyDayDecision {
+  type: AnomalyType
+  minutes: number
+  /** Excused | Deducted | Corrected, or null while HR has not decided. */
+  decision: AnomalyDecision | null
+  decidedAt: string | null
+}
+
+export interface MyAttendanceDay {
+  workDate: string
+  rostered: boolean
+  isRestDay: boolean
+  shiftName: string | null
+  /** 'HH:mm:ss' */
+  startTime: string | null
+  endTime: string | null
+  leaveDays: number
+  /** null = no attendance day. */
+  status: string | null
+  firstIn: string | null
+  lastOut: string | null
+  workedMinutes: number
+  dayFraction: number | null
+  lateMinutes: number
+  shortfallMinutes: number
+  hasAnomaly: boolean
+  isManual: boolean
+  offRosterState: 'Open' | 'Dismissed' | null
+  decisions: MyDayDecision[]
+}
+
+export interface MyAttendance {
+  employeeId: number
+  fullName: string
+  /** 'yyyy-MM' */
+  month: string
+  today: string
+  todayPunches: MyPunch[]
+  nextDays: MyAttendanceDay[]
+  days: MyAttendanceDay[]
+  totals: {
+    daysWorked: number
+    workedMinutes: number
+    lateDays: number
+    lateMinutes: number
+    absentDays: number
+    shortDays: number
+    waitingForHr: number
+  }
+}
