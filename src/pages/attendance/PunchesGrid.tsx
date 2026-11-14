@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { t as translate } from '../../i18n/t'
+import { utcToCompany } from './companyClock'
 import { Link } from 'react-router-dom'
 import {
   createColumnHelper,
@@ -20,7 +21,7 @@ import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import { useLive } from '../../live/useLive'
 import { useLiveEnabled } from '../../live/useLiveSettings'
 import { importService } from '../../services/attendanceService'
-import { formatDate, formatDayLabel, formatTime } from './attendanceFormat'
+import { formatDayLabel, formatTime } from './attendanceFormat'
 import type { RawPunch } from '../../types/attendance'
 
 /**
@@ -244,17 +245,26 @@ export function PunchesGrid({
             {t('attendance.punchesGrid.landed')}
           </span>
         ),
-        meta: { filterText: (v) => `${formatDate(v as string)} ${formatTime(v as string)}` },
-        cell: (info) => (
-          <span
-            title={t('attendance.punchesGrid.landedCell', {
-              punched: formatTime(info.row.original.punchTimeUtc),
-              received: formatTime(info.row.original.createdUtc),
-            })}
-          >
-            {formatDate(info.row.original.createdUtc)} {formatTime(info.row.original.createdUtc)}
-          </span>
-        ),
+        // The server's own stamp is UTC: shown on Beirut's clock, like the punch beside it.
+        meta: {
+          filterText: (v) => {
+            const at = utcToCompany(v as string)
+            return at ? `${at.day} ${at.time}` : ''
+          },
+        },
+        cell: (info) => {
+          const at = utcToCompany(info.row.original.createdUtc)
+          return (
+            <span
+              title={t('attendance.punchesGrid.landedCell', {
+                punched: formatTime(info.row.original.punchTimeUtc),
+                received: at?.time ?? '',
+              })}
+            >
+              {at ? `${at.day} ${at.time}` : '—'}
+            </span>
+          )
+        },
       }),
     ],
     [t, isRange],
