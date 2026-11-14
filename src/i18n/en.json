@@ -126,7 +126,8 @@
       "exitVariances": "Exit Variances",
       "corrections": "Corrections",
       "shifts": "Shifts",
-      "devices": "Devices"
+      "devices": "Devices",
+      "weeklyShifts": "Weekly shifts"
     },
     "payroll": {
       "group": "Payroll",
@@ -2018,6 +2019,27 @@
       "rejectNoteRequired": "Say why the report is rejected.",
       "rejected": "The report of {{name}} was rejected.",
       "sentForOther": "Sent to HR. The employee sees it on their My attendance page."
+    },
+    "weekly": {
+      "title": "Weekly shifts",
+      "subtitle": "The roster of a branch as a poster to print, pin up or send. Built live from the roster; people on approved leave are left out.",
+      "print": "Print / PDF",
+      "period": "Period",
+      "prevWeek": "Previous week",
+      "thisWeek": "This week",
+      "nextWeek": "Next week",
+      "shifts": "Shifts to show",
+      "allShifts": "All shifts worked",
+      "note": "Note on the poster",
+      "defaultNote": "Please be on time. Shift swaps need manager approval.",
+      "firstNames": "First names only",
+      "tooLong": "Choose at most {{max}} days for one poster.",
+      "eyebrow": "TEAM SCHEDULE",
+      "posterTitle": "Weekly Shifts",
+      "posterTitlePeriod": "Shifts",
+      "day": "DAY",
+      "off": "OFF",
+      "empty": "Nobody is on a shift in this period. Fill the roster first (Attendance > Roster)."
     }
   },
   "payroll": {
@@ -2197,7 +2219,9 @@
       "REPORT_VIEW": "View reports",
       "ACCESS_MANAGE": "Turn Google sign-in on or off and manage who can open the HRMS",
       "OFFROSTER_TODAY": "Decide a day that is not on the roster: today",
-      "OFFROSTER_PAST": "Decide a day that is not on the roster: past days"
+      "OFFROSTER_PAST": "Decide a day that is not on the roster: past days",
+      "BOOKING_ROOMS": "Edit rooms: prices, opening hours, add-ons",
+      "BOOKING_REPORT": "See the bookings report (revenue)"
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",

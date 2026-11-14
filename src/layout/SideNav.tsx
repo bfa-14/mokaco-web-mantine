@@ -93,6 +93,7 @@ const GROUPS: NavGroup[] = [
       { to: '/attendance', labelKey: 'nav.attendance.overview', icon: 'home', end: true },
       { to: '/attendance/daily', labelKey: 'nav.attendance.daily', icon: 'event' },
       { to: '/attendance/roster', labelKey: 'nav.attendance.roster', icon: 'card' },
+      { to: '/attendance/weekly-shifts', labelKey: 'nav.attendance.weeklyShifts', icon: 'event' },
       { to: '/attendance/import', labelKey: 'nav.attendance.import', icon: 'upload' },
       { to: '/attendance/unresolved', labelKey: 'nav.attendance.unresolvedPins', icon: 'help' },
       { to: '/attendance/anomalies', labelKey: 'nav.attendance.anomalies', icon: 'warning' },
