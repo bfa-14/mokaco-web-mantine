@@ -173,8 +173,7 @@
       "rooms": "Rooms",
       "report": "Report"
     },
-    "myAttendance": "My attendance",
-    "prepBook": "Prep book"
+    "myAttendance": "My attendance"
   },
   "common": {
     "dash": "—",
@@ -3195,37 +3194,6 @@
       "confirmBody": "Everyone will need to sign in with Google again. You stay signed in on this browser.",
       "confirmButton": "Sign everyone out",
       "done": "Everyone was signed out of Google."
-    }
-  },
-  "prepBook": {
-    "title": "Prep book",
-    "subtitle": "Type a drink to see its recipe. Amounts are as printed on the prep guide and bar labels.",
-    "searchPlaceholder": "Search a drink… e.g. spanish latte, qishr, mango",
-    "clear": "Clear search",
-    "category": "Category",
-    "searchingAll": "{{count}} found across the whole book",
-    "noneTitle": "No drink matches that",
-    "noneText": "Check the spelling, or try one word such as \"pistachio\" or \"matcha\".",
-    "ingredients": "Ingredients",
-    "steps": "Steps",
-    "showGuidePage": "Original guide page {{page}}",
-    "showLabel": "Original label",
-    "showRecipe": "Back to the recipe",
-    "sourceGuide": "Drink Preparation Guide v2, page {{page}}",
-    "sourceLabels": "MC MIX labels, label {{page}}",
-    "categories": {
-      "all": "All",
-      "coffee": "Coffee & lattes",
-      "matcha": "Matcha",
-      "refreshers": "Refreshers",
-      "frozen": "Frozen",
-      "traditional": "Traditional",
-      "basics": "Foams, syrups & sugar"
-    },
-    "temp": {
-      "all": "All",
-      "hot": "Hot",
-      "iced": "Iced"
     }
   }
 }

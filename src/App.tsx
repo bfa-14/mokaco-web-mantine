@@ -63,7 +63,6 @@ import DailyAttendanceReportPage from './pages/reports/DailyAttendanceReportPage
 import LeaveBalanceReportPage from './pages/reports/LeaveBalanceReportPage'
 import SettingsPage from './pages/settings/SettingsPage'
 import MyProfilePage from './pages/profile/MyProfilePage'
-import PrepBookPage from './pages/prepBook/PrepBookPage'
 
 /**
  * Wraps a route's element in its guard, IF the shared map says the route needs one.
@@ -324,9 +323,6 @@ export default function App() {
                     <Route path="/my-payslips" element={<MyPayslipsPage />} />
                     {/* Open on purpose (OPEN_ROUTES): everybody has attendance, and the API returns only their own. */}
                     <Route path="/my-attendance" element={<MyAttendancePage />} />
-                    {/* Open on purpose (OPEN_ROUTES): every barista needs the recipes, and the page holds
-                        no personal data and calls no API. */}
-                    <Route path="/prep-book" element={<PrepBookPage />} />
                     {/* Open on purpose (OPEN_ROUTES): the Preferences tab — the language switch —
                         must reach everybody. The page renders No access for its system tabs. */}
                     <Route path="/settings" element={<SettingsPage />} />

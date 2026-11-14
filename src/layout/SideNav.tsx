@@ -56,8 +56,6 @@ const PROFILE: NavLeaf = { to: '/profile', labelKey: 'nav.myProfile', icon: 'use
 const MY_PAYSLIPS: NavLeaf = { to: '/my-payslips', labelKey: 'nav.myPayslips', icon: 'money' }
 /** Everybody has attendance, so everybody may read their own — open, like the payslips. */
 const MY_ATTENDANCE: NavLeaf = { to: '/my-attendance', labelKey: 'nav.myAttendance', icon: 'clock' }
-/** The bar's recipes — every barista needs them, so open like the profile. Placed high: it is used mid-shift. */
-const PREP_BOOK: NavLeaf = { to: '/prep-book', labelKey: 'nav.prepBook', icon: 'coffee' }
 
 const GROUPS: NavGroup[] = [
   {
@@ -289,11 +287,6 @@ export function SideNav({
       >
         <NavIcon name={DASHBOARD.icon} />
         <span className="side-nav-label">{t(DASHBOARD.labelKey)}</span>
-      </NavLink>
-
-      <NavLink to={PREP_BOOK.to} className={leafClassName} onClick={onNavigate}>
-        <NavIcon name={PREP_BOOK.icon} />
-        <span className="side-nav-label">{t(PREP_BOOK.labelKey)}</span>
       </NavLink>
 
       {visibleGroups.map((group) => (

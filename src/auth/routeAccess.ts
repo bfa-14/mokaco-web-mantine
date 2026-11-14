@@ -251,8 +251,6 @@ export const OPEN_ROUTES: readonly string[] = [
   '/payroll/payslips/:id',
   // One's own attendance (GET /api/me/attendance: the token's employee only, no HR notes).
   '/my-attendance',
-  // The bar's drink recipes: static, no personal data, no API — every signed-in user may read them.
-  '/prep-book',
   // Settings — see the note at the end of ROUTE_ACCESS: the page gates its system tabs itself so
   // that the Preferences tab (the language switch) reaches everybody.
   '/settings',

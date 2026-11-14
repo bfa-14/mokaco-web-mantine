@@ -11,7 +11,6 @@ import {
   IconChecklist,
   IconChevronDown,
   IconClock,
-  IconCoffee,
   IconCopy,
   IconCreditCard,
   IconDeviceFloppy,
@@ -100,9 +99,6 @@ export const DX_ICONS: Record<string, Icon> = {
 
   /* DX's 'taskhelpneeded' is a person carrying a question mark — a role waiting to be filled. */
   taskhelpneeded: IconUserQuestion,
-
-  /* Not a DX name — the prep book is newer than the port. A cup, for the bar's recipes. */
-  coffee: IconCoffee,
 
   /**
    * DX's group expander was 'spf': a DOWN chevron that rotates 180° when the group opens. Down
