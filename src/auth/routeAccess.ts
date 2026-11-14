@@ -111,6 +111,8 @@ export const ROUTE_ACCESS: RouteRule[] = [
   { path: '/attendance', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
   { path: '/attendance/daily', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
   { path: '/attendance/roster', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
+  // The roster of a branch as a printable poster: the same read as the roster grid.
+  { path: '/attendance/weekly-shifts', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
   /* IMPORT AND UNRESOLVED PINS ARE ATTENDANCE_IMPORT, not ATTENDANCE_VIEW. Both live on the
      ingestion controller rather than the attendance one — the unresolved list especially, which
      reads GET /api/attendance/unresolved under [HasPermission("ATTENDANCE_IMPORT")]. Gated on VIEW

@@ -30,6 +30,7 @@ import HolidaysPage from './pages/core/HolidaysPage'
 import AttendanceHomePage from './pages/attendance/AttendanceHomePage'
 import DailyAttendancePage from './pages/attendance/DailyAttendancePage'
 import RosterPage from './pages/attendance/RosterPage'
+import WeeklyShiftsPage from './pages/attendance/WeeklyShiftsPage'
 import ImportPage from './pages/attendance/ImportPage'
 import UnresolvedPinsPage from './pages/attendance/UnresolvedPinsPage'
 import AnomaliesPage from './pages/attendance/AnomaliesPage'
@@ -192,6 +193,10 @@ export default function App() {
                     <Route
                       path="/attendance/roster"
                       element={guard('/attendance/roster', <RosterPage />)}
+                    />
+                    <Route
+                      path="/attendance/weekly-shifts"
+                      element={guard('/attendance/weekly-shifts', <WeeklyShiftsPage />)}
                     />
                     <Route
                       path="/attendance/import"
