@@ -1,6 +1,6 @@
 /* src/services/payrollService.ts — every payroll endpoint, one object per area. */
 import { apiRequest } from '../api/client'
-import type {
+import type { PayslipShortDays,
   AttendanceReadiness, EmployeePayslip, MyPayslip, NssfRate, NssfRateUpsertRequest,
   PayrollAdjustment, PayrollAdjustmentBulkRequest, PayrollAdjustmentBulkResult, PayrollComponentType,
   PayrollRunApproveRequest, PayrollRunCreateRequest, PayrollRunDetail, PayrollRunListItem, PayrollRunStaleness,
@@ -61,6 +61,9 @@ export const payslipsService = {
    * is the honest answer for somebody else's slip and should be shown, not swallowed.
    */
   get: (id: number) => apiRequest<PayslipDetail>(`/api/payroll/payslips/${id}`),
+
+  /** The days behind the payslip's "N day(s) short" line (script 109). Same access as the payslip itself. */
+  shortDays: (id: number) => apiRequest<PayslipShortDays>(`/api/payroll/payslips/${id}/short-days`),
 
   /** The caller's own payslips. Authentication only — everybody is paid, so everybody may look. */
   mine: () => apiRequest<MyPayslip[]>('/api/me/payslips'),

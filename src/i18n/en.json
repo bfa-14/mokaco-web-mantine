@@ -2094,6 +2094,23 @@
         "Bank": "bank transfer",
         "Cash": "cash"
       }
+    },
+    "shortDays": {
+      "show": "See the days",
+      "hide": "Hide the days",
+      "loading": "Reading the days…",
+      "unavailable": "The list of days needs database script 109.",
+      "none": "No day counts as short any more (attendance may have been corrected since this payslip was prepared).",
+      "counted": "Days counted from {{from}} to {{to}}, by the same rule as this line.",
+      "date": "Date",
+      "status": "Status",
+      "times": "In–Out",
+      "worked": "Worked",
+      "counts": "Counts as (days)",
+      "workedOf": "{{worked}} of {{standard}}",
+      "total_one": "{{count}} date",
+      "total_other": "{{count}} dates",
+      "differs": "Attendance changed after this payslip was prepared: the line deducts {{line}} day(s), the days now add up to {{now}}. Regenerating the run makes them agree."
     }
   },
   "access": {

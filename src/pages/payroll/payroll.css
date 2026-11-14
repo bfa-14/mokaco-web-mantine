@@ -81,3 +81,26 @@
   .pr-lines tr, .pr-lines-block, .pr-sign { page-break-inside: avoid; }
   body { background: #fff; }
 }
+
+/* The days behind "N day(s) short" (script 109), opened under the line. */
+.pr-link-button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent-strong, #8a5a2b);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pr-shortdays-row > td {
+  padding: 6px 0 12px;
+}
+
+.pr-shortdays {
+  margin-top: 6px;
+}
+
+.pr-shortdays-total td {
+  font-weight: 600;
+}

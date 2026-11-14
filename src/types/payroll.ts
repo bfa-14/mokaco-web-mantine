@@ -671,3 +671,28 @@ export interface NssfRateUpsertRequest {
  * ceiling of its own — see NssfRate.ceilingAmount.
  */
 export const NSSF_CEILING_USD_KEY = 'NssfCeilingUsd'
+
+/** GET /api/payroll/payslips/{id}/short-days (script 109): the days behind the "N day(s) short" line. */
+export interface PayslipShortDay {
+  workDate: string
+  status: string
+  firstInUtc: string | null
+  lastOutUtc: string | null
+  workedMinutes: number
+  standardMinutes: number
+  shortfallMinutes: number
+  lateMinutes: number
+  dayFraction: number | null
+  /** The part of a day this date deducts (1 = a whole day not worked). */
+  missingDays: number
+}
+
+export interface PayslipShortDays {
+  /** False when the database lacks script 109. */
+  available: boolean
+  countedFrom: string | null
+  countedUpTo: string | null
+  lineQuantity: number | null
+  totalMissingDays: number
+  days: PayslipShortDay[]
+}
