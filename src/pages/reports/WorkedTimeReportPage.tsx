@@ -254,7 +254,6 @@ export default function WorkedTimeReportPage() {
                     <th className="num">{t('attendance.reports.worked.col.missingPunch')}</th>
                     <th className="num">{t('attendance.reports.worked.col.leave')}</th>
                     <th className="num">{t('attendance.reports.worked.col.holidays')}</th>
-                    <th className="num">{t('attendance.reports.worked.col.notOnRoster')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -280,7 +279,7 @@ export default function WorkedTimeReportPage() {
                         </tr>
                         {isOpen && (
                           <tr className="wt-days-row">
-                            <td colSpan={12}>
+                            <td colSpan={11}>
                               <DayList days={daysOf(report, r.employeeId)} />
                             </td>
                           </tr>
@@ -301,6 +300,14 @@ export default function WorkedTimeReportPage() {
                 </tfoot>
               </table>
             </div>
+            {report.totals.notOnRosterDays > 0 && (
+              <p className="wt-rules wt-to-decide">
+                {t('attendance.reports.worked.notOnRosterNote', {
+                  count: report.totals.notOnRosterDays,
+                  time: reportMinutes(report.totals.notOnRosterMinutes),
+                })}
+              </p>
+            )}
             <p className="wt-rules">{t('attendance.reports.worked.rules')}</p>
           </>
         )}
@@ -334,22 +341,15 @@ function Figures({ row }: { row: WorkedTimeRow }) {
       <td className={row.missingPunchDays > 0 ? 'num report-negative' : 'num'}>{row.missingPunchDays}</td>
       <td className="num">{row.leaveDays}</td>
       <td className="num">{row.holidayDays}</td>
-      <td className={row.notOnRosterDays > 0 ? 'num wt-to-decide' : 'num'}>
-        {row.notOnRosterDays > 0
-          ? t('attendance.reports.worked.notOnRosterValue', {
-              count: row.notOnRosterDays,
-              time: row.notOnRosterMinutes > 0 ? reportMinutes(row.notOnRosterMinutes) : t('common.dash'),
-            })
-          : 0}
-      </td>
     </>
   )
 }
 
 function kindText(day: WorkedTimeDay, t: (key: string, options?: Record<string, unknown>) => string, arabic: boolean): string {
-  if (day.kind === 'NotOnRoster') return t('attendance.reports.worked.kind.notOnRoster')
-  if (day.kind === 'Leave' && day.note === 'HalfDay') return t('attendance.reports.worked.kind.halfLeave')
   const holiday = arabic ? (day.noteAr ?? day.note) : day.note
+  if (day.kind === 'NotOnRoster')
+    return holiday ? `${statusText('Holiday')} · ${holiday}` : t('attendance.reports.worked.kind.notOnRoster')
+  if (day.kind === 'Leave' && day.note === 'HalfDay') return t('attendance.reports.worked.kind.halfLeave')
   if (day.kind === 'Holiday' && holiday) return `${statusText('Holiday')} · ${holiday}`
   return statusText(day.kind)
 }
