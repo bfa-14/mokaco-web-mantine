@@ -147,6 +147,8 @@ export interface WorkedTimeDay {
   isManual: boolean
   /** A holiday's name, or 'HalfDay' for half a day of leave. */
   note: string | null
+  /** The holiday's Arabic name, when it has one. */
+  noteAr: string | null
 }
 
 export interface WorkedTimeReport {

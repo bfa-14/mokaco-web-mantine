@@ -1539,7 +1539,7 @@
         "notOnRosterValue_one": "{{count}} day · {{time}}",
         "notOnRosterValue_other": "{{count}} days · {{time}}",
         "noDays": "No day worked, on leave or on a holiday in the period counted.",
-        "rules": "Worked time: the attendance days (punches paired, HR's corrections included), counted up to yesterday — today is still being worked. Expected: the standard month spread over its days; public holidays and approved leave expect nothing (half a day of leave, half). Extra time: beyond the shift, or beyond the standard day without one — as detected, paid only against an approved overtime request. Not on roster: punched days of a month whose roster is approved but that are not on it; they wait for a decision on Daily attendance and are not in the totals.",
+        "rules": "Worked time: the attendance days (punches paired, HR's corrections included), first in to last out with the gaps between pairs taken out — on a day with an approved roster shift, the shift plus the time after it — counted up to yesterday, as today is still being worked. Expected: the standard month spread over its days; public holidays and approved leave expect nothing (half a day of leave, half). Extra time (part of worked time): beyond the shift, or beyond the standard day without one — as detected, paid only against an approved overtime request. Not on roster: punched days of a month whose roster is approved but that are not on it; they wait for a decision on Daily attendance and are not in the totals.",
         "col": {
           "daysWorked": "Days worked",
           "worked": "Worked",
@@ -1582,7 +1582,8 @@
           "notOnRosterDays": "Not on roster (days)",
           "notOnRosterHours": "Not on roster (hours)",
           "totals": "Totals"
-        }
+        },
+        "closedBranch": "{{name}} (closed)"
       }
     },
     "today": {
