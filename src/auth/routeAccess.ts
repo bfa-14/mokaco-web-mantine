@@ -195,6 +195,7 @@ export const ROUTE_ACCESS: RouteRule[] = [
   { path: '/reports/monthly-attendance', anyOf: [PERMISSION.REPORT_VIEW] },
   { path: '/reports/daily-attendance', anyOf: [PERMISSION.REPORT_VIEW] },
   { path: '/reports/leave-balance', anyOf: [PERMISSION.REPORT_VIEW] },
+  { path: '/reports/worked-time', anyOf: [PERMISSION.REPORT_VIEW] },
 
   /* ── Bookings ─────────────────────────────────────────────────────────────────────────────────
      The calendar, the list and the report are BOOKING_VIEW: all three read endpoints the API gates

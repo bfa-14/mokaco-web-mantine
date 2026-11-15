@@ -63,6 +63,7 @@ import BookingReportPage from './pages/bookings/BookingReportPage'
 import MonthlyAttendanceReportPage from './pages/reports/MonthlyAttendanceReportPage'
 import DailyAttendanceReportPage from './pages/reports/DailyAttendanceReportPage'
 import LeaveBalanceReportPage from './pages/reports/LeaveBalanceReportPage'
+import WorkedTimeReportPage from './pages/reports/WorkedTimeReportPage'
 import SettingsPage from './pages/settings/SettingsPage'
 import MyProfilePage from './pages/profile/MyProfilePage'
 
@@ -292,6 +293,10 @@ export default function App() {
                     <Route
                       path="/reports/leave-balance"
                       element={guard('/reports/leave-balance', <LeaveBalanceReportPage />)}
+                    />
+                    <Route
+                      path="/reports/worked-time"
+                      element={guard('/reports/worked-time', <WorkedTimeReportPage />)}
                     />
 
                     {/* Workflow — operations are open to any authenticated user; setup is guarded

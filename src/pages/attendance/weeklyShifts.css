@@ -222,12 +222,14 @@
 /* The sheet's own @page (A4, no margin) is set by the page while it is open: see PRINT_PAGE in WeeklyShiftsPage. */
 
 @media print {
-  /* The whole app is gone; the copy at the top of the page is the sheet. */
-  #root {
+  /* The whole app is gone; the copy at the top of the page is the sheet. ONLY while a poster is on the page: this
+     stylesheet stays loaded once any page imported it, and without the :has() every other page (the reports, a
+     payslip) would print blank. */
+  body:has(> .ws-print-only) #root {
     display: none !important;
   }
-  html,
-  body {
+  html:has(body > .ws-print-only),
+  body:has(> .ws-print-only) {
     margin: 0;
     padding: 0;
     background: #e4e2dd;

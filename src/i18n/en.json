@@ -159,7 +159,8 @@
       "group": "Reports",
       "monthlyAttendance": "Monthly Attendance",
       "dailyAttendance": "Daily Attendance",
-      "leaveBalance": "Leave Balance"
+      "leaveBalance": "Leave Balance",
+      "workedTime": "Worked Time"
     },
     "security": {
       "group": "Security",
@@ -1518,6 +1519,70 @@
         "help": "One row per employee for the month, with every figure payroll turns into a pay line. Review it before running a payroll period; the number to watch is unpaid absence days. Overtime here is detected, not automatically paid.",
         "totals_one": "Totals — {{count}} employee",
         "totals_other": "Totals — {{count}} employees"
+      },
+      "worked": {
+        "title": "Worked Time",
+        "subtitle": "Days and hours worked and progress against the standard month — with or without a roster.",
+        "help": "One row per employee for the period you choose (up to 93 days). Worked time comes from the attendance days the system builds from the punches every hour: ins and outs paired, double presses removed, HR's corrections included — the same days as Daily attendance and payroll. Expected time is the standard month (days × hours from Settings) spread over the days of the month; public holidays and approved leave expect nothing. Days punched but not on an approved roster are shown apart until somebody decides them. Click a row to see the employee's days.",
+        "thisMonth": "This month",
+        "lastMonth": "Last month",
+        "exportCsv": "Export CSV",
+        "tooLong": "Choose at most {{max}} days.",
+        "countedTo": "Counted up to",
+        "notStarted": "Nothing yet (the period has not started)",
+        "standard": "Standard",
+        "standardValue": "{{days}} days × {{hours}} a month",
+        "showAllDays": "Show every employee's days",
+        "hideAllDays": "Hide the days",
+        "totals_one": "Totals — {{count}} employee",
+        "totals_other": "Totals — {{count}} employees",
+        "notOnRosterValue_one": "{{count}} day · {{time}}",
+        "notOnRosterValue_other": "{{count}} days · {{time}}",
+        "noDays": "No day worked, on leave or on a holiday in the period counted.",
+        "rules": "Worked time: the attendance days (punches paired, HR's corrections included), counted up to yesterday — today is still being worked. Expected: the standard month spread over its days; public holidays and approved leave expect nothing (half a day of leave, half). Extra time: beyond the shift, or beyond the standard day without one — as detected, paid only against an approved overtime request. Not on roster: punched days of a month whose roster is approved but that are not on it; they wait for a decision on Daily attendance and are not in the totals.",
+        "col": {
+          "daysWorked": "Days worked",
+          "worked": "Worked",
+          "average": "Average / day",
+          "expected": "Expected",
+          "progress": "Progress",
+          "overtime": "Extra time",
+          "missingPunch": "Missing punch",
+          "leave": "Leave days",
+          "holidays": "Holidays",
+          "notOnRoster": "Not on roster"
+        },
+        "day": {
+          "date": "Day",
+          "what": "Status",
+          "firstIn": "First in",
+          "lastOut": "Last out",
+          "notes": "Notes",
+          "missingPunch": "Missing punch",
+          "manual": "Entered by HR",
+          "toDecide": "To decide"
+        },
+        "kind": {
+          "notOnRoster": "Not on roster",
+          "halfLeave": "Half a day of leave"
+        },
+        "csv": {
+          "employee": "Employee",
+          "branch": "Branch",
+          "department": "Department",
+          "daysWorked": "Days worked",
+          "workedHours": "Worked (hours)",
+          "averageHours": "Average per day (hours)",
+          "expectedHours": "Expected (hours)",
+          "progress": "Progress (%)",
+          "overtimeHours": "Extra time (hours)",
+          "missingPunch": "Missing punch days",
+          "leaveDays": "Leave days",
+          "holidays": "Holidays",
+          "notOnRosterDays": "Not on roster (days)",
+          "notOnRosterHours": "Not on roster (hours)",
+          "totals": "Totals"
+        }
       }
     },
     "today": {

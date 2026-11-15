@@ -96,3 +96,62 @@ export interface LeaveBalanceRow {
   /** Accrued + carried over − used + adjusted. The column people open this report to read. */
   remaining: number
 }
+
+/* ── 4. Worked Time Report (script 113) ── */
+
+export interface WorkedTimeHeader {
+  from: string
+  to: string
+  /** The last day counted: the end of the period, or yesterday when it reaches today. Null: nothing has passed yet. */
+  countedTo: string | null
+  branchId: number | null
+  branchName: string | null
+  standardDayMinutes: number
+  standardDaysPerMonth: number
+  generatedUtc: string
+}
+
+export interface WorkedTimeRow {
+  employeeId: number
+  fullName: string
+  branchName: string
+  departmentName: string
+  daysWorked: number
+  workedMinutes: number
+  averageMinutes: number
+  /** Beyond the shift, or the standard day without one — detected, not paid. */
+  overtimeMinutes: number
+  missingPunchDays: number
+  leaveDays: number
+  holidayDays: number
+  expectedMinutes: number
+  /** Worked / expected × 100; null when nothing was expected. */
+  progressPercent: number | null
+  /** Punched, not on an approved roster, waiting for a decision. Not in the figures above. */
+  notOnRosterDays: number
+  notOnRosterMinutes: number
+}
+
+export interface WorkedTimeDay {
+  employeeId: number
+  workDate: string
+  branchName: string
+  /** Present / RestDay / Holiday / Leave / Absent, or NotOnRoster. */
+  kind: string
+  /** Wall clock (Beirut). */
+  firstIn: string | null
+  lastOut: string | null
+  workedMinutes: number
+  overtimeMinutes: number
+  missingPunch: boolean
+  isManual: boolean
+  /** A holiday's name, or 'HalfDay' for half a day of leave. */
+  note: string | null
+}
+
+export interface WorkedTimeReport {
+  header: WorkedTimeHeader
+  rows: WorkedTimeRow[]
+  totals: WorkedTimeRow
+  days: WorkedTimeDay[]
+}

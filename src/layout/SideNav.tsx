@@ -175,6 +175,7 @@ const GROUPS: NavGroup[] = [
         icon: 'clock',
       },
       { to: '/reports/leave-balance', labelKey: 'nav.reports.leaveBalance', icon: 'card' },
+      { to: '/reports/worked-time', labelKey: 'nav.reports.workedTime', icon: 'chart' },
     ],
   },
   {
