@@ -60,6 +60,7 @@ import type {
   ShiftCreateRequest,
   ShiftPattern,
   ShiftPatternUpsertRequest,
+  ShiftHours,
   ShiftUpdateRequest,
   QuarantinedDeviceUser,
   QuarantineDismissRequest,
@@ -161,6 +162,11 @@ export const shiftsService = {
       method: 'PUT',
       body: JSON.stringify(request),
     }),
+  /** The shift's hours over time, oldest first. */
+  getHours: (id: number) => apiRequest<ShiftHours[]>(`/api/shifts/${id}/hours`),
+  /** Takes one change of hours back; the days it covered are worked out again. */
+  deleteHours: (id: number, shiftHoursId: number) =>
+    apiRequest<{ daysRederived: number }>(`/api/shifts/${id}/hours/${shiftHoursId}`, { method: 'DELETE' }),
 }
 
 /** The roster. Read: ATTENDANCE_VIEW. Write: ATTENDANCE_MANAGE. */

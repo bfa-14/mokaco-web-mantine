@@ -299,6 +299,39 @@ export interface ShiftCreateRequest {
 
 export interface ShiftUpdateRequest extends ShiftCreateRequest {
   isActive: boolean
+  /** 'yyyy-MM-dd': the first day the hours in this request apply. Sent when the hours change; the days before keep theirs. */
+  effectiveFrom?: string | null
+  /** 'yyyy-MM-dd': the last day they apply - the hours before come back the day after. Empty = until the next change. */
+  effectiveTo?: string | null
+  /** Why the hours change (kept in the shift's history). */
+  note?: string | null
+}
+
+/**
+ * One row of a shift's history - GET /api/shifts/{id}/hours. "From this day the shift runs these hours": a day is
+ * judged against the row in force on that day, so changing a shift's hours never re-judges the days before.
+ */
+export interface ShiftHours {
+  shiftHoursId: number
+  shiftId: number
+  /** The first day these hours apply (the shift's first row: 2000-01-01, i.e. from the start). */
+  effectiveFrom: string
+  /** The last day they apply; null on the latest row. */
+  effectiveTo: string | null
+  startTime: string
+  endTime: string
+  crossesMidnight: boolean
+  breakMinutes: number
+  graceMinutes: number | null
+  /** End - start - break: the length of a working day on these hours. */
+  standardMinutes: number
+  note: string | null
+  createdBy: string | null
+  createdAtUtc: string
+  /** The shift's first hours: they cannot be taken back. */
+  isFirst: boolean
+  /** The row in force today. */
+  isCurrent: boolean
 }
 
 /* ── Roster ── */

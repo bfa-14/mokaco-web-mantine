@@ -172,8 +172,6 @@ export default function SettingsPage() {
     }
   }
 
-  const standardHours = Number(drafts.StandardWorkDayHours) || undefined
-
   /**
    * The arming flag, owned by the Danger zone. Kept OUT of the ordinary list below: it is not a
    * preference, and a switch that permits deleting every employee must not sit among the
@@ -283,7 +281,6 @@ export default function SettingsPage() {
         setting={setting}
         draft={drafts[setting.settingKey] ?? ''}
         saving={savingKey === setting.settingKey}
-        standardHours={standardHours}
         onDraftChange={(value) =>
           setDrafts((current) => ({ ...current, [setting.settingKey]: value }))
         }

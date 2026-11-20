@@ -2101,3 +2101,70 @@ a.pipeline-stat:hover {
     flex-wrap: wrap;
   }
 }
+
+/* ── Shifts: the hours of a shift over time (the edit dialog) ── */
+.shift-hours-when {
+  margin: 4px 0 12px;
+  padding: 12px 14px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--brand-offwhite, rgba(0, 0, 0, 0.02));
+}
+.shift-hours-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.shift-hours-row {
+  position: relative;
+  padding: 8px 36px 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.shift-hours-row:first-child {
+  border-top: 0;
+}
+.shift-hours-row--now {
+  background: var(--accent-tint, rgba(86, 122, 79, 0.08));
+}
+.shift-hours-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.shift-hours-period {
+  color: var(--ink-muted);
+}
+.shift-hours-day,
+.shift-hours-note {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.shift-hours-note {
+  margin-top: 2px;
+}
+.shift-hours-now {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-strong, #567a4f);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.shift-hours-remove {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 6px;
+}
+.shift-hours-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+}
