@@ -58,6 +58,8 @@ const MY_PAYSLIPS: NavLeaf = { to: '/my-payslips', labelKey: 'nav.myPayslips', i
 const MY_ATTENDANCE: NavLeaf = { to: '/my-attendance', labelKey: 'nav.myAttendance', icon: 'clock' }
 /** One's own branch's weekly shifts: SHIFTS_VIEW_BRANCH (script 112), shown only to who holds it. */
 const MY_SHIFTS: NavLeaf = { to: '/my-shifts', labelKey: 'nav.myShifts', icon: 'event' }
+/** The drink recipes: confidential, so shown only to who holds PREP_BOOK_VIEW or PREP_BOOK_MANAGE (script 115). */
+const PREP_BOOK: NavLeaf = { to: '/recipes', labelKey: 'nav.prepBook', icon: 'coffee' }
 
 const GROUPS: NavGroup[] = [
   {
@@ -292,6 +294,13 @@ export function SideNav({
         <NavIcon name={DASHBOARD.icon} />
         <span className="side-nav-label">{t(DASHBOARD.labelKey)}</span>
       </NavLink>
+
+      {canOpen(PREP_BOOK.to, hasPermission) && (
+        <NavLink to={PREP_BOOK.to} className={leafClassName} onClick={onNavigate}>
+          <NavIcon name={PREP_BOOK.icon} />
+          <span className="side-nav-label">{t(PREP_BOOK.labelKey)}</span>
+        </NavLink>
+      )}
 
       {visibleGroups.map((group) => (
         <NavGroupSection key={group.basePath} group={group} onNavigate={onNavigate} />

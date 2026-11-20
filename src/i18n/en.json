@@ -176,7 +176,8 @@
       "report": "Report"
     },
     "myAttendance": "My attendance",
-    "myShifts": "My branch's shifts"
+    "myShifts": "My branch's shifts",
+    "prepBook": "Recipes"
   },
   "common": {
     "dash": "—",
@@ -2293,7 +2294,9 @@
       "OFFROSTER_PAST": "Decide a day that is not on the roster: past days",
       "BOOKING_ROOMS": "Edit rooms: prices, opening hours, add-ons",
       "BOOKING_REPORT": "See the bookings report (revenue)",
-      "SHIFTS_VIEW_BRANCH": "See my branch's weekly shifts"
+      "SHIFTS_VIEW_BRANCH": "See my branch's weekly shifts",
+      "PREP_BOOK_VIEW": "See the drink recipes",
+      "PREP_BOOK_MANAGE": "Upload or replace the recipe book"
     },
     "roles": {
       "rejectionEnds": "Rejection ends the request",
@@ -3289,5 +3292,47 @@
       "confirmButton": "Sign everyone out",
       "done": "Everyone was signed out of Google."
     }
+  },
+  "prepBook": {
+    "title": "Recipes",
+    "subtitle": "Type a drink to see its recipe. Amounts are as printed on the prep guide and bar labels.",
+    "searchPlaceholder": "Search a drink… e.g. spanish latte, frappé, qishr, mango",
+    "clear": "Clear search",
+    "category": "Category",
+    "searchingAll": "{{count}} found across the whole book",
+    "noneTitle": "No drink matches that",
+    "noneText": "Check the spelling, or try one word such as \"pistachio\" or \"matcha\".",
+    "ingredients": "Ingredients",
+    "steps": "Steps",
+    "showGuidePage": "Original guide page {{page}}",
+    "showLabel": "Original label",
+    "showRecipe": "Back to the recipe",
+    "sourceGuide": "Drink Preparation Guide, page {{page}}",
+    "sourceLabels": "MC MIX labels, label {{page}}",
+    "categories": {
+      "all": "All",
+      "coffee": "Coffee & lattes",
+      "matcha": "Matcha",
+      "refreshers": "Refreshers",
+      "frozen": "Frappés & blends",
+      "shakes": "Shakes",
+      "traditional": "Traditional",
+      "basics": "Foams, syrups & sugar"
+    },
+    "temp": {
+      "all": "All",
+      "hot": "Hot",
+      "iced": "Iced"
+    },
+    "uploadBook": "Upload recipe book",
+    "replaceBook": "Replace recipe book",
+    "uploaded": "The recipe book is in place: {{recipes}} recipes and {{scans}} scanned pages.",
+    "loadFailed": "The recipes could not be read: {{error}}",
+    "noBookTitle": "The recipe book is not here yet",
+    "noBookText": "An admin has not uploaded it yet. Ask your manager.",
+    "noBookManage": "Press \"Upload recipe book\" and choose the recipe book file (.zip). It is kept on the server and shown only to signed-in staff who have the permission.",
+    "confidential": "For Moka & Co staff only. Do not copy, photograph or share these recipes outside the company.",
+    "seeHot": "Hot version",
+    "seeIced": "Iced version"
   }
 }
