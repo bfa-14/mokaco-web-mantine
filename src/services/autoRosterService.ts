@@ -9,6 +9,7 @@ import type {
   RosterPinRequest,
   RosterRhythmDto,
   StaffingRequirementDto,
+  RosterRotation,
 } from '../types/attendance'
 
 /**
@@ -65,5 +66,12 @@ export const autoRosterService = {
     apiRequest<void>('/api/roster/auto/rhythm', {
       method: 'PUT',
       body: JSON.stringify(rows),
+    }),
+
+  /** The branch's fixed rotation: start date (a Monday), morning and evening shift, the list in order. Returns it as stored. */
+  saveRotation: (rotation: RosterRotation) =>
+    apiRequest<RosterRotation>('/api/roster/auto/rotation', {
+      method: 'PUT',
+      body: JSON.stringify(rotation),
     }),
 }

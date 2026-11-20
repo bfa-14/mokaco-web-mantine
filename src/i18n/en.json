@@ -1194,15 +1194,15 @@
     },
     "roster": {
       "auto": {
-        "button": "Auto-roster (6/5)…",
+        "button": "Auto-roster…",
         "disabled": {
           "allBranches": "Choose one branch first — the auto-roster plans one branch and month at a time.",
           "readOnly": "Read-only while request #{{id}} waits for approval.",
           "draftOpen": "Save or discard the draft first."
         },
         "drawer": {
-          "title": "Auto-roster (6/5)",
-          "intro": "Every employee alternates a 6-day week (1 rest day) and a 5-day week (2 rest days), and Saturdays and Sundays off are shared fairly. Leave, public holidays, locked days and your own edits are respected. A preview writes nothing.",
+          "title": "Auto-roster",
+          "intro": "Drafts the month's roster for this branch by the method you choose. Leave, public holidays, locked days and your own edits are respected. A preview writes nothing.",
           "month": "Month",
           "branch": "Branch",
           "loading": "Reading the branch's staff and settings…",
@@ -1344,7 +1344,8 @@
           "TURNAROUND": "Too little time between two shifts",
           "WEEKLY_REST_HOURS": "The weekly rest is shorter than the legal minimum",
           "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
-          "LONG_RUN": "A long run of working days"
+          "LONG_RUN": "A long run of working days",
+          "ROTATION_NOT_SET": "Not on the rotation list"
         },
         "issueShift": {
           "SHORT_STAFFED": "Below the minimum on {{shift}}",
@@ -1358,7 +1359,10 @@
           "REST_CONSECUTIVE": "Rest: breaks a long run of working days",
           "WORK_HOLIDAY_COVER": "Working the public holiday (cover)",
           "WORK_SHIFT_COVER": "Moved to {{shift}} so that shift is covered",
-          "HOLIDAY_OFF": "Public holiday: a day off, no row"
+          "HOLIDAY_OFF": "Public holiday: a day off, no row",
+          "REST_ROTATION": "Rest: the rotation's day off",
+          "WORK_ROTATION": "The rotation: the shift with fewer people that day",
+          "WORK_ROTATION_LEAD": "The rotation: the lead's shift this week"
         },
         "reasonArgs": {
           "owed": "owed {{value}}",
@@ -1448,7 +1452,62 @@
             "off": "{{shift}}: need not be covered this day"
           }
         },
-        "holidayHeader": "Public holiday: {{name}}"
+        "holidayHeader": "Public holiday: {{name}}",
+        "method": {
+          "label": "Method",
+          "Fair": "Fair weekends",
+          "Rotation": "Fixed rotation",
+          "FairHint": "The system chooses the days off: 6-day and 5-day weeks in turn, weekends shared fairly, every shift covered.",
+          "RotationHint": "Your rotation list decides: days off alternate two and one per week and move two weekdays every two weeks; the two leads swap morning and evening each week; everybody else is balanced between the two shifts."
+        },
+        "rotation": {
+          "title": "Rotation",
+          "intro": "Set where the rotation starts and its two shifts, then put the team in order. Leads first: the others are balanced down the list.",
+          "start": "Starts on (a Monday)",
+          "morning": "Morning shift",
+          "evening": "Evening shift",
+          "chooseShift": "Choose a shift",
+          "startHint": "Week 1 of the rotation starts on Monday {{date}}. Changing it moves everybody's days off.",
+          "startMissing": "Choose the Monday the rotation starts on. Any day you pick becomes the Monday of its week.",
+          "noPeople": "Nobody is on the list yet. Add people below.",
+          "moveUp": "Move {{name}} up",
+          "moveDown": "Move {{name}} down",
+          "remove": "Take {{name}} off the rotation",
+          "isNew": "New — check",
+          "role": "Role",
+          "staff": "Staff",
+          "lead1": "Lead 1",
+          "lead2": "Lead 2",
+          "group": "Group",
+          "single": "One-day week: off on",
+          "pair": "Two-day week: off on",
+          "offThisWeek": "Week of {{date}}: off {{days}}",
+          "listHint": "Group A has two days off on the rotation's odd weeks (1, 3, 5…) and one on the even weeks; group B the other way round. The days you choose are the ones of weeks 1 and 2; after that they move two weekdays later every two weeks. Lead 1 works mornings on odd weeks and evenings on even weeks; Lead 2 the opposite.",
+          "add": "Add somebody to the rotation…",
+          "addHint": "People who are not on the list are not planned by the rotation: their days stay as they are.",
+          "save": "Save rotation",
+          "saved": "The rotation is saved.",
+          "unsaved": "Not saved yet. Preview saves it first.",
+          "day": {
+            "0": "Mon",
+            "1": "Tue",
+            "2": "Wed",
+            "3": "Thu",
+            "4": "Fri",
+            "5": "Sat",
+            "6": "Sun"
+          },
+          "problem": {
+            "start": "Choose the Monday the rotation starts on.",
+            "notMonday": "The rotation starts on a Monday.",
+            "shifts": "Choose the morning shift and the evening shift.",
+            "sameShift": "The morning and the evening shift must be two different shifts.",
+            "empty": "Add at least one person to the rotation.",
+            "twoL1": "Only one person can be Lead 1.",
+            "twoL2": "Only one person can be Lead 2."
+          },
+          "splitPair": "{{first}} + {{second}} (same week)"
+        }
       },
       "branch": {
         "copyNeedsOne": "Choose a branch first — copying a month works on one branch at a time.",
