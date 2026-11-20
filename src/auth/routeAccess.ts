@@ -37,6 +37,9 @@ export const PERMISSION = {
   BOOKING_REPORT: 'BOOKING_REPORT',
   /* Script 112: one's own branch's weekly shifts, read-only (My branch's shifts). */
   SHIFTS_VIEW_BRANCH: 'SHIFTS_VIEW_BRANCH',
+  /* Script 115: the drink recipes (confidential): read them, and upload or replace the recipe book. */
+  PREP_BOOK_VIEW: 'PREP_BOOK_VIEW',
+  PREP_BOOK_MANAGE: 'PREP_BOOK_MANAGE',
   /* The two attendance WRITE trusts. Neither opens a page of its own — they gate the affordances
      inside pages ATTENDANCE_VIEW already opened, which is what lets a viewer read a roster they may
      not edit instead of being turned away from it. */
@@ -116,6 +119,8 @@ export const ROUTE_ACCESS: RouteRule[] = [
   // The roster of a branch as a printable poster: the same read as the roster grid.
   { path: '/attendance/weekly-shifts', anyOf: [PERMISSION.ATTENDANCE_VIEW] },
   { path: '/my-shifts', anyOf: [PERMISSION.SHIFTS_VIEW_BRANCH] },
+  // The drink recipes: whoever may read them, and whoever uploads the book (who must reach the page to do it).
+  { path: '/recipes', anyOf: [PERMISSION.PREP_BOOK_VIEW, PERMISSION.PREP_BOOK_MANAGE] },
   /* IMPORT AND UNRESOLVED PINS ARE ATTENDANCE_IMPORT, not ATTENDANCE_VIEW. Both live on the
      ingestion controller rather than the attendance one — the unresolved list especially, which
      reads GET /api/attendance/unresolved under [HasPermission("ATTENDANCE_IMPORT")]. Gated on VIEW

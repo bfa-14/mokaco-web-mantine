@@ -66,6 +66,7 @@ import LeaveBalanceReportPage from './pages/reports/LeaveBalanceReportPage'
 import WorkedTimeReportPage from './pages/reports/WorkedTimeReportPage'
 import SettingsPage from './pages/settings/SettingsPage'
 import MyProfilePage from './pages/profile/MyProfilePage'
+import PrepBookPage from './pages/prepBook/PrepBookPage'
 
 /**
  * Wraps a route's element in its guard, IF the shared map says the route needs one.
@@ -335,6 +336,8 @@ export default function App() {
                     {/* Open on purpose (OPEN_ROUTES): everybody has attendance, and the API returns only their own. */}
                     <Route path="/my-attendance" element={<MyAttendancePage />} />
                     <Route path="/my-shifts" element={guard('/my-shifts', <MyShiftsPage />)} />
+                    {/* The drink recipes: confidential, so guarded (PREP_BOOK_VIEW or PREP_BOOK_MANAGE). */}
+                    <Route path="/recipes" element={guard('/recipes', <PrepBookPage />)} />
                     {/* Open on purpose (OPEN_ROUTES): the Preferences tab — the language switch —
                         must reach everybody. The page renders No access for its system tabs. */}
                     <Route path="/settings" element={<SettingsPage />} />
