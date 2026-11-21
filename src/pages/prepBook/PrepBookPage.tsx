@@ -4,16 +4,19 @@ import { useSearchParams } from 'react-router-dom'
 import { ActionIcon, Button, FileButton, Loader, Modal, SegmentedControl, TextInput } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconFlame, IconLock, IconPhoto, IconSearch, IconSnowflake, IconUpload, IconX } from '@tabler/icons-react'
+import { IconChevronLeft, IconChevronRight, IconFlame, IconLock, IconPhoto, IconSearch, IconSnowflake, IconUpload, IconX } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSION } from '../../auth/routeAccess'
 import { getErrorMessage } from '../../api/errorMessage'
 import { prepBookService } from '../../services/prepBookService'
-import { PREP_CATEGORIES, type PrepCategory, type PrepRecipe } from './prepBookTypes'
+import { isGuidePage, PREP_CATEGORIES, type PrepCategory, type PrepRecipe } from './prepBookTypes'
 import { otherTemp, searchRecipes, withMl } from './prepSearch'
 import './prepBook.css'
 
 type TempFilter = 'all' | 'hot' | 'iced'
+
+/** What the API accepts for the guide (PrepBookPackageReader.MaxZipBytes). */
+const MAX_UPLOAD_BYTES = 40 * 1024 * 1024
 
 /**
  * RECIPES — the bar's drink recipes, searchable: type a drink, read its ingredients and steps, open the original
@@ -23,6 +26,10 @@ type TempFilter = 'all' | 'hot' | 'iced'
  * scanned pages come from the API to a signed-in user who holds PREP_BOOK_VIEW, and an admin (PREP_BOOK_MANAGE)
  * uploads or replaces the book here - which is also how a new version of the guide is published. Once loaded the
  * page searches in the browser, so it stays quick on a weak connection.
+ *
+ * TWO KINDS OF BOOK. A recipe book (.zip) holds recipe CARDS: ingredients, steps, categories, hot and iced. The guide
+ * uploaded as a PDF becomes a book of PAGES: the server draws every page, and here they are a grid of pictures to
+ * flip through (found by a word when the PDF has text, by looking when it is made of pictures).
  *
  * The open drink lives in the URL (?drink=iced-spanish-latte): the iPad's back gesture closes it.
  */
@@ -41,6 +48,8 @@ export default function PrepBookPage() {
   const [recipes, setRecipes] = useState<PrepRecipe[] | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  // A PDF chosen while the book on file has recipe cards: asked about before anything is replaced.
+  const [pendingPdf, setPendingPdf] = useState<File | null>(null)
 
   const load = useCallback(async () => {
     if (!canView) {
@@ -63,16 +72,39 @@ export default function PrepBookPage() {
     void load()
   }, [load])
 
-  async function upload(file: File | null) {
+  const isPdf = (file: File) => file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+
+  /** A PDF brings pages only: when the book on file has recipe cards, the admin is told what goes before it goes. */
+  function choose(file: File | null) {
     if (!file) return
+    // The server takes 40 MB at most; said here, in words, rather than as a bare "413" after a long wait.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      notifications.show({
+        color: 'red',
+        message: t('prepBook.tooLarge', { size: Math.ceil(file.size / (1024 * 1024)), max: MAX_UPLOAD_BYTES / (1024 * 1024) }),
+        autoClose: 12000,
+      })
+      return
+    }
+    if (isPdf(file) && (recipes ?? []).some((r) => !isGuidePage(r))) setPendingPdf(file)
+    else void upload(file)
+  }
+
+  async function upload(file: File) {
+    const pdf = isPdf(file)
     setUploading(true)
     try {
       const info = await prepBookService.upload(file)
       notifications.show({
         color: 'green',
-        message: t('prepBook.uploaded', { recipes: info.recipeCount, scans: info.scanCount }),
+        message: pdf
+          ? t('prepBook.uploadedPdf', { pages: info.scanCount })
+          : t('prepBook.uploaded', { recipes: info.recipeCount, scans: info.scanCount }),
         autoClose: 6000,
       })
+      setQuery('')
+      setCategory('all')
+      setTemp('all')
       await load()
     } catch (err) {
       notifications.show({ color: 'red', message: getErrorMessage(err), autoClose: 12000 })
@@ -82,6 +114,9 @@ export default function PrepBookPage() {
   }
 
   const all = useMemo(() => recipes ?? [], [recipes])
+  // A book of pages (the guide uploaded as a PDF): pictures to flip through, no categories, no hot and iced.
+  const pageBook = all.length > 0 && all.every(isGuidePage)
+  const hasText = useMemo(() => all.some((r) => r.text), [all])
   const openId = params.get('drink')
   const open = useMemo(() => all.find((r) => r.id === openId) ?? null, [all, openId])
 
@@ -89,9 +124,15 @@ export default function PrepBookPage() {
      nothing would read as "we don't make that". The chips narrow only an empty search. */
   const searching = query.trim().length > 0
   const shown = useMemo(() => {
+    if (pageBook) {
+      // "12" or "page 12" goes straight to that page; anything else is searched in the names and the text.
+      const number = /^\s*(?:page\s*)?(\d{1,3})\s*$/i.exec(query)?.[1]
+      if (number) return all.filter((r) => r.page === Number(number))
+      return searchRecipes(all, query)
+    }
     const pool = searching ? all : all.filter((r) => category === 'all' || r.category === category)
     return searchRecipes(pool, query).filter((r) => temp === 'all' || r.temp === temp)
-  }, [all, query, category, temp, searching])
+  }, [all, query, category, temp, searching, pageBook])
 
   // Only the categories the book on file has drinks in.
   const categories = useMemo(() => PREP_CATEGORIES.filter((c) => all.some((r) => r.category === c)), [all])
@@ -123,11 +164,11 @@ export default function PrepBookPage() {
       <div className="page-head">
         <div>
           <h1 className="page-title">{t('prepBook.title')}</h1>
-          <p className="page-subtitle">{t('prepBook.subtitle')}</p>
+          <p className="page-subtitle">{pageBook ? t('prepBook.subtitlePages') : t('prepBook.subtitle')}</p>
         </div>
         {canManage && (
           <div className="page-head-actions">
-            <FileButton onChange={(file) => void upload(file)} accept=".zip,application/zip,application/x-zip-compressed">
+            <FileButton onChange={choose} accept=".pdf,application/pdf,.zip,application/zip,application/x-zip-compressed">
               {(props) => (
                 <Button {...props} variant="default" loading={uploading} leftSection={<IconUpload size={16} />}>
                   {recipes && recipes.length > 0 ? t('prepBook.replaceBook') : t('prepBook.uploadBook')}
@@ -137,6 +178,12 @@ export default function PrepBookPage() {
           </div>
         )}
       </div>
+
+      {uploading && (
+        <div className="alert alert--warning" role="status">
+          {t('prepBook.uploadingPdf')}
+        </div>
+      )}
 
       {error && (
         <div className="alert alert--error" role="alert">
@@ -162,11 +209,42 @@ export default function PrepBookPage() {
       )}
 
       <RecipeModal
-        recipe={open}
-        other={open ? otherTemp(open, all) : null}
+        recipe={open && !isGuidePage(open) ? open : null}
+        other={open && !isGuidePage(open) ? otherTemp(open, all) : null}
         onSwitch={(id) => setParams({ drink: id }, { replace: true })}
         onClose={close}
       />
+      <PageModal
+        page={open && isGuidePage(open) ? open : null}
+        pages={all}
+        onGo={(id) => setParams({ drink: id }, { replace: true })}
+        onClose={close}
+      />
+
+      <Modal
+        opened={pendingPdf !== null}
+        onClose={() => setPendingPdf(null)}
+        title={t('prepBook.replaceWithPdfTitle')}
+        centered
+        size={520}
+      >
+        <p>{t('prepBook.replaceWithPdfText', { count: all.filter((r) => !isGuidePage(r)).length })}</p>
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setPendingPdf(null)}>
+            {t('prepBook.keepCards')}
+          </Button>
+          <Button
+            color="red"
+            onClick={() => {
+              const file = pendingPdf
+              setPendingPdf(null)
+              if (file) void upload(file)
+            }}
+          >
+            {t('prepBook.replaceWithPdfConfirm')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 
@@ -179,8 +257,8 @@ export default function PrepBookPage() {
           size="lg"
           radius="md"
           className="prep-search"
-          placeholder={t('prepBook.searchPlaceholder')}
-          aria-label={t('prepBook.searchPlaceholder')}
+          placeholder={pageBook ? t('prepBook.searchPages') : t('prepBook.searchPlaceholder')}
+          aria-label={pageBook ? t('prepBook.searchPages') : t('prepBook.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
           onKeyDown={(e) => {
@@ -201,6 +279,13 @@ export default function PrepBookPage() {
           enterKeyHint="search"
         />
 
+        {pageBook && !hasText && (
+          <div className="hint">
+            {t('prepBook.picturesOnly')}
+            {canManage ? ` ${t('prepBook.picturesOnlyAdmin')}` : ''}
+          </div>
+        )}
+        {!pageBook && (
         <div className="prep-filters">
           <div className={`prep-chips${searching ? ' prep-chips--idle' : ''}`} role="group" aria-label={t('prepBook.category')}>
             {(['all', ...categories] as const).map((c) => (
@@ -227,21 +312,30 @@ export default function PrepBookPage() {
             ]}
           />
         </div>
-        {searching && <div className="hint">{t('prepBook.searchingAll', { count: shown.length })}</div>}
+        )}
+        {searching && (
+          <div className="hint">
+            {pageBook ? t('prepBook.pagesFound', { count: shown.length }) : t('prepBook.searchingAll', { count: shown.length })}
+          </div>
+        )}
       </div>
 
       {shown.length === 0 ? (
         <div className="card">
           <div className="empty-hint">
-            <div className="empty-hint-main">{t('prepBook.noneTitle')}</div>
-            {t('prepBook.noneText')}
+            <div className="empty-hint-main">{pageBook ? t('prepBook.nonePagesTitle') : t('prepBook.noneTitle')}</div>
+            {pageBook ? t('prepBook.nonePagesText') : t('prepBook.noneText')}
           </div>
+        </div>
+      ) : pageBook ? (
+        <div className="prep-grid prep-grid--pages">
+          {shown.map((r) => (
+            <PageCard key={r.id} page={r} onOpen={() => openRecipe(r.id)} />
+          ))}
         </div>
       ) : (
         <div className="prep-grid">
-          {shown.map((r) => (
-            <RecipeCard key={r.id} recipe={r} onOpen={() => openRecipe(r.id)} />
-          ))}
+          {shown.map((r) => (isGuidePage(r) ? <PageCard key={r.id} page={r} onOpen={() => openRecipe(r.id)} /> : <RecipeCard key={r.id} recipe={r} onOpen={() => openRecipe(r.id)} />))}
         </div>
       )}
 
@@ -287,6 +381,148 @@ function RecipeCard({ recipe, onOpen }: { recipe: PrepRecipe; onOpen: () => void
         </div>
       </div>
     </button>
+  )
+}
+
+/** One page of a PDF guide in the grid: its small picture, its number, and its name when the page has one. */
+function PageCard({ page, onOpen }: { page: PrepRecipe; onOpen: () => void }) {
+  const { t } = useTranslation()
+  const number = t('prepBook.pageNumber', { page: page.page })
+  // A page of pictures is named "Page N" by the server: the number is then all there is to say.
+  const named = page.page == null || page.name !== `Page ${page.page}`
+  return (
+    <button type="button" className="prep-page-card" onClick={onOpen} aria-label={named ? `${number}: ${page.name}` : number}>
+      <div className="prep-page-thumb">{page.thumb ? <img src={page.thumb} alt="" loading="lazy" draggable={false} /> : null}</div>
+      <div className="prep-page-caption">
+        <span className="prep-page-number">{number}</span>
+        {named && (
+          <span className="prep-page-name" dir="auto">
+            {page.name}
+          </span>
+        )}
+      </div>
+    </button>
+  )
+}
+
+/**
+ * One page of a PDF guide, full size, with the pages before and after it one press away (the arrow keys too).
+ * The picture is fetched with the token when the page opens and its object URL is given back when it closes.
+ */
+function PageModal({
+  page,
+  pages,
+  onGo,
+  onClose,
+}: {
+  page: PrepRecipe | null
+  /** The whole book in order: where "previous" and "next" lead. */
+  pages: PrepRecipe[]
+  onGo: (id: string) => void
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const narrow = useMediaQuery('(max-width: 720px)')
+  const number = page?.page ?? null
+  const index = page ? pages.findIndex((p) => p.id === page.id) : -1
+  const previous = index > 0 ? pages[index - 1] : null
+  const next = index >= 0 && index < pages.length - 1 ? pages[index + 1] : null
+
+  const [picture, setPicture] = useState<{ url: string | null; error: string | null }>({ url: null, error: null })
+  useEffect(() => {
+    if (number == null) return
+    let cancelled = false
+    let made: string | null = null
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPicture({ url: null, error: null })
+    prepBookService
+      .scanObjectUrl('pages', number)
+      .then((url) => {
+        if (cancelled) URL.revokeObjectURL(url)
+        else {
+          made = url
+          setPicture({ url, error: null })
+        }
+      })
+      .catch((err) => !cancelled && setPicture({ url: null, error: getErrorMessage(err) }))
+    return () => {
+      cancelled = true
+      if (made) URL.revokeObjectURL(made)
+    }
+  }, [number])
+
+  const previousId = previous?.id
+  const nextId = next?.id
+  useEffect(() => {
+    if (number == null) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft' && previousId) onGo(previousId)
+      if (e.key === 'ArrowRight' && nextId) onGo(nextId)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [number, previousId, nextId, onGo])
+
+  const named = page != null && (page.page == null || page.name !== `Page ${page.page}`)
+
+  return (
+    <Modal
+      opened={page !== null}
+      onClose={onClose}
+      size={1100}
+      fullScreen={narrow}
+      centered
+      padding="md"
+      radius="lg"
+      title={
+        page ? (
+          <div className="prep-modal-title">
+            <div>
+              <div className="prep-modal-name" dir="auto">
+                {named ? page.name : t('prepBook.pageNumber', { page: page.page })}
+              </div>
+              <div className="prep-card-meta">
+                <span>{t('prepBook.pageOf', { page: index + 1, count: pages.length })}</span>
+              </div>
+            </div>
+          </div>
+        ) : null
+      }
+    >
+      {page && (
+        <div className="prep-page-view" dir="ltr">
+          <div className="prep-page-nav">
+            <Button
+              variant="default"
+              leftSection={<IconChevronLeft size={16} />}
+              disabled={!previous}
+              onClick={() => previous && onGo(previous.id)}
+            >
+              {t('prepBook.prevPage')}
+            </Button>
+            <Button
+              variant="default"
+              rightSection={<IconChevronRight size={16} />}
+              disabled={!next}
+              onClick={() => next && onGo(next.id)}
+            >
+              {t('prepBook.nextPage')}
+            </Button>
+          </div>
+          {picture.url ? (
+            <img src={picture.url} alt={page.name} className="prep-original" draggable={false} />
+          ) : picture.error ? (
+            <div className="alert alert--error" role="alert">
+              {picture.error}
+            </div>
+          ) : (
+            <div className="page-loading">
+              <Loader size={32} />
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 

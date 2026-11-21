@@ -328,3 +328,77 @@
   -webkit-user-drag: none;
   user-select: none;
 }
+
+/* ── A book of PAGES: the guide uploaded as a PDF, each page a picture ── */
+.prep-grid--pages {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px;
+}
+
+.prep-page-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font: inherit;
+  text-align: start;
+  color: var(--ink);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.prep-page-card:hover,
+.prep-page-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(46, 46, 42, 0.08);
+  outline: none;
+}
+
+.prep-page-thumb {
+  background: var(--brand-stone);
+  line-height: 0;
+}
+
+.prep-page-thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.prep-page-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.prep-page-number {
+  font-size: 13px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.prep-page-name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.prep-page-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 720px) {
+  .prep-grid--pages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}

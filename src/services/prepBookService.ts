@@ -14,7 +14,10 @@ export const prepBookService = {
   /** The book on file: size, when, by whom. Null when there is none. PREP_BOOK_MANAGE. */
   info: async () => (await apiRequest<PrepBookInfo | undefined>('/api/prep-book/info')) ?? null,
 
-  /** Uploads the recipe book (.zip) and replaces the one on file. PREP_BOOK_MANAGE. */
+  /**
+   * Uploads the guide and replaces the one on file: the guide itself as a PDF (the server draws its pages - this
+   * takes some seconds) or a recipe book (.zip). PREP_BOOK_MANAGE.
+   */
   upload: (file: File) => {
     const form = new FormData()
     form.append('file', file)

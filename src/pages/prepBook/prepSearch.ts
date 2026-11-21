@@ -9,6 +9,8 @@ export interface Searchable {
   aliases?: string[]
   ingredients?: string[]
   sizes?: { size: string; items: string[] }[]
+  /** What is written on a page of a PDF guide. */
+  text?: string
 }
 
 /**
@@ -94,7 +96,7 @@ export function scoreRecipe(recipe: Searchable, query: string): number {
   if (terms.length === 0) return 1
   const nameWords = normalize([recipe.name, ...(recipe.aliases ?? [])].join(' ')).split(' ')
   const bodyWords = normalize(
-    [...(recipe.ingredients ?? []), ...(recipe.sizes ?? []).flatMap((s) => s.items)].join(' '),
+    [...(recipe.ingredients ?? []), ...(recipe.sizes ?? []).flatMap((s) => s.items), recipe.text ?? ''].join(' '),
   ).split(' ')
 
   let total = 0

@@ -3375,22 +3375,41 @@
       "frozen": "Frappés & blends",
       "shakes": "Shakes",
       "traditional": "Traditional",
-      "basics": "Foams, syrups & sugar"
+      "basics": "Foams, syrups & sugar",
+      "pages": "Guide pages"
     },
     "temp": {
       "all": "All",
       "hot": "Hot",
       "iced": "Iced"
     },
-    "uploadBook": "Upload recipe book",
-    "replaceBook": "Replace recipe book",
+    "uploadBook": "Upload the guide",
+    "replaceBook": "Replace the guide",
     "uploaded": "The recipe book is in place: {{recipes}} recipes and {{scans}} scanned pages.",
     "loadFailed": "The recipes could not be read: {{error}}",
-    "noBookTitle": "The recipe book is not here yet",
+    "noBookTitle": "The guide is not here yet",
     "noBookText": "An admin has not uploaded it yet. Ask your manager.",
-    "noBookManage": "Press \"Upload recipe book\" and choose the recipe book file (.zip). It is kept on the server and shown only to signed-in staff who have the permission.",
+    "noBookManage": "Press \"Upload the guide\" and choose the guide as a PDF: the system turns it into pages by itself. (A recipe book .zip, with recipe cards, is accepted too.) It is kept on the server and shown only to signed-in staff who have the permission.",
     "confidential": "For Moka & Co staff only. Do not copy, photograph or share these recipes outside the company.",
     "seeHot": "Hot version",
-    "seeIced": "Iced version"
+    "seeIced": "Iced version",
+    "uploadedPdf": "The guide is in place: {{pages}} pages.",
+    "uploadingPdf": "Reading the PDF and drawing its pages. This can take a minute; keep this page open.",
+    "searchPages": "Search the guide… a word on the page, or a page number",
+    "picturesOnly": "Look through the pages, or type a page number.",
+    "pagesFound": "{{count}} pages",
+    "nonePagesTitle": "No page matches that",
+    "nonePagesText": "Try another word, or clear the search to see every page.",
+    "pageNumber": "Page {{page}}",
+    "pageOf": "Page {{page}} of {{count}}",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "replaceWithPdfTitle": "Replace the recipe cards with this PDF?",
+    "replaceWithPdfText": "The book on file has {{count}} recipe cards (ingredients, steps, search by drink). A PDF brings its pages only: after this, staff will see the guide's pages and the cards will be gone until the recipe book (.zip) is uploaded again.",
+    "replaceWithPdfConfirm": "Replace with the PDF",
+    "keepCards": "Keep the cards",
+    "subtitlePages": "The preparation guide, page by page. Tap a page to open it.",
+    "picturesOnlyAdmin": "(This PDF is made of pictures, with no text to read, so a drink cannot be searched by name. The recipe book .zip brings recipe cards with search.)",
+    "tooLarge": "This file is {{size}} MB; the guide may be up to {{max}} MB. Export the PDF at a smaller size and try again."
   }
 }

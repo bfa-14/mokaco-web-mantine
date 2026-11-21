@@ -98,3 +98,14 @@ test('a drink finds its other temperature, and only its own', () => {
   assert.equal(other('Hot Pistachio Matcha'), 'Iced Pistachio Matcha')
   assert.equal(other('Mango Refresher'), null)
 })
+
+test('a page of a PDF guide is found by a word written on it, its name first', () => {
+  const pages = [
+    { name: 'Page 1', text: '' },
+    { name: 'Test Latte', text: 'Test Latte\n2 shots of water\nstir gently' },
+    { name: 'Sample Frappe', text: 'Sample Frappe\nblend with ice\nserve with a test latte biscuit' },
+  ]
+  assert.deepEqual(searchRecipes(pages, 'stir').map((p) => p.name), ['Test Latte'])
+  assert.deepEqual(searchRecipes(pages, 'latte').map((p) => p.name), ['Test Latte', 'Sample Frappe'])
+  assert.deepEqual(searchRecipes(pages, 'mango'), [])
+})
