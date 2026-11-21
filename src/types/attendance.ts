@@ -299,6 +299,39 @@ export interface ShiftCreateRequest {
 
 export interface ShiftUpdateRequest extends ShiftCreateRequest {
   isActive: boolean
+  /** 'yyyy-MM-dd': the first day the hours in this request apply. Sent when the hours change; the days before keep theirs. */
+  effectiveFrom?: string | null
+  /** 'yyyy-MM-dd': the last day they apply - the hours before come back the day after. Empty = until the next change. */
+  effectiveTo?: string | null
+  /** Why the hours change (kept in the shift's history). */
+  note?: string | null
+}
+
+/**
+ * One row of a shift's history - GET /api/shifts/{id}/hours. "From this day the shift runs these hours": a day is
+ * judged against the row in force on that day, so changing a shift's hours never re-judges the days before.
+ */
+export interface ShiftHours {
+  shiftHoursId: number
+  shiftId: number
+  /** The first day these hours apply (the shift's first row: 2000-01-01, i.e. from the start). */
+  effectiveFrom: string
+  /** The last day they apply; null on the latest row. */
+  effectiveTo: string | null
+  startTime: string
+  endTime: string
+  crossesMidnight: boolean
+  breakMinutes: number
+  graceMinutes: number | null
+  /** End - start - break: the length of a working day on these hours. */
+  standardMinutes: number
+  note: string | null
+  createdBy: string | null
+  createdAtUtc: string
+  /** The shift's first hours: they cannot be taken back. */
+  isFirst: boolean
+  /** The row in force today. */
+  isCurrent: boolean
 }
 
 /* ── Roster ── */
@@ -1125,6 +1158,37 @@ export interface AutoRosterRequest {
   offRotationEmployeeIds: number[]
   rhythmOverrides: AutoRosterRhythmOverride[]
   draftCells: AutoRosterDraftCell[]
+  /**
+   * How the free days are decided. 'Fair' (also null): the 6/5 rhythm with fair weekends and shift cover.
+   * 'Rotation': the branch's FIXED ROTATION (script 116), read by the server as stored - the owner's rule.
+   */
+  method?: AutoRosterMethod | null
+}
+
+export type AutoRosterMethod = 'Fair' | 'Rotation'
+
+/** One person's line of the rotation list. Weekdays are 0 = Monday … 6 = Sunday. */
+export interface RosterRotationMember {
+  employeeId: number
+  /** 0 or 1 (A / B): group 0 has its two-days-off week on the even weeks, group 1 on the odd ones. */
+  group: number
+  /** The day off of a one-day-off week, before the rotation moves it. */
+  singleRestDay: number
+  /** The first of the two days off of a two-days-off week, before the rotation moves them. */
+  pairRestDay: number
+  /** The two leads alternate morning and evening week by week, opposite each other. */
+  leadSlot?: 'L1' | 'L2' | null
+  sortOrder: number
+}
+
+/** A branch's fixed rotation as stored. Nothing is set until the start date and the two shifts are. */
+export interface RosterRotation {
+  branchId: number
+  /** 'yyyy-MM-dd', a Monday: where week 0 starts. */
+  startDate?: string | null
+  morningShiftId?: number | null
+  eveningShiftId?: number | null
+  members: RosterRotationMember[]
 }
 
 /** The row a cell had when the preview read it — echoed back by the commit as its concurrency check. */
@@ -1352,6 +1416,8 @@ export interface AutoRosterSetup {
   shifts: AutoRosterSetupShift[]
   /** The branch's last saved run, as the drawer's defaults. Null before the first run. */
   lastParams?: AutoRosterRequest | null
+  /** The branch's fixed rotation as stored (the "Fixed rotation" method). */
+  rotation?: RosterRotation | null
   monthStatus?: string | null
   /** A roster approval waiting on the month: nothing may be planned until it is decided. */
   openRequestId?: number | null

@@ -78,11 +78,6 @@ const KNOWN: Record<
     switchLabel?: string
   }
 > = {
-  StandardWorkDayHours: {
-    min: 1,
-    max: 24,
-    step: 0.5,
-  },
   ExitLeaveBasis: {},
   /* THE TOLERANCE. A punch this many minutes or more past the shift start (or before its end) is
      an anomaly for HR to decide; inside it, nothing is flagged. A shift's own Grace overrides it
@@ -242,19 +237,9 @@ export function titleOf(setting: Setting): string {
 export function describeValue(
   key: string,
   value: string,
-  standardHours: number | undefined,
 ): string | null {
   const numeric = Number(value)
   if (value === '' || Number.isNaN(numeric)) return null
-
-  if (key === 'StandardWorkDayHours') {
-    const hours = Math.floor(numeric)
-    const mins = Math.round((numeric - hours) * 60)
-    const label = mins === 0
-      ? translate('common.hoursOnly', { hours })
-      : translate('common.hoursMinutes', { hours, minutes: mins })
-    return translate('settings.rows.explain.standardDay', { label, cost: (2 / numeric).toFixed(2) })
-  }
 
   if (key === 'AttendanceToleranceMinutes') {
     const n = Math.round(numeric)
@@ -267,19 +252,8 @@ export function describeValue(
 
   if (key === 'FullDayThreshold') {
     const percent = Math.round(numeric * 100)
-    const base = translate('settings.rows.explain.fraction', { value: numeric.toFixed(2), percent })
-    if (!standardHours) return base
-
-    const requiredHours = numeric * standardHours
-    const h = Math.floor(requiredHours)
-    const m = Math.round((requiredHours - h) * 60)
-    const label = m === 0
-      ? translate('common.hoursOnly', { hours: h })
-      : translate('common.hoursMinutes', { hours: h, minutes: m })
-
-    return numeric >= 1
-      ? `${base} ${translate('settings.rows.explain.fractionWhole', { hours: standardHours })}`
-      : `${base} ${translate('settings.rows.explain.fractionPart', { hours: standardHours, label })}`
+    // The length of a day is each shift's own (no setting any more), so the example stays a share of "the shift".
+    return translate('settings.rows.explain.fraction', { value: numeric.toFixed(2), percent })
   }
 
   return null
@@ -302,7 +276,6 @@ export function SystemSettingRow({
   setting,
   draft,
   saving,
-  standardHours,
   onDraftChange,
   onSave,
 }: {
@@ -310,7 +283,6 @@ export function SystemSettingRow({
   draft: string
   saving: boolean
   /** The configured standard day, so a fraction can be shown as real hours rather than a bare decimal. */
-  standardHours: number | undefined
   onDraftChange: (value: string) => void
   onSave: () => void
 }) {
@@ -332,7 +304,7 @@ export function SystemSettingRow({
     return label === path ? value : label
   }
   const dirty = draft !== setting.settingValue
-  const example = describeValue(setting.settingKey, draft, standardHours)
+  const example = describeValue(setting.settingKey, draft)
   const inputId = `setting-${setting.settingKey}`
 
   const isBool = setting.dataType === 'bool'

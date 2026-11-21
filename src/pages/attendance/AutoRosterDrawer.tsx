@@ -7,6 +7,7 @@ import { Drawer } from '../../components/dialogs'
 import { getErrorMessage } from '../../api/errorMessage'
 import { autoRosterService } from '../../services/autoRosterService'
 import type {
+  AutoRosterMethod,
   AutoRosterMode,
   AutoRosterRequest,
   AutoRosterRhythmStart,
@@ -15,6 +16,9 @@ import type {
 } from '../../types/attendance'
 import { formatDayLabel, periodLabel, periodRange } from './attendanceFormat'
 import { mondayOf } from './rosterCounters'
+import { AutoRosterRotation } from './AutoRosterRotation'
+import { proposeLine, rotationKey, rotationLines, rotationProblem, rotationToSave } from './rotationSetup'
+import type { RotationLine } from './rotationSetup'
 import {
   sameShiftCover,
   setLineCovered,
@@ -109,6 +113,20 @@ export function AutoRosterDrawer({
   const [savingStaffing, setSavingStaffing] = useState(false)
   const [staffingError, setStaffingError] = useState<string | null>(null)
 
+  /* THE METHOD. 'Fair' is everything above; 'Rotation' is the branch's fixed rotation (script 116): its start date,
+     its two shifts and the list. Like the staffing it belongs to the branch, not to the run - one save, made by
+     Preview first when it has changed, because the server plans by what is stored. */
+  const [method, setMethod] = useState<AutoRosterMethod>('Fair')
+  const [rotationStart, setRotationStart] = useState<string | null>(null)
+  const [rotationMorning, setRotationMorning] = useState<number | null>(null)
+  const [rotationEvening, setRotationEvening] = useState<number | null>(null)
+  const [rotationList, setRotationList] = useState<RotationLine[]>([])
+  /** What is stored, as rotationKey gives it; '' = nothing stored yet. */
+  const [rotationSaved, setRotationSaved] = useState('')
+  const [savingRotation, setSavingRotation] = useState(false)
+  const [rotationError, setRotationError] = useState<string | null>(null)
+  const rotationDirty = rotationKey(rotationStart, rotationMorning, rotationEvening, rotationList) !== rotationSaved
+
   const shiftCoverChanged = !sameShiftCover(shiftCover, coverSaved.lines)
   /** One unsaved state for the whole staffing: the weekdays and the shifts are one save. */
   const staffingDirty = daysDirty || shiftCoverChanged
@@ -156,6 +174,23 @@ export function AutoRosterDrawer({
     setShiftCover(lines)
     setCoverSaved({ lines, detected: source.detected })
     setStaffingError(null)
+
+    // The fixed rotation as stored; people on rotation who are not on the list yet get a proposal to check.
+    const off = new Set(current?.offRotationEmployeeIds ?? setup.staff.filter((s) => !s.onRotation).map((s) => s.employeeId))
+    const stored = setup.rotation ?? null
+    const rotLines = rotationLines(setup.staff, stored?.members ?? [], off)
+    const rotStart = stored?.startDate ? stored.startDate.slice(0, 10) : null
+    const morning = stored?.morningShiftId != null && activeShifts.has(stored.morningShiftId) ? stored.morningShiftId : null
+    const evening = stored?.eveningShiftId != null && activeShifts.has(stored.eveningShiftId) ? stored.eveningShiftId : null
+    setRotationStart(rotStart)
+    setRotationMorning(morning)
+    setRotationEvening(evening)
+    setRotationList(rotLines)
+    setRotationSaved(
+      stored?.startDate && !rotLines.some((l) => l.isNew) ? rotationKey(rotStart, morning, evening, rotLines) : '',
+    )
+    setRotationError(null)
+    setMethod((current?.method ?? setup.lastParams?.method) === 'Rotation' ? 'Rotation' : 'Fair')
   }, [opened, setup, filled, current, firstMonday, period])
 
   /** The month's holidays only — the setup may carry the ones the planner looked back over. */
@@ -233,8 +268,72 @@ export function AutoRosterDrawer({
     }
   }
 
+  async function saveRotation(): Promise<boolean> {
+    const problem = rotationProblem(rotationStart, rotationMorning, rotationEvening, rotationList)
+    if (problem) {
+      setRotationError(t(`attendance.roster.auto.rotation.problem.${problem}`))
+      return false
+    }
+    // Read before the await: what was sent is what was saved.
+    const lines = rotationList
+    setSavingRotation(true)
+    setRotationError(null)
+    try {
+      await autoRosterService.saveRotation(
+        rotationToSave(branchId, rotationStart as string, rotationMorning as number, rotationEvening as number, lines),
+      )
+      const saved = lines.map((l) => ({ ...l, isNew: false }))
+      setRotationList(saved)
+      setRotationSaved(rotationKey(rotationStart, rotationMorning, rotationEvening, saved))
+      return true
+    } catch (err) {
+      setRotationError(getErrorMessage(err))
+      return false
+    } finally {
+      setSavingRotation(false)
+    }
+  }
+
+  /** Off the list = off rotation for the run: shown as they stand, never planned (and not reported as missing). */
+  function removeFromRotation(employeeId: number) {
+    setRotationList((lines) => lines.filter((l) => l.employeeId !== employeeId))
+    setOffRotation((prev) => new Set(prev).add(employeeId))
+  }
+
+  function addToRotation(employeeId: number) {
+    const person = setup?.staff.find((s) => s.employeeId === employeeId)
+    if (!person) return
+    setRotationList((lines) =>
+      lines.some((l) => l.employeeId === employeeId)
+        ? lines
+        : [...lines, { employeeId, fullName: person.fullName, position: person.position, ...proposeLine(lines.length), isNew: true }],
+    )
+    setOffRotation((prev) => {
+      const next = new Set(prev)
+      next.delete(employeeId)
+      return next
+    })
+  }
+
   async function preview() {
     if (!setup) return
+    if (method === 'Rotation') {
+      // The server plans by the stored rotation, so an unsaved one would be planned without its changes.
+      if ((rotationDirty || rotationSaved === '') && !(await saveRotation())) return
+      onPreview({
+        branchId,
+        month: period,
+        mode,
+        method: 'Rotation',
+        rhythmStart: null,
+        defaultShiftId: null,
+        holidayCover: [...cover.entries()].map(([date, count]) => ({ date, count })),
+        offRotationEmployeeIds: [...offRotation],
+        rhythmOverrides: [],
+        draftCells: [],
+      })
+      return
+    }
     // The planner reads the staffing from the database, so an unsaved one would be planned without.
     if (staffingDirty && !(await saveStaffing())) return
     const rhythmOverrides = setup.staff
@@ -248,6 +347,7 @@ export function AutoRosterDrawer({
       branchId,
       month: period,
       mode,
+      method: 'Fair',
       rhythmStart,
       defaultShiftId,
       holidayCover: [...cover.entries()].map(([date, count]) => ({ date, count })),
@@ -258,7 +358,12 @@ export function AutoRosterDrawer({
   }
 
   const waiting = setup?.openRequestId != null
-  const canPreview = setup != null && !waiting && !busy && !savingStaffing && (mode !== 'ReplanAll' || confirmAll)
+  const canPreview =
+    setup != null && !waiting && !busy && !savingStaffing && !savingRotation && (mode !== 'ReplanAll' || confirmAll)
+  /** Staff who could be put on the rotation list: everybody not on it. */
+  const notOnRotationList = setup
+    ? setup.staff.filter((s) => !rotationList.some((l) => l.employeeId === s.employeeId))
+    : []
   const onRotationCount = setup ? setup.staff.filter((s) => !offRotation.has(s.employeeId)).length : 0
   const anyWeekUnknown = setup
     ? setup.staff.some((s) => !offRotation.has(s.employeeId) && !firstWeek.has(s.employeeId) && !firstWeekKnown(s))
@@ -312,6 +417,23 @@ export function AutoRosterDrawer({
           )}
 
           <div className="form-field">
+            <span className="form-label">{t('attendance.roster.auto.method.label')}</span>
+            <SegmentedControl
+              fullWidth
+              value={method}
+              onChange={(v) => setMethod(v as AutoRosterMethod)}
+              data={[
+                { value: 'Fair', label: t('attendance.roster.auto.method.Fair') },
+                { value: 'Rotation', label: t('attendance.roster.auto.method.Rotation') },
+              ]}
+              disabled={busy}
+            />
+            <div className="hint" style={{ marginTop: 6 }}>
+              {t(`attendance.roster.auto.method.${method}Hint`)}
+            </div>
+          </div>
+
+          <div className="form-field">
             <span className="form-label">{t('attendance.roster.auto.mode.label')}</span>
             <SegmentedControl
               fullWidth
@@ -338,6 +460,67 @@ export function AutoRosterDrawer({
             )}
           </div>
 
+          {method === 'Rotation' && (
+            <>
+              <AutoRosterRotation
+                shifts={setup.shifts}
+                startDate={rotationStart}
+                onStartDate={setRotationStart}
+                morningShiftId={rotationMorning}
+                onMorningShift={setRotationMorning}
+                eveningShiftId={rotationEvening}
+                onEveningShift={setRotationEvening}
+                lines={rotationList}
+                onLines={setRotationList}
+                onRemove={removeFromRotation}
+                firstMonday={firstMonday}
+                disabled={busy || savingRotation}
+              />
+              {notOnRotationList.length > 0 && (
+                <div className="form-field" style={{ marginTop: -4 }}>
+                  <Select
+                    aria-label={t('attendance.roster.auto.rotation.add')}
+                    placeholder={t('attendance.roster.auto.rotation.add')}
+                    data={notOnRotationList.map((s) => ({ value: String(s.employeeId), label: s.fullName }))}
+                    value={null}
+                    onChange={(v) => v != null && addToRotation(Number(v))}
+                    searchable
+                    disabled={busy || savingRotation}
+                  />
+                  <div className="hint" style={{ marginTop: 4 }}>
+                    {t('attendance.roster.auto.rotation.addHint')}
+                  </div>
+                </div>
+              )}
+              {rotationError && <div className="form-error">{rotationError}</div>}
+              <div className="form-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', marginBottom: 12 }}>
+                <Button
+                  variant="default"
+                  size="xs"
+                  leftSection={<IconDeviceFloppy size={14} />}
+                  loading={savingRotation}
+                  disabled={!rotationDirty || busy || waiting}
+                  onClick={() => {
+                    void saveRotation().then((ok) => {
+                      if (ok) {
+                        notifications.show({
+                          message: t('attendance.roster.auto.rotation.saved'),
+                          color: 'green',
+                          autoClose: 2500,
+                        })
+                      }
+                    })
+                  }}
+                >
+                  {t('attendance.roster.auto.rotation.save')}
+                </Button>
+                {rotationDirty && <span className="hint">{t('attendance.roster.auto.rotation.unsaved')}</span>}
+              </div>
+            </>
+          )}
+
+          {method === 'Fair' && (
+          <>
           <div className="form-grid">
             <div className="form-field">
               <span className="form-label">{t('attendance.roster.auto.rhythm.label')}</span>
@@ -461,6 +644,8 @@ export function AutoRosterDrawer({
               </>
             )}
           </div>
+          </>
+          )}
 
           {/* ── public holidays ── */}
           <div className="form-section">
@@ -516,6 +701,8 @@ export function AutoRosterDrawer({
             )}
           </div>
 
+          {method === 'Fair' && (
+          <>
           {/* ── shifts to cover every day (D16) ── */}
           <div className="form-section">
             <h3 className="form-section-title">{t('attendance.roster.auto.shiftCover.title')}</h3>
@@ -661,6 +848,8 @@ export function AutoRosterDrawer({
               {staffingDirty && <span className="hint">{t('attendance.roster.auto.staffing.unsaved')}</span>}
             </div>
           </div>
+          </>
+          )}
         </>
       )}
 

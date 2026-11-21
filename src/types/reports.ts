@@ -116,6 +116,8 @@ export interface WorkedTimeRow {
   fullName: string
   branchName: string
   departmentName: string
+  /** The length of this person's working day in minutes: their shift's (the default day when none of their days was measured). */
+  standardDayMinutes: number
   daysWorked: number
   workedMinutes: number
   averageMinutes: number

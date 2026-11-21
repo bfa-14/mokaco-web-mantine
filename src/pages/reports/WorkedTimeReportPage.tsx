@@ -324,7 +324,9 @@ function Figures({ row }: { row: WorkedTimeRow }) {
       <td className="num">{row.daysWorked}</td>
       <td className="num report-strong-cell">{reportMinutes(row.workedMinutes)}</td>
       <td className="num">{row.daysWorked ? reportMinutes(row.averageMinutes) : t('common.dash')}</td>
-      <td className="num">{reportMinutes(row.expectedMinutes)}</td>
+      <td className="num" title={row.standardDayMinutes > 0 ? t('attendance.reports.worked.expectedOf', { hours: reportMinutes(row.standardDayMinutes) }) : undefined}>
+        {reportMinutes(row.expectedMinutes)}
+      </td>
       <td>
         {row.progressPercent == null ? (
           t('common.dash')

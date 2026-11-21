@@ -5,18 +5,20 @@ import { ActionIcon, Button, Checkbox, Group, Loader, NumberInput, Pagination, S
 import { Modal } from '../../components/dialogs'
 import { TimePicker } from '@mantine/dates'
 import { notifications } from '@mantine/notifications'
-import { IconPlus, IconRefresh, IconSearch } from '@tabler/icons-react'
+import { IconPlus, IconRefresh, IconSearch, IconX } from '@tabler/icons-react'
 import { getErrorMessage } from '../../api/errorMessage'
 import { gridFilterFn, GridFilterRow } from '../../components/grid/GridFilterRow'
 import { PageHelp } from '../../components/PageHelp'
 import { shiftsService } from '../../services/attendanceService'
 import { GridHeaderContent } from '../../components/grid/GridHeaderFilter'
 import {
+  formatDayLabel,
   formatMinutes,
 } from './attendanceFormat'
+import { beirutToday } from '../../components/DateRangeField'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSIONS } from '../../types/attendance'
-import type { Shift } from '../../types/attendance'
+import type { Shift, ShiftHours } from '../../types/attendance'
 
 interface ShiftFormState {
   name: string
@@ -118,6 +120,23 @@ const activeText = (isActive: boolean) => (isActive ? 'Active' : 'Inactive')
 const MIDNIGHT_LABELS = ['Overnight', '—']
 const midnightText = (crosses: boolean) => (crosses ? 'Overnight' : '—')
 
+/** True when the form's hours are not the ones the shift has now: the change then needs the day it starts. */
+function hoursDiffer(form: ShiftFormState, shift: Shift): boolean {
+  return (
+    form.startTime.slice(0, 5) !== shift.startTime.slice(0, 5) ||
+    form.endTime.slice(0, 5) !== shift.endTime.slice(0, 5) ||
+    form.breakMinutes !== shift.breakMinutes ||
+    form.graceMinutes !== shift.graceMinutes ||
+    form.crossesMidnight !== shift.crossesMidnight
+  )
+}
+
+/** "From 01/12/2026 to 31/12/2026" for a row of the history; the first row has been there from the start. */
+function periodText(row: ShiftHours): string {
+  const from = row.isFirst ? 'From the start' : `From ${formatDayLabel(row.effectiveFrom)}`
+  return row.effectiveTo ? `${from} to ${formatDayLabel(row.effectiveTo)}` : row.isFirst ? 'Since the start' : `${from} onwards`
+}
+
 function ActiveCell({ isActive }: { isActive: boolean }) {
   return (
     <span className={isActive ? 'badge badge--on' : 'badge badge--off'}>
@@ -149,6 +168,14 @@ export default function ShiftsPage() {
   const [form, setForm] = useState<ShiftFormState>(EMPTY_FORM)
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // New hours for a shift apply FROM A DAY (and, when an end is given, until a day - the hours before then come back).
+  const [hoursFrom, setHoursFrom] = useState('')
+  const [hoursTo, setHoursTo] = useState('')
+  const [hoursNote, setHoursNote] = useState('')
+  const [history, setHistory] = useState<ShiftHours[] | null>(null)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<number | null>(null)
+  const [removing, setRemoving] = useState(false)
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -198,20 +225,77 @@ export default function ShiftsPage() {
     setPopupVisible(true)
   }
 
-  const openEdit = useCallback((shift: Shift) => {
-    setEditing(shift)
-    setForm({
-      name: shift.name,
-      startTime: shift.startTime,
-      endTime: shift.endTime,
-      graceMinutes: shift.graceMinutes,
-      breakMinutes: shift.breakMinutes,
-      crossesMidnight: shift.crossesMidnight,
-      isActive: shift.isActive,
-    })
-    setFormError(null)
-    setPopupVisible(true)
+  const loadHistory = useCallback(async (shiftId: number) => {
+    try {
+      setHistory(await shiftsService.getHours(shiftId))
+      setHistoryError(null)
+    } catch (err) {
+      setHistory(null)
+      setHistoryError(getErrorMessage(err))
+    }
   }, [])
+
+  const openEdit = useCallback(
+    (shift: Shift) => {
+      setEditing(shift)
+      setForm({
+        name: shift.name,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        graceMinutes: shift.graceMinutes,
+        breakMinutes: shift.breakMinutes,
+        crossesMidnight: shift.crossesMidnight,
+        isActive: shift.isActive,
+      })
+      setHoursFrom(beirutToday())
+      setHoursTo('')
+      setHoursNote('')
+      setHistory(null)
+      setHistoryError(null)
+      setConfirmRemove(null)
+      setFormError(null)
+      setPopupVisible(true)
+      void loadHistory(shift.shiftId)
+    },
+    [loadHistory],
+  )
+
+  /** Takes one change of hours back: the hours before it run on, and the days it covered are worked out again. */
+  async function takeBack(row: ShiftHours) {
+    if (!editing) return
+    setRemoving(true)
+    try {
+      const result = await shiftsService.deleteHours(editing.shiftId, row.shiftHoursId)
+      notifications.show({
+        message:
+          result.daysRederived > 0
+            ? `The change of ${formatDayLabel(row.effectiveFrom)} was taken back. ${result.daysRederived} day(s) were worked out again.`
+            : `The change of ${formatDayLabel(row.effectiveFrom)} was taken back.`,
+        color: 'green',
+        autoClose: 3500,
+      })
+      setConfirmRemove(null)
+      const fresh = await shiftsService.getAll()
+      setShifts(fresh)
+      const now = fresh.find((s) => s.shiftId === editing.shiftId)
+      if (now) {
+        setEditing(now)
+        setForm((f) => ({
+          ...f,
+          startTime: now.startTime,
+          endTime: now.endTime,
+          graceMinutes: now.graceMinutes,
+          breakMinutes: now.breakMinutes,
+          crossesMidnight: now.crossesMidnight,
+        }))
+      }
+      await loadHistory(editing.shiftId)
+    } catch (err) {
+      notifications.show({ message: getErrorMessage(err), color: 'red', autoClose: 6000 })
+    } finally {
+      setRemoving(false)
+    }
+  }
 
   async function submitShift() {
     const name = form.name.trim()
@@ -225,6 +309,16 @@ export default function ShiftsPage() {
     const problem = describeTimeProblem(form)
     if (problem) {
       setFormError(problem)
+      return
+    }
+    // New hours need the day they start; an end day, when given, is on or after it.
+    const changesHours = editing != null && hoursDiffer(form, editing)
+    if (changesHours && !hoursFrom) {
+      setFormError('Choose the day the new hours start')
+      return
+    }
+    if (changesHours && hoursTo && hoursTo < hoursFrom) {
+      setFormError('The last day of the new hours is before their first day')
       return
     }
     setFormError(null)
@@ -241,11 +335,18 @@ export default function ShiftsPage() {
           breakMinutes: form.breakMinutes,
           crossesMidnight: form.crossesMidnight,
           isActive: form.isActive,
+          effectiveFrom: changesHours ? hoursFrom : null,
+          effectiveTo: changesHours && hoursTo ? hoursTo : null,
+          note: changesHours && hoursNote.trim() ? hoursNote.trim() : null,
         })
         notifications.show({
-          message: `"${name}" saved. A full day on it is now ${formatMinutes(paid)}. Days already processed keep the hours they were given.`,
+          message: !changesHours
+            ? `"${name}" saved.`
+            : hoursTo
+              ? `"${name}" saved. From ${formatDayLabel(hoursFrom)} to ${formatDayLabel(hoursTo)} a full day on it is ${formatMinutes(paid)}; after that its hours are as before. The days before keep the hours they were judged against.`
+              : `"${name}" saved. From ${formatDayLabel(hoursFrom)} a full day on it is ${formatMinutes(paid)}. The days before keep the hours they were judged against.`,
           color: 'green',
-          autoClose: 2500,
+          autoClose: 4500,
         })
       } else {
         await shiftsService.create({
@@ -367,6 +468,7 @@ export default function ShiftsPage() {
   // Checked live, not just on Save: a break longer than the shift makes the "full day"
   // preview go NEGATIVE, and a number like "-30m" presented as somebody's paid day is
   // worse than no preview at all. When the times do not make sense, say so instead.
+  const changesHours = editing != null && hoursDiffer(form, editing)
   const timeProblem = describeTimeProblem(form)
   const previewMinutes = timeProblem ? null : fullDayMinutes(form)
 
@@ -402,8 +504,8 @@ export default function ShiftsPage() {
       <PageHelp>
         A shift is what makes “late” and “a full day” mean something: without one, there is
         no start time to be late against and no target for the hours to fall short of.
-        Changing a shift changes how days are judged from here on — it does not re-judge the
-        days that have already been processed.
+        A shift’s hours can change from a day you choose — and for a period, after which they come
+        back — without touching the days before: each day is judged against the hours in force on it.
       </PageHelp>
 
       {error && (
@@ -414,9 +516,10 @@ export default function ShiftsPage() {
 
       <div className="card">
         <p className="hint">
-          Somebody with no rostered shift is not judged against nothing — they fall back to
-          the standard working day in Settings. They still earn a day fraction, but they
-          cannot be late: there is no start time to be late against.
+          Somebody with no rostered shift is not judged against nothing — their day is measured
+          against the shift their first punch fits (the one that starts nearest to it). They
+          still earn a day fraction, but they cannot be late: without a roster there is no start
+          time to be late against.
         </p>
       </div>
 
@@ -531,8 +634,8 @@ export default function ShiftsPage() {
             <div className="empty-hint">
               <div className="empty-hint-main">No shifts are defined yet.</div>
               {canManage
-                ? 'Add the shifts people actually work — the morning, the evening, the overnight. Until one exists there is nothing to roster anybody onto, and every day falls back to the standard working day in Settings.'
-                : 'Until somebody with roster rights adds one, every day falls back to the standard working day in Settings.'}
+                ? 'Add the shifts people actually work — the morning, the evening, the overnight. Until one exists there is nothing to roster anybody onto, and nothing to measure a day against.'
+                : 'Until somebody with roster rights adds one, there is nothing to measure a day against.'}
             </div>
           </div>
         )
@@ -542,7 +645,7 @@ export default function ShiftsPage() {
         opened={popupVisible}
         onClose={() => setPopupVisible(false)}
         title={editing ? `Edit ${editing.name}` : 'New Shift'}
-        size={480}
+        size={520}
         centered
       >
         {formError && (
@@ -673,8 +776,120 @@ export default function ShiftsPage() {
             />
             <p className="hint">
               Turning a shift off stops it being rostered from now on. Days already
-              worked on it keep the hours they were given.
+              worked on it keep the hours they were judged against.
             </p>
+          </div>
+        )}
+
+        {editing && changesHours && (
+          <div className="form-section shift-hours-when">
+            <h3 className="form-section-title">When do the new hours apply?</h3>
+            <div className="form-grid">
+              <div className="form-field">
+                <label className="form-label" htmlFor="shift-hours-from">
+                  From
+                </label>
+                <TextInput
+                  id="shift-hours-from"
+                  type="date"
+                  value={hoursFrom}
+                  onChange={(e) => setHoursFrom(e.currentTarget.value)}
+                  disabled={saving}
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label" htmlFor="shift-hours-to">
+                  Until (optional)
+                </label>
+                <TextInput
+                  id="shift-hours-to"
+                  type="date"
+                  value={hoursTo}
+                  min={hoursFrom || undefined}
+                  onChange={(e) => setHoursTo(e.currentTarget.value)}
+                  disabled={saving}
+                />
+              </div>
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="shift-hours-note">
+                Reason (optional)
+              </label>
+              <TextInput
+                id="shift-hours-note"
+                value={hoursNote}
+                maxLength={200}
+                onChange={(e) => setHoursNote(e.currentTarget.value)}
+                placeholder="Winter hours, Ramadan, a trial…"
+                disabled={saving}
+              />
+            </div>
+            <p className="hint">
+              {hoursTo
+                ? `From ${formatDayLabel(hoursFrom)} to ${formatDayLabel(hoursTo)} the shift runs the new hours; the day after, it goes back to ${formatClock(editing.startTime)}–${formatClock(editing.endTime)} by itself.`
+                : `From ${formatDayLabel(hoursFrom)} the shift runs the new hours, until you change them again.`}{' '}
+              The days before keep the hours they were judged against. Days from that date
+              already processed are worked out again; a day already paid never changes.
+            </p>
+          </div>
+        )}
+
+        {editing && (history || historyError) && (
+          <div className="form-field">
+            <span className="form-label">Hours over time</span>
+            {historyError && <p className="hint">{historyError}</p>}
+            {history && (
+              <ul className="shift-hours-list">
+                {history.map((row) => (
+                  <li key={row.shiftHoursId} className={row.isCurrent ? 'shift-hours-row shift-hours-row--now' : 'shift-hours-row'}>
+                    <div className="shift-hours-main">
+                      <span className="shift-hours-period">{periodText(row)}</span>
+                      <strong>
+                        {formatClock(row.startTime)}–{formatClock(row.endTime)}
+                      </strong>
+                      <span className="shift-hours-day">
+                        {formatMinutes(row.standardMinutes)} a day
+                        {row.breakMinutes > 0 ? `, ${formatMinutes(row.breakMinutes)} break` : ''}
+                      </span>
+                      {row.isCurrent && <span className="shift-hours-now">now</span>}
+                    </div>
+                    {(row.note || row.createdBy) && !row.isFirst && (
+                      <div className="shift-hours-note">
+                        {row.note}
+                        {row.note && row.createdBy ? ' · ' : ''}
+                        {row.createdBy ? `by ${row.createdBy}` : ''}
+                      </div>
+                    )}
+                    {canManage &&
+                      !row.isFirst &&
+                      (confirmRemove === row.shiftHoursId ? (
+                        <div className="shift-hours-confirm">
+                          <span>Take this change back?</span>
+                          <Button size="compact-xs" color="red" onClick={() => void takeBack(row)} disabled={removing || saving}>
+                            {removing ? 'Taking back…' : 'Yes, take it back'}
+                          </Button>
+                          <Button size="compact-xs" variant="default" onClick={() => setConfirmRemove(null)} disabled={removing}>
+                            No
+                          </Button>
+                        </div>
+                      ) : (
+                        <ActionIcon
+                          className="shift-hours-remove"
+                          variant="subtle"
+                          color="gray"
+                          size="sm"
+                          aria-label={`Take back the change of ${formatDayLabel(row.effectiveFrom)}`}
+                          title="Take this change back"
+                          disabled={saving || removing}
+                          onClick={() => setConfirmRemove(row.shiftHoursId)}
+                        >
+                          <IconX size={14} />
+                        </ActionIcon>
+                      ))}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 

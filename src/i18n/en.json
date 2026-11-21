@@ -1194,15 +1194,15 @@
     },
     "roster": {
       "auto": {
-        "button": "Auto-roster (6/5)…",
+        "button": "Auto-roster…",
         "disabled": {
           "allBranches": "Choose one branch first — the auto-roster plans one branch and month at a time.",
           "readOnly": "Read-only while request #{{id}} waits for approval.",
           "draftOpen": "Save or discard the draft first."
         },
         "drawer": {
-          "title": "Auto-roster (6/5)",
-          "intro": "Every employee alternates a 6-day week (1 rest day) and a 5-day week (2 rest days), and Saturdays and Sundays off are shared fairly. Leave, public holidays, locked days and your own edits are respected. A preview writes nothing.",
+          "title": "Auto-roster",
+          "intro": "Drafts the month's roster for this branch by the method you choose. Leave, public holidays, locked days and your own edits are respected. A preview writes nothing.",
           "month": "Month",
           "branch": "Branch",
           "loading": "Reading the branch's staff and settings…",
@@ -1344,7 +1344,9 @@
           "TURNAROUND": "Too little time between two shifts",
           "WEEKLY_REST_HOURS": "The weekly rest is shorter than the legal minimum",
           "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
-          "LONG_RUN": "A long run of working days"
+          "LONG_RUN": "A long run of working days",
+          "ROTATION_NOT_SET": "Not on the rotation list",
+          "LEADS_SAME_SHIFT": "Two shift leaders on the same shift"
         },
         "issueShift": {
           "SHORT_STAFFED": "Below the minimum on {{shift}}",
@@ -1358,7 +1360,11 @@
           "REST_CONSECUTIVE": "Rest: breaks a long run of working days",
           "WORK_HOLIDAY_COVER": "Working the public holiday (cover)",
           "WORK_SHIFT_COVER": "Moved to {{shift}} so that shift is covered",
-          "HOLIDAY_OFF": "Public holiday: a day off, no row"
+          "HOLIDAY_OFF": "Public holiday: a day off, no row",
+          "REST_ROTATION": "Rest: the rotation's day off",
+          "WORK_ROTATION": "The rotation: the shift with fewer people that day",
+          "WORK_ROTATION_LEAD": "The rotation: the lead's shift this week",
+          "WORK_LEAD_APART": "Moved so the two shift leaders are on different shifts"
         },
         "reasonArgs": {
           "owed": "owed {{value}}",
@@ -1448,7 +1454,62 @@
             "off": "{{shift}}: need not be covered this day"
           }
         },
-        "holidayHeader": "Public holiday: {{name}}"
+        "holidayHeader": "Public holiday: {{name}}",
+        "method": {
+          "label": "Method",
+          "Fair": "Fair weekends",
+          "Rotation": "Fixed rotation",
+          "FairHint": "The system chooses the days off: 6-day and 5-day weeks in turn, weekends shared fairly, every shift covered.",
+          "RotationHint": "Your rotation list decides: days off alternate two and one per week and move two weekdays every two weeks; the two leads swap morning and evening each week; everybody else is balanced between the two shifts."
+        },
+        "rotation": {
+          "title": "Rotation",
+          "intro": "Set where the rotation starts and its two shifts, then put the team in order. Leads first: the others are balanced down the list.",
+          "start": "Starts on (a Monday)",
+          "morning": "Morning shift",
+          "evening": "Evening shift",
+          "chooseShift": "Choose a shift",
+          "startHint": "Week 1 of the rotation starts on Monday {{date}}. Changing it moves everybody's days off.",
+          "startMissing": "Choose the Monday the rotation starts on. Any day you pick becomes the Monday of its week.",
+          "noPeople": "Nobody is on the list yet. Add people below.",
+          "moveUp": "Move {{name}} up",
+          "moveDown": "Move {{name}} down",
+          "remove": "Take {{name}} off the rotation",
+          "isNew": "New — check",
+          "role": "Role",
+          "staff": "Staff",
+          "lead1": "Lead 1",
+          "lead2": "Lead 2",
+          "group": "Group",
+          "single": "One-day week: off on",
+          "pair": "Two-day week: off on",
+          "offThisWeek": "Week of {{date}}: off {{days}}",
+          "listHint": "Group A has two days off on the rotation's odd weeks (1, 3, 5…) and one on the even weeks; group B the other way round. The days you choose are the ones of weeks 1 and 2; after that they move two weekdays later every two weeks. Lead 1 works mornings on odd weeks and evenings on even weeks; Lead 2 the opposite. Lead 1 and Lead 2 are the branch's shift leaders: they are never planned on the same shift, by either method, even when one of them has a day set by hand.",
+          "add": "Add somebody to the rotation…",
+          "addHint": "People who are not on the list are not planned by the rotation: their days stay as they are.",
+          "save": "Save rotation",
+          "saved": "The rotation is saved.",
+          "unsaved": "Not saved yet. Preview saves it first.",
+          "day": {
+            "0": "Mon",
+            "1": "Tue",
+            "2": "Wed",
+            "3": "Thu",
+            "4": "Fri",
+            "5": "Sat",
+            "6": "Sun"
+          },
+          "problem": {
+            "start": "Choose the Monday the rotation starts on.",
+            "notMonday": "The rotation starts on a Monday.",
+            "shifts": "Choose the morning shift and the evening shift.",
+            "sameShift": "The morning and the evening shift must be two different shifts.",
+            "empty": "Add at least one person to the rotation.",
+            "twoL1": "Only one person can be Lead 1.",
+            "twoL2": "Only one person can be Lead 2."
+          },
+          "splitPair": "{{first}} + {{second}} (same week)"
+        }
       },
       "branch": {
         "copyNeedsOne": "Choose a branch first — copying a month works on one branch at a time.",
@@ -1524,7 +1585,7 @@
       "worked": {
         "title": "Worked Time",
         "subtitle": "Days and hours worked from the punches, and progress against the standard month — with or without a roster.",
-        "help": "One row per employee for the period you choose (up to 93 days). Worked time comes from the punches, processed every hour: ins and outs paired, double presses removed, HR's corrections included — the same days as Daily attendance and payroll. Every punched day counts, whether or not a roster exists for it. Expected time is the standard month (days × hours from Settings) spread over the days of the month; public holidays and approved leave expect nothing. Click a row to see the employee's days.",
+        "help": "One row per employee for the period you choose (up to 93 days). Worked time comes from the punches, processed every hour: ins and outs paired, double presses removed, HR's corrections included — the same days as Daily attendance and payroll. Every punched day counts, whether or not a roster exists for it. Expected time is the working days of a month (Settings) × the hours of each person's own shift, spread over the days of the month; public holidays and approved leave expect nothing. Click a row to see the employee's days.",
         "thisMonth": "This month",
         "lastMonth": "Last month",
         "exportCsv": "Export CSV",
@@ -1532,13 +1593,13 @@
         "countedTo": "Counted up to",
         "notStarted": "Nothing yet (the period has not started)",
         "standard": "Standard",
-        "standardValue": "{{days}} days × {{hours}} a month",
+        "standardValue": "{{days}} days a month × the hours of each person's shift ({{hours}} when no shift fits)",
         "showAllDays": "Show every employee's days",
         "hideAllDays": "Hide the days",
         "totals_one": "Totals — {{count}} employee",
         "totals_other": "Totals — {{count}} employees",
         "noDays": "No day worked, on leave or on a holiday in the period counted.",
-        "rules": "Worked time: every punched day, on the roster or not — first in to last out with the gaps between pairs taken out (on a day with an approved roster shift, the shift plus the time after it) — counted up to yesterday, as today is still being worked. Expected: the standard month spread over its days; public holidays and approved leave expect nothing (half a day of leave, half). Extra time (part of worked time): beyond the shift, or beyond the standard day without one — as detected, paid only against an approved overtime request. A day somebody dismissed on Daily attendance is not counted.",
+        "rules": "Worked time: every punched day, on the roster or not — first in to last out with the gaps between pairs taken out (on a day with an approved roster shift, the shift plus the time after it; without one, the day is measured against the shift its first punch fits) — counted up to yesterday, as today is still being worked. Expected: the working days of a month × the hours of the person's own shift, spread over the days of the month; public holidays and approved leave expect nothing (half a day of leave, half). Extra time (part of worked time): beyond the shift — as detected, paid only against an approved overtime request. A day somebody dismissed on Daily attendance is not counted.",
         "col": {
           "daysWorked": "Days worked",
           "worked": "Worked",
@@ -1583,7 +1644,8 @@
         },
         "closedBranch": "{{name}} (closed)",
         "notOnRosterNote_one": "Includes {{count}} day ({{time}}) worked but missing from an approved roster — counted from its punches; decide it on Daily attendance > Not on roster.",
-        "notOnRosterNote_other": "Includes {{count}} days ({{time}}) worked but missing from an approved roster — counted from their punches; decide them on Daily attendance > Not on roster."
+        "notOnRosterNote_other": "Includes {{count}} days ({{time}}) worked but missing from an approved roster — counted from their punches; decide them on Daily attendance > Not on roster.",
+        "expectedOf": "This person's working day: {{hours}} (their shift)"
       }
     },
     "today": {
@@ -2777,16 +2839,12 @@
       "noMonth": "No month (never)",
       "saved": "{{title}} saved.",
       "explain": {
-        "standardDay": "A {{label}} day. A 2-hour exit permission costs {{cost}} of a leave day.",
         "toleranceZero": "Zero: every minute past the shift start or before its end becomes an anomaly for HR to decide.",
         "tolerance": "On a 07:00–15:00 shift: punching in at {{lateIn}} or later, or out at {{earlyOut}} or earlier, becomes an anomaly for HR to decide. A shift with its own Grace uses that instead.",
-        "fraction": "This is a fraction of the day, not a percentage: {{value}} means {{percent}}%.",
-        "fractionWhole": "The whole {{hours}}h day must be worked before it counts as full.",
-        "fractionPart": "With a {{hours}}h standard day, working {{label}} is enough to count as a full day."
+        "fraction": "This is a fraction of the day, not a percentage: {{value}} means {{percent}}%."
       }
     },
     "rowTitles": {
-      "StandardWorkDayHours": "Standard work day",
       "ExitLeaveBasis": "Exit leave basis",
       "AttendanceToleranceMinutes": "Attendance tolerance (minutes)",
       "FullDayThreshold": "Full day threshold",
