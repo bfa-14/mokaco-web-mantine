@@ -60,6 +60,8 @@ import BookingCalendarPage from './pages/bookings/BookingCalendarPage'
 import BookingsListPage from './pages/bookings/BookingsListPage'
 import RoomsPage from './pages/bookings/RoomsPage'
 import BookingReportPage from './pages/bookings/BookingReportPage'
+import PaymentsPage from './pages/bookings/PaymentsPage'
+import GatewayTestPage from './pages/bookings/GatewayTestPage'
 import MonthlyAttendanceReportPage from './pages/reports/MonthlyAttendanceReportPage'
 import DailyAttendanceReportPage from './pages/reports/DailyAttendanceReportPage'
 import LeaveBalanceReportPage from './pages/reports/LeaveBalanceReportPage'
@@ -277,6 +279,14 @@ export default function App() {
                     <Route
                       path="/bookings/report"
                       element={guard('/bookings/report', <BookingReportPage />)}
+                    />
+                    <Route
+                      path="/bookings/payments"
+                      element={guard('/bookings/payments', <PaymentsPage />)}
+                    />
+                    <Route
+                      path="/bookings/gateway-test"
+                      element={guard('/bookings/gateway-test', <GatewayTestPage />)}
                     />
 
                     <Route

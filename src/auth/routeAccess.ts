@@ -35,6 +35,11 @@ export const PERMISSION = {
   /* Script 111: the rooms catalogue and the bookings report (revenue), each its own code. */
   BOOKING_ROOMS: 'BOOKING_ROOMS',
   BOOKING_REPORT: 'BOOKING_REPORT',
+  /* Script 119: the online payments (Bank of Beirut, Whish) - see them, act on them - and the gateways' keys and
+     test page, which is the admins' alone. */
+  BOOKING_PAYMENTS: 'BOOKING_PAYMENTS',
+  BOOKING_PAYMENTS_MANAGE: 'BOOKING_PAYMENTS_MANAGE',
+  GATEWAY_ADMIN: 'GATEWAY_ADMIN',
   /* Script 112: one's own branch's weekly shifts, read-only (My branch's shifts). */
   SHIFTS_VIEW_BRANCH: 'SHIFTS_VIEW_BRANCH',
   /* Script 115: the drink recipes (confidential): read them, and upload or replace the recipe book. */
@@ -216,6 +221,10 @@ export const ROUTE_ACCESS: RouteRule[] = [
   // Script 111: hidden from the booking desk unless their role is given these on Role permissions.
   { path: '/bookings/rooms', anyOf: [PERMISSION.BOOKING_ROOMS] },
   { path: '/bookings/report', anyOf: [PERMISSION.BOOKING_REPORT] },
+  // Script 119: the online payments, and the gateway test page (admins only). The gateways' KEYS are a tab of
+  // Settings, which gates itself (see below).
+  { path: '/bookings/payments', anyOf: [PERMISSION.BOOKING_PAYMENTS] },
+  { path: '/bookings/gateway-test', anyOf: [PERMISSION.GATEWAY_ADMIN] },
 
   // ── Security ──────────────────────────────────────────────────────────────────────────────────
   { path: '/security/users', anyOf: [PERMISSION.USER_MANAGE] },

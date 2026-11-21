@@ -1,0 +1,503 @@
+/* PAYMENTS, the gateway keys and the gateway test page (script 119). Logical properties throughout: the pages read
+   the same in Arabic. Colours follow the app's alerts: green = money in, amber = look at this, red = money owed. */
+
+/* ── the tiles above the list ── */
+.pay-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pay-tile {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: start;
+  font: inherit;
+  color: inherit;
+}
+
+.pay-tile--button {
+  cursor: pointer;
+}
+
+.pay-tile--button:hover,
+.pay-tile--active {
+  border-color: var(--brand-primary, #8a5a00);
+  box-shadow: 0 0 0 1px var(--brand-primary, #8a5a00) inset;
+}
+
+.pay-tile--good {
+  border-inline-start: 4px solid #2f8f4e;
+}
+
+.pay-tile--warn {
+  border-inline-start: 4px solid #d99a00;
+}
+
+.pay-tile-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #6f6b62;
+}
+
+.pay-tile-value {
+  margin-top: 4px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pay-tile-note {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6f6b62;
+}
+
+/* ── the list ── */
+.pay-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.pay-search-note {
+  margin: -8px 0 12px;
+}
+
+.pay-list {
+  padding: 0;
+  overflow: hidden;
+}
+
+.pay-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pay-table th,
+.pay-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  font-size: 14px;
+}
+
+.pay-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6f6b62;
+  background: var(--brand-stone, #f4f1ea);
+}
+
+.pay-table .num {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.pay-row {
+  cursor: pointer;
+}
+
+.pay-row:hover,
+.pay-row:focus-visible,
+.pay-row--open {
+  background: #faf7f0;
+  outline: none;
+}
+
+.pay-ref {
+  font-weight: 600;
+}
+
+.pay-sub {
+  font-size: 12px;
+  color: #6f6b62;
+}
+
+.pay-count {
+  padding: 10px 14px;
+}
+
+.pay-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ── tags ── */
+.pay-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pay-tag--good {
+  color: #166534;
+  background: #e1f2e5;
+}
+
+.pay-tag--warn {
+  color: #8a5a00;
+  background: #fbeec6;
+}
+
+.pay-tag--bad {
+  color: #b91c1c;
+  background: #f6e0da;
+}
+
+.pay-tag--plain {
+  color: #57534a;
+  background: var(--brand-stone, #f4f1ea);
+}
+
+.pay-method {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pay-gateway {
+  font-weight: 600;
+}
+
+.pay-test {
+  padding: 1px 7px;
+  border: 1px dashed #b7791f;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #8a5a00;
+}
+
+.pay-live {
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: #b91c1c;
+}
+
+/* ── the panel of one payment ── */
+.pay-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pay-panel-amount {
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.pay-explain {
+  margin: 10px 0 14px;
+  font-size: 14px;
+}
+
+.pay-facts {
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) 1fr;
+  gap: 6px 14px;
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+
+.pay-facts dt {
+  color: #6f6b62;
+}
+
+.pay-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pay-facts--inline {
+  margin: 8px 0 0;
+}
+
+.pay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pay-section {
+  margin: 20px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #6f6b62;
+}
+
+/* The log, as a timeline: a line down the reading edge, a dot per step. */
+.pay-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-inline-start: 2px solid var(--border);
+}
+
+.pay-step {
+  position: relative;
+  padding: 0 0 14px;
+  padding-inline-start: 16px;
+}
+
+.pay-step::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -6px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #b9b3a6;
+}
+
+.pay-step--good::before {
+  background: #2f8f4e;
+}
+
+.pay-step--warn::before {
+  background: #d99a00;
+}
+
+.pay-step--bad::before {
+  background: #c0392b;
+}
+
+.pay-step-main {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pay-step-note,
+.pay-step-time {
+  font-size: 12px;
+  color: #6f6b62;
+  overflow-wrap: anywhere;
+}
+
+.pay-lines {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pay-lines td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: top;
+}
+
+.pay-lines .num {
+  text-align: end;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.pay-neg {
+  color: #b91c1c;
+}
+
+.pay-refund-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ── the gateways' keys (Settings) and the test page ── */
+.gw-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.gw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.gw-mode {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.gw-mode--active {
+  border-color: #2f8f4e;
+  box-shadow: 0 0 0 1px #2f8f4e inset;
+}
+
+.gw-mode--live.gw-mode--active {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 1px #b91c1c inset;
+}
+
+.gw-mode-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.gw-mode-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.gw-fields {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.gw-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.gw-check {
+  margin: 10px 0 0;
+}
+
+.gw-inuse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.gw-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gw-history li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.gw-history li:last-child {
+  border-bottom: 0;
+}
+
+.gw-steps {
+  display: grid;
+  gap: 16px;
+}
+
+.gw-step-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.gw-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 13px;
+  color: #fff;
+  background: var(--brand-primary, #5b4636);
+}
+
+.gw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gw-result {
+  margin-top: 14px;
+}
+
+.gw-result .pay-facts {
+  margin-bottom: 0;
+}
+
+/* ── phones: the list becomes cards ── */
+@media (max-width: 640px) {
+  .pay-table thead {
+    display: none;
+  }
+
+  .pay-table,
+  .pay-table tbody,
+  .pay-table tr,
+  .pay-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .pay-table tr {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pay-table td {
+    padding: 2px 0;
+    border: 0;
+  }
+
+  .pay-table td.num {
+    text-align: start;
+    font-weight: 700;
+  }
+
+  .pay-tile-value {
+    font-size: 20px;
+  }
+}
+
+/* A button that reads as a link, for a small action inside a sentence. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--brand-primary, #5b4636);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
