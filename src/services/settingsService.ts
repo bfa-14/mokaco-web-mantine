@@ -1,5 +1,7 @@
 import { apiRequest } from '../api/client'
 import type {
+  MailGuardState,
+  MailTestResult,
   Setting,
   SettingUpsertRequest,
   SystemResetSummaryRow,
@@ -25,6 +27,16 @@ export const settingsService = {
     apiRequest<void>(`/api/settings/${encodeURIComponent(key)}`, {
       method: 'PUT',
       body: JSON.stringify(request),
+    }),
+
+  /** Is this the production system, and if not, who may a test system write to. */
+  mailGuard: () => apiRequest<MailGuardState>('/api/settings/mail-guard'),
+
+  /** Sends one test message now through the HR account or the bookings mailbox, with the SAVED settings. */
+  testMail: (account: 'hr' | 'booking', to: string) =>
+    apiRequest<MailTestResult>('/api/settings/mail-test', {
+      method: 'POST',
+      body: JSON.stringify({ account, to }),
     }),
 }
 
