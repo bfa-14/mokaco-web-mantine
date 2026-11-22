@@ -10,7 +10,8 @@
  * translated amount is one more place for a mistake to hide.
  */
 
-export type PrepCategory = 'coffee' | 'matcha' | 'refreshers' | 'frozen' | 'shakes' | 'traditional' | 'basics'
+/** 'pages' is not a kind of drink: it marks an entry that is one PAGE of a guide uploaded as a PDF. */
+export type PrepCategory = 'coffee' | 'matcha' | 'refreshers' | 'frozen' | 'shakes' | 'traditional' | 'basics' | 'pages'
 export type PrepTemp = 'hot' | 'iced'
 
 export interface PrepStep {
@@ -42,11 +43,18 @@ export interface PrepRecipe {
   page?: number
   /** Page of the MC MIX Labels: its scan is GET /api/prep-book/labels/{label}. */
   label?: number
-  /** The drink photo, a data URI inside the book; absent where the guide page has none. */
+  /** The drink photo, a data URI inside the book; absent where the guide page has none. For a page: its small picture. */
   thumb?: string
+  /** A page of a PDF guide that has a text layer: what is written on it (searched, never shown as the recipe). */
+  text?: string
 }
 
 export interface PrepBook {
+  /**
+   * 'pdf' when the book was made by the server from the guide uploaded as a PDF: every entry is then one page
+   * (category 'pages'), shown as its picture. Absent for a recipe book (.zip), whose entries are recipe cards.
+   */
+  source?: 'pdf'
   recipes: PrepRecipe[]
 }
 
@@ -59,5 +67,8 @@ export interface PrepBookInfo {
   uploadedBy: string | null
 }
 
-/** The order the category buttons are shown in. */
+/** The order the category buttons are shown in ('pages' has no button: a book of pages has no categories). */
 export const PREP_CATEGORIES: PrepCategory[] = ['coffee', 'matcha', 'refreshers', 'frozen', 'shakes', 'traditional', 'basics']
+
+/** True for an entry that is a page of a PDF guide. */
+export const isGuidePage = (recipe: Pick<PrepRecipe, 'category'>) => recipe.category === 'pages'

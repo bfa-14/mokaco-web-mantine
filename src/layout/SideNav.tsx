@@ -149,6 +149,8 @@ const GROUPS: NavGroup[] = [
       { to: '/bookings/list', labelKey: 'nav.bookings.list', icon: 'detailslayout' },
       { to: '/bookings/rooms', labelKey: 'nav.bookings.rooms', icon: 'home' },
       { to: '/bookings/report', labelKey: 'nav.bookings.report', icon: 'chart' },
+      { to: '/bookings/payments', labelKey: 'nav.bookings.payments', icon: 'money' },
+      { to: '/bookings/gateway-test', labelKey: 'nav.bookings.gatewayTest', icon: 'tips' },
     ],
   },
   {

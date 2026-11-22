@@ -26,11 +26,15 @@ import { DangerZone } from './DangerZone'
 import { LiveUpdatesRows } from './LiveUpdatesSection'
 import { LanguageRow } from './LanguageSection'
 import { GoogleSignInSection } from './GoogleSignInSection'
+import { PaymentGatewaysSection } from './PaymentGatewaysSection'
 import { ACCESS_MANAGE_PERMISSION } from '../../types/access'
 import './settings.css'
 
 /** Only SETTING_MANAGE may read the full list or write any of it — these values decide what people are paid. */
 const SETTING_MANAGE = 'SETTING_MANAGE'
+
+/** The payment gateways' keys and mode (script 119): Admin and Owner. */
+const GATEWAY_ADMIN = 'GATEWAY_ADMIN'
 
 /**
  * The tab a `?tab=` value may name. Kept as a union so a URL somebody typed by hand cannot select
@@ -44,6 +48,7 @@ const TAB_IDS = [
   'workflow',
   'notifications',
   'google',
+  'gateways',
   'advanced',
   'danger',
 ] as const
@@ -75,6 +80,8 @@ export default function SettingsPage() {
   // Google sign-in has its own permission (Admin, Owner) and its own endpoints, so its tab shows for
   // ACCESS_MANAGE whether or not the person may touch the rest of the settings.
   const canAccess = hasPermission(ACCESS_MANAGE_PERMISSION)
+  // The payment gateways' keys (script 119) have their own permission too - the admins' - and their own endpoints.
+  const canGateways = hasPermission(GATEWAY_ADMIN)
   /** Bumped by Refresh, so the Google sign-in tab — which loads its own data — reloads too. */
   const [accessRefresh, setAccessRefresh] = useState(0)
 
@@ -331,6 +338,7 @@ export default function SettingsPage() {
       ? [{ id: 'notifications' as TabId, label: t('settings.tabs.notifications') }]
       : []),
     ...(canAccess ? [{ id: 'google' as TabId, label: t('settings.tabs.google') }] : []),
+    ...(canGateways ? [{ id: 'gateways' as TabId, label: t('settings.tabs.gateways') }] : []),
     ...(canManage ? [{ id: 'advanced' as TabId, label: t('settings.tabs.advanced') }] : []),
     // LAST, always — it belongs to a different kind of act than everything before it.
     ...(canReset ? [{ id: 'danger' as TabId, label: t('settings.tabs.danger'), danger: true }] : []),
@@ -362,7 +370,13 @@ export default function SettingsPage() {
   const refusedTab =
     requestedIsSystemTab &&
     !visible.some((tab) => tab.id === requested) &&
-    (requested === 'danger' ? !canReset : requested === 'google' ? !canAccess : !canManage)
+    (requested === 'danger'
+      ? !canReset
+      : requested === 'google'
+        ? !canAccess
+        : requested === 'gateways'
+          ? !canGateways
+          : !canManage)
   if (refusedTab) return <AccessDenied />
 
   function selectTab(value: string | null) {
@@ -383,7 +397,7 @@ export default function SettingsPage() {
             The rules the whole system is measured against.
           </p>
         </div>
-        {(canManage || canAccess) && (
+        {(canManage || canAccess || canGateways) && (
           <div className="page-head-actions">
             <ActionIcon
               variant="default"
@@ -582,6 +596,12 @@ export default function SettingsPage() {
         {/* ── GOOGLE SIGN-IN — the optional front door before the HRMS login ──────────────────
             Hand-built and self-loading, like the Danger zone: its four keys never reach the
             generic list, and it reads and writes only api/access. */}
+        {canGateways && (
+          <Tabs.Panel value="gateways" className="set-panel">
+            <PaymentGatewaysSection refreshKey={accessRefresh} />
+          </Tabs.Panel>
+        )}
+
         {canAccess && (
           <Tabs.Panel value="google" className="set-panel">
             <GoogleSignInSection refreshKey={accessRefresh} />

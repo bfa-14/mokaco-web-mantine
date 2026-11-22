@@ -173,7 +173,9 @@
       "calendar": "Calendar",
       "list": "All bookings",
       "rooms": "Rooms",
-      "report": "Report"
+      "report": "Report",
+      "payments": "Payments",
+      "gatewayTest": "Gateway test"
     },
     "myAttendance": "My attendance",
     "myShifts": "My branch's shifts",
@@ -2779,7 +2781,8 @@
       "notifications": "Notifications",
       "leave": "Leave",
       "payroll": "Payroll",
-      "google": "Google sign-in"
+      "google": "Google sign-in",
+      "gateways": "Payment gateways"
     },
     "punchDirection": {
       "title": "Punch direction",
@@ -3375,22 +3378,346 @@
       "frozen": "Frappés & blends",
       "shakes": "Shakes",
       "traditional": "Traditional",
-      "basics": "Foams, syrups & sugar"
+      "basics": "Foams, syrups & sugar",
+      "pages": "Guide pages"
     },
     "temp": {
       "all": "All",
       "hot": "Hot",
       "iced": "Iced"
     },
-    "uploadBook": "Upload recipe book",
-    "replaceBook": "Replace recipe book",
+    "uploadBook": "Upload the guide",
+    "replaceBook": "Replace the guide",
     "uploaded": "The recipe book is in place: {{recipes}} recipes and {{scans}} scanned pages.",
     "loadFailed": "The recipes could not be read: {{error}}",
-    "noBookTitle": "The recipe book is not here yet",
+    "noBookTitle": "The guide is not here yet",
     "noBookText": "An admin has not uploaded it yet. Ask your manager.",
-    "noBookManage": "Press \"Upload recipe book\" and choose the recipe book file (.zip). It is kept on the server and shown only to signed-in staff who have the permission.",
+    "noBookManage": "Press \"Upload the guide\" and choose the guide as a PDF: the system turns it into pages by itself. (A recipe book .zip, with recipe cards, is accepted too.) It is kept on the server and shown only to signed-in staff who have the permission.",
     "confidential": "For Moka & Co staff only. Do not copy, photograph or share these recipes outside the company.",
     "seeHot": "Hot version",
-    "seeIced": "Iced version"
+    "seeIced": "Iced version",
+    "uploadedPdf": "The guide is in place: {{pages}} pages.",
+    "uploadingPdf": "Reading the PDF and drawing its pages. This can take a minute; keep this page open.",
+    "searchPages": "Search the guide… a word on the page, or a page number",
+    "picturesOnly": "Look through the pages, or type a page number.",
+    "pagesFound": "{{count}} pages",
+    "nonePagesTitle": "No page matches that",
+    "nonePagesText": "Try another word, or clear the search to see every page.",
+    "pageNumber": "Page {{page}}",
+    "pageOf": "Page {{page}} of {{count}}",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "replaceWithPdfTitle": "Replace the recipe cards with this PDF?",
+    "replaceWithPdfText": "The book on file has {{count}} recipe cards (ingredients, steps, search by drink). A PDF brings its pages only: after this, staff will see the guide's pages and the cards will be gone until the recipe book (.zip) is uploaded again.",
+    "replaceWithPdfConfirm": "Replace with the PDF",
+    "keepCards": "Keep the cards",
+    "subtitlePages": "The preparation guide, page by page. Tap a page to open it.",
+    "picturesOnlyAdmin": "(This PDF is made of pictures, with no text to read, so a drink cannot be searched by name. The recipe book .zip brings recipe cards with search.)",
+    "tooLarge": "This file is {{size}} MB; the guide may be up to {{max}} MB. Export the PDF at a smaller size and try again."
+  },
+  "payments": {
+    "title": "Payments",
+    "subtitle": "Booking deposits paid online, by card (Bank of Beirut) or by Whish.",
+    "help": "One line per booking a guest tried to pay online. Green is money received. Amber needs somebody to look. Open a line to read everything that happened to it, ask the gateway again, or refund a Whish payment. Payments made while a gateway was in test mode carry a TEST tag and are never counted as money.",
+    "noAccess": "You do not have access to the payments.",
+    "noAccessHint": "This page needs the ‘see the online payments’ permission (Security → Role permissions, card Booking).",
+    "empty": "No online payments in this period.",
+    "emptyHint": "Try a longer period, another filter, or search by booking reference.",
+    "count": "Payments shown: {{count}}",
+    "notReceived": "deposit, not received",
+    "test": "TEST",
+    "testHint": "Made while the gateway was in test mode. No real money moved.",
+    "someone": "somebody",
+    "tiles": {
+      "received": "Received online",
+      "nothingReceived": "Nothing received in this period.",
+      "split": "Card {{card}} · Whish {{whish}}",
+      "refunded": "refunded {{amount}}",
+      "waiting": "Waiting for the guest",
+      "waitingNote": "Opened, the guest may still be paying.",
+      "attention": "Need attention",
+      "attentionNote": "Not confirmed, a refund due, or a clash. Tap to list them.",
+      "tests": "Test payments",
+      "testsNote": "Not counted as money."
+    },
+    "filter": {
+      "allStates": "All",
+      "attention": "Need attention",
+      "method": "Paid with",
+      "state": "Status",
+      "searchPlaceholder": "Reference, guest, phone…",
+      "searchAllDates": "A search looks at every date, not only the period above."
+    },
+    "gateway": {
+      "cardShort": "Card",
+      "whish": "Whish"
+    },
+    "state": {
+      "Paid": "Paid",
+      "RefundDue": "Refund due",
+      "Refunded": "Refunded",
+      "NeedsStaff": "Paid, needs a decision",
+      "Open": "Waiting for the guest",
+      "Unconfirmed": "Not confirmed",
+      "NotPaid": "Not paid"
+    },
+    "stateHelp": {
+      "Paid": "The deposit was received and is recorded on the booking.",
+      "RefundDue": "The guest paid, then the booking was cancelled: money is owed back. Refund it, then it shows as Refunded.",
+      "Refunded": "The guest paid and the money was given back.",
+      "NeedsStaff": "The guest paid, but the booking could not be confirmed by itself (its slot was taken meanwhile). Open the booking and decide: keep it, or cancel and refund.",
+      "Open": "The payment page was opened and the guest may still be paying. Nothing to do yet; it settles by itself.",
+      "Unconfirmed": "The payment was opened a while ago and the gateway still cannot say whether it was paid. The slot is kept. Press Ask the gateway now; if it stays like this, check the gateway's own portal.",
+      "NotPaid": "A payment was opened but nothing was paid. Nothing was taken from the guest."
+    },
+    "col": {
+      "when": "When",
+      "booking": "Booking",
+      "method": "Paid with",
+      "amount": "Amount",
+      "state": "Status"
+    },
+    "panel": {
+      "title": "Payment {{ref}}",
+      "loading": "Payment",
+      "paidOn": "Received {{when}}",
+      "depositNotReceived": "The deposit due. Not received.",
+      "testNote": "This payment was made in TEST mode: no real money moved.",
+      "guest": "Guest",
+      "booking": "Booking",
+      "total": "Booking total",
+      "deposit": "deposit",
+      "paidFrom": "Paid from",
+      "gatewayId": "Gateway reference",
+      "transaction": "Transaction",
+      "attempts": "Whish attempts",
+      "refund": "Refund",
+      "refundLine": "due {{due}} · given back {{done}} {{currency}}",
+      "log": "What happened",
+      "noLog": "Nothing was logged for this payment (it is older than the payment log).",
+      "money": "Money on this booking",
+      "noMoney": "No money was recorded on this booking.",
+      "refundLineName": "Refund ({{method}})"
+    },
+    "actions": {
+      "check": "Ask the gateway now",
+      "refund": "Refund on Whish",
+      "openBooking": "Open the booking",
+      "checkHint": "Asking is always safe: a payment already recorded is never recorded twice.",
+      "refundWhy": "Refund on Whish is not offered:"
+    },
+    "refund": {
+      "title": "Refund this Whish payment?",
+      "body": "{{amount}} will go back to {{phone}} on Whish, and the refund will be recorded on the booking.",
+      "thePayer": "the payer",
+      "note": "Whish gives back the whole payment, never a part of it. This cannot be undone.",
+      "reason": "Reason (the guest sees it on Whish)",
+      "reasonPlaceholder": "Booking cancelled",
+      "confirm": "Refund {{amount}}"
+    },
+    "event": {
+      "opened": "Payment opened",
+      "openFailed": "The gateway did not open the payment",
+      "paidConfirmed": "Paid. Recorded, and the booking confirmed",
+      "paidRecorded": "Paid. Recorded on the booking",
+      "paidPaidButClosed": "Paid after the booking was closed. Recorded; a refund is due",
+      "paidSlotClash": "Paid, but the slot was taken meanwhile. Recorded; staff must decide",
+      "paidReplay": "Paid (already recorded)",
+      "released": "Not paid. The slot was released and the booking cancelled",
+      "alerted": "Staff were e-mailed about this payment",
+      "refunded": "Refunded on Whish",
+      "refundFailed": "Whish did not refund it",
+      "checkedReturn": "The guest came back from the payment page; the gateway was asked",
+      "checkedCallback": "Whish told us the payment was processed; Whish was asked",
+      "checkedJob": "Automatic check",
+      "checkedStaff": "{{by}} asked the gateway",
+      "checkedGuest": "The guest left the payment; the gateway was asked",
+      "checkedWebsite": "The guest pressed Pay again; the earlier payment was checked",
+      "other": "Note",
+      "gatewaySaid": "The gateway said: {{words}}",
+      "repeats": "asked {{count}} times with the same answer, last {{last}}"
+    },
+    "answer": {
+      "Unconfirmed": "cannot tell yet",
+      "Failed": "not paid",
+      "NotPaid": "not paid",
+      "NoChange": "nothing changed",
+      "Paid": "paid",
+      "CallbackReceived": "received",
+      "Opened": "not paid yet",
+      "Refunded": "refunded",
+      "Unknown": "no clear answer"
+    }
+  },
+  "gateways": {
+    "glance": {
+      "title": "Online payments at a glance",
+      "description": "What each gateway is ready for. Saving keys here never turns anything on for guests: the website keeps its own switches.",
+      "openTest": "Open the gateway test page",
+      "card": "Bank of Beirut (card)",
+      "whish": "Whish",
+      "deposits": "Deposits on the website",
+      "depositsOn": "On: a website booking asks for its deposit online.",
+      "depositsOff": "Off: a website booking is a request that staff confirm; nobody pays online.",
+      "whishWebsite": "Whish on the website",
+      "whishWebsiteOn": "Connected: guests can choose Whish.",
+      "whishWebsiteOff": "Not connected: guests do not see Whish. You can still save keys and test it from HRMS.",
+      "addressesMissing": "The server file does not say the website's address or this system's public address (BOOKING_SITE_URL, API_PUBLIC_URL). Without them a gateway cannot send the guest back. Ask whoever manages the server to set them."
+    },
+    "history": {
+      "title": "Recent changes",
+      "description": "Who saved or removed keys, switched a mode, or checked a connection.",
+      "empty": "Nothing yet.",
+      "KeysSaved": "keys saved",
+      "KeysRemoved": "keys removed",
+      "ModeChanged": "mode changed",
+      "ConnectionCheck": "connection check: {{outcome}}",
+      "ok": "accepted",
+      "failed": "refused"
+    },
+    "name": {
+      "card": "Bank of Beirut",
+      "whish": "Whish"
+    },
+    "mode": {
+      "test": "Test",
+      "live": "Live"
+    },
+    "modeTag": {
+      "test": "TEST",
+      "live": "LIVE"
+    },
+    "about": {
+      "card": "Card payments through the bank's gateway (Mastercard Payment Gateway Services). The bank issues a merchant ID and an API password, one pair for test and one for live.",
+      "whish": "Whish Pay. Whish issues three values: a channel, a secret and a website URL, one set for test (sandbox) and one for live."
+    },
+    "notSetUp": "Not set up",
+    "ready": "Ready",
+    "inUse": "Mode the website's payments use",
+    "modeChosen": "Chosen by {{by}}, {{when}}.",
+    "modeFromServer": "Following the server file. Choose a mode here to decide it in HRMS.",
+    "modeDefault": "Test is the default. Switch to Live when the live keys are saved and you are ready for real payments.",
+    "followServer": "Follow the server file again",
+    "goLive": {
+      "title": "Switch {{name}} to LIVE?",
+      "body": "From now on, payments guests make through {{name}} are REAL payments, taken with the live keys.",
+      "note": "Payments already opened in test mode are still settled with the test keys. You can switch back to Test at any time.",
+      "confirm": "Yes, switch to LIVE"
+    },
+    "keys": {
+      "kept": "{{value}} (saved; leave empty to keep)",
+      "title": {
+        "test": "Test keys",
+        "live": "Live keys"
+      },
+      "inUse": "In use",
+      "unreadable": "Keys are saved, but this server cannot open them (they were saved on another server, or its signing key changed). Enter them again.",
+      "savedBy": "Saved in HRMS by {{by}}, {{when}}. Stored encrypted; never shown again.",
+      "fromServer": "From the server file. Save keys here to use these instead.",
+      "none": {
+        "test": "No test keys yet. Paste the ones the gateway issued for testing.",
+        "live": "No live keys yet. Paste them here when the gateway issues them; they are stored encrypted."
+      },
+      "save": "Save keys",
+      "replace": "Save changes",
+      "saveFirst": "Save what you typed first.",
+      "check": "Check connection",
+      "remove": "Remove",
+      "took": "{{ms}} ms",
+      "removeTitle": "Remove these keys?",
+      "removeBody": "The {{mode}} keys of {{name}} will be removed from HRMS. If the server file holds keys for this mode, they are used again; otherwise this mode stops working until keys are saved."
+    },
+    "fields": {
+      "channel": "Channel",
+      "channelHint": "The number Whish issued",
+      "secret": "Secret",
+      "secretHint": "Paste it here",
+      "websiteUrl": "Website URL",
+      "websiteUrlHint": "Exactly as Whish issued it (it is compared letter by letter).",
+      "baseUrl": "Gateway address",
+      "baseUrlHint": "https://… (from the bank)",
+      "merchantId": "Merchant ID",
+      "merchantHint": {
+        "test": "A test profile: it starts with TEST.",
+        "live": "The live profile: it does not start with TEST."
+      },
+      "apiPassword": "API password",
+      "apiVersion": "API version"
+    }
+  },
+  "gatewayTest": {
+    "title": "Gateway test",
+    "subtitle": "Try Bank of Beirut and Whish from HRMS, in test or in live, without the website.",
+    "help": "Work down the page. Check connection asks the gateway with the saved keys and moves no money. A test payment opens a small payment and gives you the gateway's own page to pay it on; this page then follows it by itself. Look up shows what the gateway holds for any reference. A test is never a booking: its reference starts with GT- and it appears only here.",
+    "noAccess": "You do not have access to the gateway test page.",
+    "noAccessHint": "This page is for administrators (permission ‘Payment gateways’, Security → Role permissions, card Booking).",
+    "choose": {
+      "title": "What to try",
+      "gateway": "Gateway",
+      "mode": "With which keys",
+      "liveWarning": "LIVE: the live keys are used. A test payment here is a REAL payment with real money.",
+      "testNote": "Test: the gateway's test system. No real money moves.",
+      "noKeys": "There are no keys for this choice yet.",
+      "openSettings": "Open Settings → Payment gateways",
+      "keysFrom": "Keys: {{source}}.",
+      "sameAsWebsite": "This is also the mode the website's payments use.",
+      "notWebsiteMode": "The website's payments use {{mode}} mode; testing here does not change that."
+    },
+    "source": {
+      "settings": "saved in HRMS",
+      "server": "from the server file",
+      "none": "none"
+    },
+    "connection": {
+      "title": "Check the connection",
+      "about": "Asks {{name}} a harmless question with the saved keys. It answers only if the keys are right. No money moves."
+    },
+    "payment": {
+      "title": "Make a test payment",
+      "aboutLive": "A real payment of a small amount, to prove the whole path works in production. Pay it yourself, then refund it.",
+      "aboutTest": {
+        "whish": "Opens a Whish test payment. On Whish's page, press Simulate Success (or Simulate Failure) instead of paying.",
+        "card": "Opens a card test payment on the bank's test system. Pay with one of the bank's test cards."
+      },
+      "open": "Open a test payment",
+      "openLive": "Open a LIVE payment",
+      "limit": "At most {{max}} per test.",
+      "openPage": "Open the payment page",
+      "checkNow": "Check now",
+      "following": "This page checks by itself every few seconds while the payment is open.",
+      "callback": "Gateway's notice to our server",
+      "callbackYes": "received {{when}}",
+      "callbackNo": "not received (yet)"
+    },
+    "status": {
+      "Opened": "Waiting for payment",
+      "Paid": "Paid",
+      "NotPaid": "Not paid",
+      "Unknown": "Cannot tell",
+      "Refunded": "Refunded",
+      "Error": "Failed to open"
+    },
+    "lookup": {
+      "title": "Look up a payment",
+      "about": "Shows what {{name}} holds for a reference, and how HRMS reads it. Changes nothing.",
+      "reference": "Reference",
+      "ask": "Ask the gateway"
+    },
+    "recent": {
+      "title": "Tests so far",
+      "empty": "No test payments yet.",
+      "test": "Test",
+      "check": "Check",
+      "refund": "Refund"
+    },
+    "live": {
+      "title": "Open a REAL payment?",
+      "body": "This opens a real payment of {{amount}} through {{name}} with the live keys. Whoever pays it is really charged.",
+      "refund": {
+        "whish": "After it is paid you can give it back with the Refund button on this page.",
+        "card": "A card test cannot be refunded from HRMS: refund it in the bank's merchant portal."
+      },
+      "confirm": "Open a real payment of {{amount}}"
+    }
   }
 }
