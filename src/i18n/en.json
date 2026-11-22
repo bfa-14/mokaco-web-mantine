@@ -3658,7 +3658,8 @@
       "confirmWhish": "From now on, guests on the website can choose Whish to pay the deposit.",
       "confirmMode": "{{name}} is working in mode:",
       "confirmTestNote": "Test mode: no real money moves. Use it on the test system only.",
-      "confirm": "Yes, turn it on"
+      "confirm": "Yes, turn it on",
+      "testOfferedLive": "Guests on the LIVE website are being sent to a gateway in TEST mode. Real cards do not work there, and a test payment costs nothing and still confirms the booking. Turn off \"Take the deposit online\" until the live keys are saved and the gateway is switched to Live."
     }
   },
   "gatewayTest": {

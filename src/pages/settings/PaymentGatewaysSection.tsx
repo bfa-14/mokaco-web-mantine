@@ -221,7 +221,15 @@ function WebsiteSwitches({ overview, onChanged }: { overview: GatewayOverview; o
           {error}
         </div>
       )}
-      {testOffered && !overview.production && <div className="alert alert--warning gw-check">{t('gateways.website.testOffered')}</div>}
+      {/* On the test side this is how things are meant to be. On the live system it is a hole: said in red. */}
+      {testOffered &&
+        (overview.production ? (
+          <div className="alert alert--error gw-check" role="alert">
+            {t('gateways.website.testOfferedLive')}
+          </div>
+        ) : (
+          <div className="alert alert--warning gw-check">{t('gateways.website.testOffered')}</div>
+        ))}
 
       <Modal opened={asking != null} onClose={() => setAsking(null)} title={t('gateways.website.confirmTitle')} centered>
         <p>{t(asking === 'whish' ? 'gateways.website.confirmWhish' : 'gateways.website.confirmDeposits')}</p>
