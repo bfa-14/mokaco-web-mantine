@@ -70,6 +70,7 @@ import {
   statusLabel,
   today,
   weekdayName,
+  statusText,
 } from './bookingShared'
 import {
   calendarWindow,
@@ -1344,7 +1345,7 @@ export default function BookingCalendarPage() {
                           }`}
                           style={geometry}
                           onClick={() => openBooking(row)}
-                          title={`${row.guestName} · ${row.roomName} · ${statusLabel(row.status)}`}
+                          title={`${row.guestName} · ${row.roomName} · ${statusText(row)}`}
                         >
                           <span className="bk-ev-stripe" style={{ background: stripe }} />
                           <span className="bk-ev-time">

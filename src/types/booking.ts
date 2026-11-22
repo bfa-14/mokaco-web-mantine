@@ -128,6 +128,11 @@ export interface BookingRow {
   currencyCode: string
   status: BookingStatus
   source: BookingSource
+  /**
+   * Until when the slot is held for the guest's online deposit (UTC). Only a Pending website booking that
+   * must pay online carries one: it is not booked yet (read it through bookingShared.awaitsPayment).
+   */
+  holdExpiresUtc?: string | null
   createdUtc: string
   createdByUserId: number | null
   decidedByUserId: number | null

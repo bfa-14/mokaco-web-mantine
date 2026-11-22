@@ -34,9 +34,10 @@ import {
   REFUND_COLOR,
   refundLabel,
   refundStatusOf,
-  STATUS_COLOR,
   statusLabel,
   today,
+  statusColor,
+  statusText,
 } from './bookingShared'
 import { BookingDrawer } from './BookingDrawer'
 import { balanceOwed } from './bookingMoney'
@@ -230,8 +231,8 @@ export default function BookingsListPage() {
            has been handed over — so the list is where somebody finds the ones still to settle. */
         cell: (info) => (
           <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-            <Badge color={STATUS_COLOR[info.getValue()]} variant="light">
-              {statusLabel(info.getValue())}
+            <Badge color={statusColor(info.row.original)} variant="light">
+              {statusText(info.row.original)}
             </Badge>
             {hasRefund(info.row.original) && (
               <Badge color={REFUND_COLOR[refundStatusOf(info.row.original)]} variant="light">
@@ -243,10 +244,10 @@ export default function BookingsListPage() {
         meta: {
           filterText: (_v, row) =>
             hasRefund(row)
-              ? `${statusLabel(row.status)} ${refundLabel(refundStatusOf(row))}`
-              : statusLabel(row.status),
+              ? `${statusText(row)} ${refundLabel(refundStatusOf(row))}`
+              : statusText(row),
           // Only the statuses actually present, so every option in the dropdown returns something.
-          filterOptions: optionsFrom(rows, (row) => statusLabel(row.status)),
+          filterOptions: optionsFrom(rows, (row) => statusText(row)),
         },
       }),
       columnHelper.accessor('source', {

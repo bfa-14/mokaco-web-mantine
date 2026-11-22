@@ -2952,7 +2952,8 @@
       "Confirmed": "Confirmed",
       "Completed": "Completed",
       "Cancelled": "Cancelled",
-      "NoShow": "No-show"
+      "NoShow": "No-show",
+      "AwaitingPayment": "Awaiting payment"
     },
     "source": {
       "Website": "Website",
@@ -3058,7 +3059,8 @@
       "refundAmountHint": "{{due}} still due back to the guest.",
       "refundRecorded": "Refund recorded — {{status}}.",
       "refundLine": "Refund",
-      "refundNothingDue": "Nothing is due back."
+      "refundNothingDue": "Nothing is due back.",
+      "awaitingPayment": "The guest is paying the deposit online. This is not a booking yet: the payment confirms it by itself, and if it is not paid within the hold time the slot is released by itself. Confirm it by hand only if you took the deposit another way."
     },
     "new": {
       "title": "New booking",
