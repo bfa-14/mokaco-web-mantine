@@ -65,6 +65,16 @@ export const gatewaysService = {
       body: JSON.stringify({ mode }),
     }),
 
+  /**
+   * What guests can do on the website: take the deposit online at all, and offer Whish beside the card. A field left
+   * out is not changed. Turning one on is refused, in a sentence, while no gateway is ready for guests.
+   */
+  setWebsite: (switches: { deposits?: boolean; whish?: boolean }) =>
+    apiRequest<{ ok: boolean; message: string }>('/api/payment-gateways/website', {
+      method: 'PUT',
+      body: JSON.stringify(switches),
+    }),
+
   /** Asks the gateway with the keys of that mode. Moves no money. A refusal is an answer (ok: false), not an error. */
   check: (gateway: GatewayName, mode: GatewayMode) =>
     apiRequest<GatewayCheckResult>(`/api/payment-gateways/${gateway}/${mode}/check`, { method: 'POST' }),

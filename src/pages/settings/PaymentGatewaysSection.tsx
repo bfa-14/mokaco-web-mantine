@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
-import { Button, Loader, PasswordInput, SegmentedControl, TextInput } from '@mantine/core'
+import { Button, Loader, PasswordInput, SegmentedControl, Switch, TextInput } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { getErrorMessage } from '../../api/errorMessage'
 import { Modal } from '../../components/dialogs'
@@ -16,7 +16,7 @@ import type {
   GatewayView,
 } from '../../types/payments'
 import { stamp } from '../bookings/bookingShared'
-import { SettingsCard } from './SettingsCard'
+import { SettingRow, SettingRows, SettingsCard } from './SettingsCard'
 import '../bookings/payments.css'
 
 /** The address the bank gave for its TEST gateway: offered as the starting value of the test box. */
@@ -103,13 +103,11 @@ export function PaymentGatewaysSection({ refreshKey }: { refreshKey: number }) {
           <dd>
             <ReadyTag view={overview.whish} />
           </dd>
-          <dt>{t('gateways.glance.deposits')}</dt>
-          <dd>{overview.depositsRequired ? t('gateways.glance.depositsOn') : t('gateways.glance.depositsOff')}</dd>
-          <dt>{t('gateways.glance.whishWebsite')}</dt>
-          <dd>{overview.whishOnWebsite ? t('gateways.glance.whishWebsiteOn') : t('gateways.glance.whishWebsiteOff')}</dd>
         </dl>
         {addressesMissing && <div className="alert alert--warning">{t('gateways.glance.addressesMissing')}</div>}
       </SettingsCard>
+
+      <WebsiteSwitches overview={overview} onChanged={load} />
 
       <GatewayCard view={overview.whish} onChanged={load} />
       <GatewayCard view={overview.card} onChanged={load} />
@@ -139,6 +137,108 @@ export function PaymentGatewaysSection({ refreshKey }: { refreshKey: number }) {
         )}
       </SettingsCard>
     </div>
+  )
+}
+
+/**
+ * WHAT GUESTS CAN DO ON THE WEBSITE — the two switches that turn the gateways on for the public: take the deposit
+ * online at all (the card, Bank of Beirut), and offer Whish beside it.
+ *
+ * TURNING ONE ON IS ASKED FOR TWICE, with the mode in front of the eye: from that moment guests are asked to pay.
+ * Turning one off is immediate - it only ever stops a payment. The server refuses a switch that would offer guests a
+ * gateway that is not ready, or (on the live system) one in test mode, and its sentence is shown as it comes.
+ */
+function WebsiteSwitches({ overview, onChanged }: { overview: GatewayOverview; onChanged: () => void }) {
+  const { t } = useTranslation()
+  const [asking, setAsking] = useState<'deposits' | 'whish' | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function apply(which: 'deposits' | 'whish', on: boolean) {
+    setBusy(true)
+    setError(null)
+    try {
+      const answer = await gatewaysService.setWebsite(which === 'deposits' ? { deposits: on } : { whish: on })
+      notifications.show({ message: answer.message, color: 'green' })
+      onChanged()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setBusy(false)
+      setAsking(null)
+    }
+  }
+
+  function toggle(which: 'deposits' | 'whish', on: boolean) {
+    if (on) setAsking(which)
+    else void apply(which, false)
+  }
+
+  const gateway = asking === 'whish' ? overview.whish : overview.card
+  // A gateway in test mode offered to guests: fine on the test side, never on the live one (the server refuses it).
+  const testOffered =
+    overview.depositsRequired &&
+    ((overview.card.ready && overview.card.activeMode === 'test') ||
+      (overview.whishOnWebsite && overview.whish.ready && overview.whish.activeMode === 'test'))
+
+  return (
+    <SettingsCard title={t('gateways.website.title')} description={t('gateways.website.description')}>
+      <SettingRows>
+        <SettingRow
+          label={t('gateways.website.deposits')}
+          hint={overview.depositsRequired ? t('gateways.glance.depositsOn') : t('gateways.glance.depositsOff')}
+          control={
+            <Switch
+              checked={overview.depositsRequired}
+              onChange={(event) => toggle('deposits', event.currentTarget.checked)}
+              disabled={busy}
+              aria-label={t('gateways.website.deposits')}
+            />
+          }
+        />
+        <SettingRow
+          label={t('gateways.website.whish')}
+          hint={
+            overview.whishOnWebsite
+              ? overview.depositsRequired
+                ? t('gateways.glance.whishWebsiteOn')
+                : t('gateways.website.whishWaiting')
+              : t('gateways.glance.whishWebsiteOff')
+          }
+          control={
+            <Switch
+              checked={overview.whishOnWebsite}
+              onChange={(event) => toggle('whish', event.currentTarget.checked)}
+              disabled={busy}
+              aria-label={t('gateways.website.whish')}
+            />
+          }
+        />
+      </SettingRows>
+
+      {error && (
+        <div className="alert alert--error gw-check" role="alert">
+          {error}
+        </div>
+      )}
+      {testOffered && !overview.production && <div className="alert alert--warning gw-check">{t('gateways.website.testOffered')}</div>}
+
+      <Modal opened={asking != null} onClose={() => setAsking(null)} title={t('gateways.website.confirmTitle')} centered>
+        <p>{t(asking === 'whish' ? 'gateways.website.confirmWhish' : 'gateways.website.confirmDeposits')}</p>
+        <p>
+          {t('gateways.website.confirmMode', { name: t(`gateways.name.${gateway.gateway}`) })} <ModeTag mode={gateway.activeMode} />
+        </p>
+        {gateway.activeMode === 'test' && <p className="hint">{t('gateways.website.confirmTestNote')}</p>}
+        <div className="pay-refund-actions">
+          <Button variant="default" onClick={() => setAsking(null)} disabled={busy}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={() => asking && void apply(asking, true)} loading={busy}>
+            {t('gateways.website.confirm')}
+          </Button>
+        </div>
+      </Modal>
+    </SettingsCard>
   )
 }
 

@@ -188,6 +188,8 @@ export interface GatewayOverview {
   whish: GatewayView
   whishOnWebsite: boolean
   depositsRequired: boolean
+  /** This is the live system: a gateway in test mode cannot be offered to guests here. */
+  production: boolean
   siteUrl: string | null
   apiPublicUrl: string | null
   maxTestAmount: { usd: number; lbp: number }

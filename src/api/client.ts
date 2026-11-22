@@ -1,3 +1,4 @@
+import { serverTrouble } from './serverTrouble'
 import { API_BASE_URL } from '../config'
 import { tokenStorage } from '../auth/tokenStorage'
 import { extractTokens } from '../auth/tokenExtractor'
@@ -87,11 +88,16 @@ async function parseBody(response: Response): Promise<unknown> {
 async function handleResponse<T>(response: Response): Promise<T> {
   const body = await parseBody(response)
   if (!response.ok) {
-    const message = extractErrorMessage(
-      body,
-      response.statusText || `Request failed with status ${response.status}`,
-    )
-    throw new ApiError(response.status, message, body)
+    // The web server's own error page (the API is not running, or is being updated) is said in a sentence, never
+    // printed as HTML into the form that asked. See serverTrouble.ts.
+    const trouble = serverTrouble(response.status, body)
+    const message =
+      trouble === 'notAnswering'
+        ? t('common.serverNotAnswering', { status: response.status })
+        : trouble === 'errorPage'
+          ? t('common.serverErrorPage', { status: response.status })
+          : extractErrorMessage(body, response.statusText || `Request failed with status ${response.status}`)
+    throw new ApiError(response.status, message, trouble ? null : body)
   }
   return body as T
 }
