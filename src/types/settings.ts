@@ -111,6 +111,50 @@ export const GOOGLE_SIGNIN_KEYS: readonly string[] = [
   'GoogleSignInEpoch',
 ]
 
+/**
+ * The bookings mailbox: the address booking e-mails are sent from, and its own login. Pulled out of the
+ * generic list because they are one decision with one home, the "Bookings mailbox" card on Notifications,
+ * which also creates the rows a database does not have yet.
+ */
+export const BOOKING_MAIL_KEYS: readonly string[] = [
+  'BookingFromEmail',
+  'BookingFromName',
+  'BookingSmtpUser',
+  'BookingSmtpPassword',
+  'BookingSmtpHost',
+  'BookingSmtpPort',
+]
+
+/** core.SETTING TestMailRecipients: who a TEST system may write to. Owned by the same card. */
+export const TEST_MAIL_RECIPIENTS_KEY = 'TestMailRecipients'
+
+/**
+ * GET /api/settings/mail-guard. A system that is not the production one (the test side runs on a copy of
+ * production: real staff, real guests) writes only to the recipients listed here. Production is never guarded.
+ */
+export interface MailGuardState {
+  production: boolean
+  recipients: string[]
+  settingKey: string
+}
+
+/** POST /api/settings/mail-test: what the mail server said to one test message. */
+export interface MailTestResult {
+  ok: boolean
+  /** 'hr' | 'booking' */
+  account: string
+  /** server:port the message went through; empty when there was none. */
+  through: string
+  from: string
+  to: string
+  /** login | unreachable | certificate | refused | other | no-login | no-server | bad-from | hr-off */
+  kind: string | null
+  /** The same, in English, for a kind this page has no words for. */
+  message: string | null
+  /** The mail server's own answer. */
+  serverAnswer: string | null
+}
+
 /** The confirmation phrase, exactly as core.usp_System_ResetTestData compares it. */
 export const RESET_CONFIRM_PHRASE = 'DELETE ALL DATA'
 

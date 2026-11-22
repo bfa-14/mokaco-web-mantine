@@ -11,14 +11,17 @@ import { settingsService } from '../../services/settingsService'
 import { getErrorMessage } from '../../api/errorMessage'
 import {
   ALLOW_SYSTEM_RESET_KEY,
+  BOOKING_MAIL_KEYS,
   GOOGLE_SIGNIN_KEYS,
   MACHINE_PULL_KEYS,
   PUNCH_DIRECTION_KEYS,
   SHOW_PAGE_HELP_KEY,
   SYSTEM_RESET_PERMISSION,
+  TEST_MAIL_RECIPIENTS_KEY,
   type Setting,
 } from '../../types/settings'
 import { SettingRows, SettingsCard } from './SettingsCard'
+import { BookingsMailboxSection } from './BookingsMailboxSection'
 import { SystemSettingRow, tabOfSection, titleOf } from './SystemSettingRow'
 import { AttendanceMachinesSection } from './AttendanceMachinesSection'
 import { PunchDirectionRows } from './PunchDirectionSection'
@@ -192,14 +195,17 @@ export default function SettingsPage() {
    * Each exclusion has its own home elsewhere on the page: the arming flag belongs to the Danger
    * zone, the machine-pull keys are the schedule for the machines they poll, the punch pair is one
    * decision rather than two loose values, and the four Google* keys belong to the Google sign-in
-   * tab — the generic save would be refused for them anyway.
+   * tab — the generic save would be refused for them anyway. The bookings mailbox's six rows and the
+   * test system's list of recipients are one form on Notifications (BookingsMailboxSection).
    */
   const listed = settings.filter(
     (s) =>
       s.settingKey !== ALLOW_SYSTEM_RESET_KEY &&
       !MACHINE_PULL_KEYS.includes(s.settingKey) &&
       !PUNCH_DIRECTION_KEYS.includes(s.settingKey) &&
-      !GOOGLE_SIGNIN_KEYS.includes(s.settingKey),
+      !GOOGLE_SIGNIN_KEYS.includes(s.settingKey) &&
+      !BOOKING_MAIL_KEYS.includes(s.settingKey) &&
+      s.settingKey !== TEST_MAIL_RECIPIENTS_KEY,
   )
   /**
    * EVERY listed setting, filed by the tab its SECTION names — and filed exactly once.
@@ -587,6 +593,7 @@ export default function SettingsPage() {
                       <SettingRows>{notificationBands.loose.map(renderSetting)}</SettingRows>
                     </SettingsCard>
                   )}
+                  <BookingsMailboxSection settings={settings} onSaved={load} />
                 </>
               )}
             </div>
