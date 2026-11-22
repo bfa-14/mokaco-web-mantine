@@ -3645,6 +3645,20 @@
       },
       "apiPassword": "API password",
       "apiVersion": "API version"
+    },
+    "website": {
+      "title": "What guests can do on the website",
+      "description": "These two switches turn online payment on for the public. Saving keys never does: nothing changes for guests until a switch here is on.",
+      "deposits": "Take the deposit online",
+      "whish": "Offer Whish on the website",
+      "whishWaiting": "On, but guests will only see Whish once the deposit is taken online (the switch above).",
+      "testOffered": "Guests are being offered a gateway in TEST mode. That is right on the test system only: a test payment costs nothing and still confirms the booking.",
+      "confirmTitle": "Turn this on for guests?",
+      "confirmDeposits": "From now on, a guest who books on the website is asked to pay the deposit online before the booking is confirmed.",
+      "confirmWhish": "From now on, guests on the website can choose Whish to pay the deposit.",
+      "confirmMode": "{{name}} is working in mode:",
+      "confirmTestNote": "Test mode: no real money moves. Use it on the test system only.",
+      "confirm": "Yes, turn it on"
     }
   },
   "gatewayTest": {
