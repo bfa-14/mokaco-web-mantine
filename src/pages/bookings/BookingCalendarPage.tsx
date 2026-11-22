@@ -71,6 +71,9 @@ import {
   today,
   weekdayName,
   statusText,
+  isUnpaidAttempt,
+  readShowUnpaid,
+  writeShowUnpaid,
 } from './bookingShared'
 import {
   calendarWindow,
@@ -218,6 +221,8 @@ export default function BookingCalendarPage() {
   const [systemMinHours, setSystemMinHours] = useState(DEFAULT_MIN_HOURS)
 
   const [showCancelled, setShowCancelled] = useState(false)
+  /* Unpaid attempts (held for the online deposit, or released unpaid) are left off the calendar unless asked. */
+  const [showUnpaid, setShowUnpaid] = useState(readShowUnpaid)
   /** Rooms switched OFF in the legend. Client-side only — the fetch is unchanged by it. */
   const [hiddenRooms, setHiddenRooms] = useState<number[]>([])
 
@@ -369,7 +374,7 @@ export default function BookingCalendarPage() {
       day.slice(0, 10) <= rangeTo || spanOf(item).start < NEXT_MORNING_LIMIT
     const inUse = new Set([
       ...bookings
-        .filter((b) => (showCancelled || b.status !== 'Cancelled') && inRange(b.bookDate, b))
+        .filter((b) => (showCancelled || b.status !== 'Cancelled') && (showUnpaid || !isUnpaidAttempt(b)) && inRange(b.bookDate, b))
         .map((b) => b.roomId),
       ...blocks.filter((b) => inRange(b.blockDate, b)).map((b) => b.roomId),
     ])
@@ -378,7 +383,7 @@ export default function BookingCalendarPage() {
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.roomId - b.roomId)
     return [...activeRooms, ...retired]
-  }, [activeRooms, catalog.rooms, bookings, blocks, showCancelled, rangeTo])
+  }, [activeRooms, catalog.rooms, bookings, blocks, showCancelled, showUnpaid, rangeTo])
 
   /**
    * The colour a room wears, fixed by its place in SortOrder and read from the theme.
@@ -476,14 +481,14 @@ export default function BookingCalendarPage() {
           event: { kind: 'block' as const, key: `block-${b.blockId}`, roomId: b.roomId, ...spanOf(b), block: b },
         })),
       ...bookings
-        .filter((b) => roomIds.has(b.roomId) && (showCancelled || b.status !== 'Cancelled'))
+        .filter((b) => roomIds.has(b.roomId) && (showCancelled || b.status !== 'Cancelled') && (showUnpaid || !isUnpaidAttempt(b)))
         .map((b) => ({
           day: b.bookDate.slice(0, 10),
           event: { kind: 'booking' as const, key: `bk-${b.bookingId}`, roomId: b.roomId, ...spanOf(b), booking: b },
         })),
     ]
     return placeInColumns(items, (i) => i.day, (i) => i.event, days, hoursWindow)
-  }, [blocks, bookings, visibleRooms, showCancelled, days, hoursWindow])
+  }, [blocks, bookings, visibleRooms, showCancelled, showUnpaid, days, hoursWindow])
 
   /** The window drawn: the hours on screen, widened to whatever is placed outside them. */
   const viewWindow = useMemo(() => calendarWindow(relevantHours, placed), [relevantHours, placed])
@@ -984,6 +989,17 @@ export default function BookingCalendarPage() {
             checked={showCancelled}
             onChange={(event) => setShowCancelled(event.currentTarget.checked)}
             label={t('booking.calendar.showCancelled')}
+          />
+          <Switch
+            mt={6}
+            checked={showUnpaid}
+            onChange={(event) => {
+              const show = event.currentTarget.checked
+              setShowUnpaid(show)
+              writeShowUnpaid(show)
+            }}
+            label={t('booking.calendar.showUnpaid')}
+            title={t('booking.list.unpaidHint')}
           />
         </div>
 

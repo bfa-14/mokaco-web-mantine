@@ -133,6 +133,12 @@ export interface BookingRow {
    * must pay online carries one: it is not booked yet (read it through bookingShared.awaitsPayment).
    */
   holdExpiresUtc?: string | null
+  /**
+   * A website booking that never became one: still held for its online deposit, or released because it was
+   * not paid. Decided by the API (BookingRow.UnpaidAttempt); absent from an older API. Read it through
+   * bookingShared.isUnpaidAttempt. The list and the calendar leave these out unless asked.
+   */
+  unpaidAttempt?: boolean
   createdUtc: string
   createdByUserId: number | null
   decidedByUserId: number | null

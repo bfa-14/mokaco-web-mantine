@@ -3022,7 +3022,8 @@
       "seats_one": "{{count}} seat",
       "seats_other": "{{count}} seats",
       "slotHint": "Book {{room}} at {{time}} — drag for a longer slot",
-      "retired": "{{room}} (inactive)"
+      "retired": "{{room}} (inactive)",
+      "showUnpaid": "Show unpaid attempts"
     },
     "drawer": {
       "title": "Booking #{{id}}",
@@ -3095,7 +3096,11 @@
       "help": "The same bookings the calendar draws, in a list you can sort, filter and search. Click a row to open it. Staff blocks are not shown here — they have no guest and no money; look for them on the calendar.",
       "search": "Search these bookings",
       "empty": "No bookings match.",
-      "pageInfo": "{{from}}–{{to}} of {{total}}"
+      "pageInfo": "{{from}}–{{to}} of {{total}}",
+      "unpaid": "Unpaid attempts",
+      "showUnpaid_one": "Show unpaid attempts ({{count}})",
+      "showUnpaid_other": "Show unpaid attempts ({{count}})",
+      "unpaidHint": "Website bookings whose online deposit was not paid: still waiting for the payment, or released. They are not bookings."
     },
     "rooms": {
       "title": "Rooms",
