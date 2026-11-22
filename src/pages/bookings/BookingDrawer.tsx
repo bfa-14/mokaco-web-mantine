@@ -47,8 +47,10 @@ import {
   refundOutstanding,
   refundStatusOf,
   stamp,
-  STATUS_COLOR,
   statusLabel,
+  awaitsPayment,
+  statusColor,
+  statusText,
 } from './bookingShared'
 import { ReceiptModal } from './ReceiptModal'
 import { balanceOwed } from './bookingMoney'
@@ -471,8 +473,8 @@ export function BookingDrawer({
         {booking && (
           <>
             <div style={{ marginBottom: 12 }}>
-              <Badge color={STATUS_COLOR[booking.status]} variant="light">
-                {statusLabel(booking.status)}
+              <Badge color={statusColor(booking)} variant="light">
+                {statusText(booking)}
               </Badge>{' '}
               <Badge color="gray" variant="outline">
                 {t(`booking.source.${booking.source}`)}
@@ -486,6 +488,12 @@ export function BookingDrawer({
                 </>
               )}
             </div>
+
+            {awaitsPayment(booking) && (
+              <div className="alert alert--warning" role="status" style={{ marginBottom: 12 }}>
+                {t('booking.drawer.awaitingPayment')}
+              </div>
+            )}
 
             <div className="bk-detail-grid">
               <span className="bk-detail-label">{t('booking.fields.guest')}</span>

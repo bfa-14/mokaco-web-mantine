@@ -221,6 +221,25 @@ export function statusLabel(status: BookingStatus): string {
   return t(`booking.status.${status}`)
 }
 
+/**
+ * HELD, NOT BOOKED: a website booking waiting for its online deposit. The API gives it a hold from the moment
+ * it exists; the payment confirms it, and it is released by itself when it is not paid. To staff it must not
+ * read as an ordinary Pending request, which is a booking a person is asked to confirm.
+ */
+export function awaitsPayment(row: Pick<BookingRow, 'status' | 'source' | 'holdExpiresUtc'>): boolean {
+  return row.status === 'Pending' && row.source === 'Website' && !!row.holdExpiresUtc
+}
+
+/** The status as a person should read it: "Awaiting payment" for a held booking, else the status's own name. */
+export function statusText(row: Pick<BookingRow, 'status' | 'source' | 'holdExpiresUtc'>): string {
+  return awaitsPayment(row) ? t('booking.status.AwaitingPayment') : statusLabel(row.status)
+}
+
+/** Its badge colour: a held booking is orange, apart from the yellow of a request waiting for staff. */
+export function statusColor(row: Pick<BookingRow, 'status' | 'source' | 'holdExpiresUtc'>): string {
+  return awaitsPayment(row) ? 'orange' : STATUS_COLOR[row.status]
+}
+
 /* ── refunds ─────────────────────────────────────────────────────────────────────────────────── */
 
 /**

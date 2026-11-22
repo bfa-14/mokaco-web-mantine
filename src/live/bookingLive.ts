@@ -37,6 +37,11 @@ export interface BookingChangedMessage {
   endMin: number
   guestName: string
   source: string
+  /**
+   * Held for its online deposit (API script 121): Pending, but NOT a request for staff to confirm. The payment
+   * confirms it, or it is released. Absent from an older API, which reads as false.
+   */
+  awaitingPayment?: boolean
 }
 
 type Handler = (message: BookingChangedMessage) => void

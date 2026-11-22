@@ -13,6 +13,10 @@ import { bookingDrawerLink, PERMISSIONS } from './bookingShared'
  * confirm it, and until now that person found out by reloading the calendar; the toast is that
  * moment arriving by itself. Clicking it opens the booking's drawer, where Confirm is.
  *
+ * ONLY Pending + Website, and NOT a booking held for its online deposit: nobody confirms those, the
+ * payment does (or it is released), so a "click to confirm" for one would invite staff to book a room
+ * nobody has paid for.
+ *
  * ONLY Pending + Website. Every other change (a colleague's confirmation, a payment, a manual
  * booking somebody here just typed) refreshes the pages that show it and says nothing: a toast for
  * what the user did themselves is noise, and one for every status change would teach people to
@@ -31,7 +35,7 @@ export function BookingLiveToasts() {
   useBookingChanged((message) => {
     const id = `booking-live-${message.bookingId}`
 
-    if (message.status !== 'Pending' || message.source !== 'Website') {
+    if (message.status !== 'Pending' || message.source !== 'Website' || message.awaitingPayment) {
       // Decided (or cancelled by the guest) before anybody clicked: the prompt is out of date.
       notifications.hide(id)
       return
