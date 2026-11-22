@@ -259,7 +259,9 @@
       "allBranches": "All branches",
       "allEmployees": "All employees"
     },
-    "pageHelpTitle": "What is this page for?"
+    "pageHelpTitle": "What is this page for?",
+    "serverNotAnswering": "The server is not answering right now (error {{status}}). It may be restarting or being updated. Try again in a minute; if it stays like this, tell whoever looks after the system.",
+    "serverErrorPage": "The server answered with an error page (error {{status}}) instead of an answer. Try again; if it stays like this, tell whoever looks after the system."
   },
   "workflow": {
     "leaveNotice": {
