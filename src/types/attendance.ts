@@ -1237,6 +1237,28 @@ export interface RosterRotation {
   members: RosterRotationMember[]
 }
 
+/** One shift leader of a branch (script 123): on the branch's own list, a lead of the rotation list, or both. */
+export interface RosterLeader {
+  employeeId: number
+  fullName: string
+  /** On the branch's own list (what the drawer's picker holds). */
+  isStored: boolean
+  /** Lead 1 / Lead 2 of the fixed-rotation list; they count as leaders whichever method plans. */
+  leadSlot?: 'L1' | 'L2' | null
+}
+
+/**
+ * GET / PUT api/roster/auto/leaders - the branch's shift leaders, never planned on the same shift of a day.
+ * A PUT sends branchId and employeeIds (it replaces the branch's own list) and answers with the leaders as stored.
+ */
+export interface RosterLeaders {
+  branchId: number
+  /** The branch's own list. */
+  employeeIds: number[]
+  /** Read only: everybody who counts as a leader - the list above and the rotation's leads - with names. */
+  leaders: RosterLeader[]
+}
+
 /** The row a cell had when the preview read it — echoed back by the commit as its concurrency check. */
 export interface AutoRosterCellExpected {
   exists: boolean
