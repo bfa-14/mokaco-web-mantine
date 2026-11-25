@@ -1513,6 +1513,19 @@
             "twoL2": "Only one person can be Lead 2."
           },
           "splitPair": "{{first}} + {{second}} (same week)"
+        },
+        "leaders": {
+          "title": "Shift leaders",
+          "loading": "Reading the shift leaders…",
+          "loadFailed": "The shift leaders could not be read. {{error}}",
+          "placeholder": "Choose the branch's shift leaders",
+          "nobody": "Nobody found",
+          "hint": "Never two leaders on the same shift: each leader who works a day gets a different shift, as long as the day has enough shifts.",
+          "rotationLeads": "The rotation list's leads count too: {{names}}.",
+          "separator": ", ",
+          "save": "Save shift leaders",
+          "saved": "The shift leaders are saved.",
+          "unsaved": "Not saved yet. Preview saves them first."
         }
       },
       "branch": {
@@ -2873,7 +2886,8 @@
       "WhatsAppApiUrl": "Cloud API URL",
       "WhatsAppPhoneNumberId": "Sending number id",
       "WhatsAppAccessToken": "Access token",
-      "WhatsAppTemplateName": "Template name"
+      "WhatsAppTemplateName": "Template name",
+      "RosterNewHireSixDayMonths": "New employees: months of 6-day weeks"
     },
     "bookingMail": {
       "title": "Bookings mailbox",

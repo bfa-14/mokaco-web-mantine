@@ -12,11 +12,14 @@ import type {
   AutoRosterRequest,
   AutoRosterRhythmStart,
   AutoRosterSetup,
+  RosterLeaders,
   StaffingRequirementDto,
 } from '../../types/attendance'
 import { formatDayLabel, periodLabel, periodRange } from './attendanceFormat'
 import { mondayOf } from './rosterCounters'
 import { AutoRosterRotation } from './AutoRosterRotation'
+import { AutoRosterLeaders } from './AutoRosterLeaders'
+import { sameLeaders } from './rosterLeaders'
 import { proposeLine, rotationKey, rotationLines, rotationProblem, rotationToSave } from './rotationSetup'
 import type { RotationLine } from './rotationSetup'
 import {
@@ -126,6 +129,35 @@ export function AutoRosterDrawer({
   const [savingRotation, setSavingRotation] = useState(false)
   const [rotationError, setRotationError] = useState<string | null>(null)
   const rotationDirty = rotationKey(rotationStart, rotationMorning, rotationEvening, rotationList) !== rotationSaved
+
+  /* THE SHIFT LEADERS (script 123), for both methods: the branch's own list, beside the rotation's Lead 1 / Lead 2.
+     Read each time the drawer opens; like the staffing and the rotation it belongs to the branch, so Preview saves it
+     first when it has changed. State is set only when an answer arrives: until then the section says it is loading. */
+  const [leadersRead, setLeadersRead] = useState<{ branchId: number; stored: RosterLeaders | null; error: string | null } | null>(null)
+  const [leaderPicks, setLeaderPicks] = useState<number[]>([])
+  const [savingLeaders, setSavingLeaders] = useState(false)
+  const [leadersError, setLeadersError] = useState<string | null>(null)
+  const leadersStored = leadersRead?.branchId === branchId ? leadersRead.stored : null
+  const leadersLoading = opened && leadersRead?.branchId !== branchId
+  const leadersDirty = leadersStored != null && !sameLeaders(leaderPicks, leadersStored.employeeIds)
+  useEffect(() => {
+    if (!opened) return
+    let live = true
+    autoRosterService.leaders(branchId).then(
+      (stored) => {
+        if (!live) return
+        setLeadersRead({ branchId, stored, error: null })
+        setLeaderPicks(stored.employeeIds)
+        setLeadersError(null)
+      },
+      (err: unknown) => {
+        if (live) setLeadersRead({ branchId, stored: null, error: getErrorMessage(err) })
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [opened, branchId])
 
   const shiftCoverChanged = !sameShiftCover(shiftCover, coverSaved.lines)
   /** One unsaved state for the whole staffing: the weekdays and the shifts are one save. */
@@ -268,6 +300,32 @@ export function AutoRosterDrawer({
     }
   }
 
+  async function saveLeaders(): Promise<boolean> {
+    // Read before the await: the picker is disabled while saving, but what was sent is what was saved.
+    const ids = leaderPicks
+    setSavingLeaders(true)
+    setLeadersError(null)
+    try {
+      const stored = await autoRosterService.saveLeaders(branchId, ids)
+      setLeadersRead({ branchId, stored, error: null })
+      setLeaderPicks(stored.employeeIds)
+      return true
+    } catch (err) {
+      setLeadersError(getErrorMessage(err))
+      return false
+    } finally {
+      setSavingLeaders(false)
+    }
+  }
+
+  /** The rotation's leads count as leaders: after a rotation save, the leaders' note reads them again (the picks stay). */
+  function refreshRotationLeads() {
+    autoRosterService.leaders(branchId).then(
+      (stored) => setLeadersRead((read) => (read?.branchId === branchId && read.stored ? { ...read, stored } : read)),
+      () => undefined, // the note keeps what it showed; the list itself did not change
+    )
+  }
+
   async function saveRotation(): Promise<boolean> {
     const problem = rotationProblem(rotationStart, rotationMorning, rotationEvening, rotationList)
     if (problem) {
@@ -285,6 +343,7 @@ export function AutoRosterDrawer({
       const saved = lines.map((l) => ({ ...l, isNew: false }))
       setRotationList(saved)
       setRotationSaved(rotationKey(rotationStart, rotationMorning, rotationEvening, saved))
+      refreshRotationLeads()
       return true
     } catch (err) {
       setRotationError(getErrorMessage(err))
@@ -317,6 +376,8 @@ export function AutoRosterDrawer({
 
   async function preview() {
     if (!setup) return
+    // Both methods keep the leaders apart, and the server plans by the stored list.
+    if (leadersDirty && !(await saveLeaders())) return
     if (method === 'Rotation') {
       // The server plans by the stored rotation, so an unsaved one would be planned without its changes.
       if ((rotationDirty || rotationSaved === '') && !(await saveRotation())) return
@@ -359,7 +420,13 @@ export function AutoRosterDrawer({
 
   const waiting = setup?.openRequestId != null
   const canPreview =
-    setup != null && !waiting && !busy && !savingStaffing && !savingRotation && (mode !== 'ReplanAll' || confirmAll)
+    setup != null &&
+    !waiting &&
+    !busy &&
+    !savingStaffing &&
+    !savingRotation &&
+    !savingLeaders &&
+    (mode !== 'ReplanAll' || confirmAll)
   /** Staff who could be put on the rotation list: everybody not on it. */
   const notOnRotationList = setup
     ? setup.staff.filter((s) => !rotationList.some((l) => l.employeeId === s.employeeId))
@@ -646,6 +713,31 @@ export function AutoRosterDrawer({
           </div>
           </>
           )}
+
+          {/* ── shift leaders (both methods) ── */}
+          <AutoRosterLeaders
+            staff={setup.staff}
+            stored={leadersStored}
+            loading={leadersLoading}
+            loadError={leadersRead?.branchId === branchId ? leadersRead.error : null}
+            picks={leaderPicks}
+            onPicks={setLeaderPicks}
+            dirty={leadersDirty}
+            saving={savingLeaders}
+            error={leadersError}
+            onSave={() => {
+              void saveLeaders().then((ok) => {
+                if (ok) {
+                  notifications.show({
+                    message: t('attendance.roster.auto.leaders.saved'),
+                    color: 'green',
+                    autoClose: 2500,
+                  })
+                }
+              })
+            }}
+            disabled={busy || waiting}
+          />
 
           {/* ── public holidays ── */}
           <div className="form-section">

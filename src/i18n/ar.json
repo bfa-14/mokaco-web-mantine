@@ -1685,6 +1685,19 @@
             "twoL2": "مسؤول 2 شخص واحد فقط."
           },
           "splitPair": "{{first}} + {{second}} (في الأسبوع نفسه)"
+        },
+        "leaders": {
+          "title": "مسؤولو الورديات",
+          "loading": "جارٍ قراءة مسؤولي الورديات…",
+          "loadFailed": "تعذّرت قراءة مسؤولي الورديات. {{error}}",
+          "placeholder": "اختر مسؤولي الورديات في الفرع",
+          "nobody": "لا أحد",
+          "hint": "لا يوضع مسؤولان أبدًا في الوردية نفسها: كل مسؤول يعمل في يوم يأخذ وردية مختلفة، ما دام في اليوم ورديات كافية.",
+          "rotationLeads": "مسؤولا قائمة التناوب يُحسبان أيضًا: {{names}}.",
+          "separator": "، ",
+          "save": "حفظ مسؤولي الورديات",
+          "saved": "تم حفظ مسؤولي الورديات.",
+          "unsaved": "لم يُحفظوا بعد. المعاينة تحفظهم أولًا."
         }
       },
       "branch": {
@@ -3157,7 +3170,8 @@
       "WhatsAppApiUrl": "عنوان واجهة Cloud API",
       "WhatsAppPhoneNumberId": "معرّف رقم الإرسال",
       "WhatsAppAccessToken": "رمز الوصول",
-      "WhatsAppTemplateName": "اسم القالب"
+      "WhatsAppTemplateName": "اسم القالب",
+      "RosterNewHireSixDayMonths": "الموظفون الجدد: أشهر العمل 6 أيام في الأسبوع"
     },
     "bookingMail": {
       "title": "بريد الحجوزات",
