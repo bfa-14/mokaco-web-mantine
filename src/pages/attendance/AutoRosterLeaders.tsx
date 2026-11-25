@@ -76,6 +76,8 @@ export function AutoRosterLeaders({
               <>
                 {' '}
                 {t('attendance.roster.auto.leaders.rotationLeads', {
+                  // One lead or two: the line agrees in number with them (Arabic has a dual).
+                  count: leads.length,
                   names: leads
                     .map((l) => `${l.fullName} (${t(`attendance.roster.auto.rotation.${l.leadSlot === 'L1' ? 'lead1' : 'lead2'}`)})`)
                     .join(t('attendance.roster.auto.leaders.separator')),
