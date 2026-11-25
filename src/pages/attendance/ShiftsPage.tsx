@@ -18,6 +18,7 @@ import {
 } from './attendanceFormat'
 import { beirutToday } from '../../components/DateRangeField'
 import { useAuth } from '../../auth/useAuth'
+import { t as translate } from '../../i18n/t'
 import { PERMISSIONS } from '../../types/attendance'
 import type { Shift, ShiftChange, ShiftHours } from '../../types/attendance'
 import { ShiftChangeLog } from './ShiftChangeLog'
@@ -51,7 +52,12 @@ const EMPTY_FORM: ShiftFormState = {
 
 /** The Grace cell: a number of minutes, or the words for "no override" — null is the tolerance setting, not zero. */
 function graceText(minutes: number | null): string {
-  return minutes == null ? 'Tolerance setting' : `${minutes} min`
+  return minutes == null ? translate('attendance.shiftsPage.values.toleranceSetting') : minutesText(minutes)
+}
+
+/** '30 min' — the Grace and Break cells (and their filters) say it the same way. */
+function minutesText(minutes: number): string {
+  return translate('attendance.shiftsPage.values.minutes', { minutes })
 }
 
 /**
@@ -92,18 +98,18 @@ function shiftSpanMinutes(form: ShiftFormState): number | null {
  */
 function describeTimeProblem(form: ShiftFormState): string | null {
   const span = shiftSpanMinutes(form)
-  if (span === null) return 'Enter a start time and an end time.'
+  if (span === null) return translate('attendance.shiftsPage.problems.noTimes')
 
   if (span < 0) {
-    return "This shift ends before it starts. Tick 'crosses midnight' if it is an overnight shift."
+    return translate('attendance.shiftsPage.problems.endsBefore')
   }
   if (span === 0) {
-    return "This shift starts and ends at the same time, so it is zero hours long. Tick 'crosses midnight' if you meant a full 24-hour shift."
+    return translate('attendance.shiftsPage.problems.zero')
   }
   // A break at least as long as the shift leaves nothing to pay: a full day on this shift
   // would be worth zero minutes, and everyone rostered on it would look permanently short.
   if (form.breakMinutes >= span) {
-    return `The break (${formatMinutes(form.breakMinutes)}) is as long as the shift itself (${formatMinutes(span)}), which would leave nothing to pay. Shorten the break or lengthen the shift.`
+    return translate('attendance.shiftsPage.problems.breakTooLong', { break: formatMinutes(form.breakMinutes), span: formatMinutes(span) })
   }
   return null
 }
@@ -116,11 +122,12 @@ function fullDayMinutes(form: ShiftFormState): number | null {
 }
 
 /** The words the Status and Crosses-midnight cells print — also their filter dropdowns' options. */
-const ACTIVE_LABELS = ['Active', 'Inactive']
-const activeText = (isActive: boolean) => (isActive ? 'Active' : 'Inactive')
+const activeText = (isActive: boolean) =>
+  translate(isActive ? 'attendance.shiftsPage.values.active' : 'attendance.shiftsPage.values.inactive')
+const activeLabels = () => [activeText(true), activeText(false)]
 
-const MIDNIGHT_LABELS = ['Overnight', '—']
-const midnightText = (crosses: boolean) => (crosses ? 'Overnight' : '—')
+const midnightText = (crosses: boolean) => (crosses ? translate('attendance.shiftsPage.values.overnight') : translate('common.dash'))
+const midnightLabels = () => [midnightText(true), midnightText(false)]
 
 /** True when the form's hours are not the ones the shift has now: the change then needs the day it starts. */
 function hoursDiffer(form: ShiftFormState, shift: Shift): boolean {
@@ -135,8 +142,11 @@ function hoursDiffer(form: ShiftFormState, shift: Shift): boolean {
 
 /** "From 01/12/2026 to 31/12/2026" for a row of the history; the first row has been there from the start. */
 function periodText(row: ShiftHours): string {
-  const from = row.isFirst ? 'From the start' : `From ${formatDayLabel(row.effectiveFrom)}`
-  return row.effectiveTo ? `${from} to ${formatDayLabel(row.effectiveTo)}` : row.isFirst ? 'Since the start' : `${from} onwards`
+  const from = row.isFirst
+    ? translate('attendance.shiftsPage.hours.fromStart')
+    : translate('attendance.shiftsPage.hours.from', { day: formatDayLabel(row.effectiveFrom) })
+  if (row.effectiveTo) return translate('attendance.shiftsPage.hours.fromTo', { from, to: formatDayLabel(row.effectiveTo) })
+  return row.isFirst ? translate('attendance.shiftsPage.hours.sinceStart') : translate('attendance.shiftsPage.hours.onwards', { from })
 }
 
 function ActiveCell({ isActive }: { isActive: boolean }) {
@@ -148,8 +158,8 @@ function ActiveCell({ isActive }: { isActive: boolean }) {
 }
 
 function MidnightCell({ crosses }: { crosses: boolean }) {
-  if (!crosses) return <span>—</span>
-  return <span className="badge badge--muted">Overnight</span>
+  if (!crosses) return <span>{midnightText(false)}</span>
+  return <span className="badge badge--muted">{midnightText(true)}</span>
 }
 
 const columnHelper = createColumnHelper<Shift>()
@@ -305,8 +315,8 @@ export default function ShiftsPage() {
       notifications.show({
         message:
           result.daysRederived > 0
-            ? `The change of ${formatDayLabel(row.effectiveFrom)} was taken back. ${result.daysRederived} day(s) were worked out again.`
-            : `The change of ${formatDayLabel(row.effectiveFrom)} was taken back.`,
+            ? t('attendance.shiftsPage.notify.takenBackDays', { day: formatDayLabel(row.effectiveFrom), count: result.daysRederived })
+            : t('attendance.shiftsPage.notify.takenBack', { day: formatDayLabel(row.effectiveFrom) }),
         color: 'green',
         autoClose: 3500,
       })
@@ -338,7 +348,7 @@ export default function ShiftsPage() {
     // The DX RequiredRule is gone with DevExtreme; the same rule, in the same words, is
     // enforced here through the dialog's own error slot.
     if (!name) {
-      setFormError('A shift needs a name people will recognise on the roster')
+      setFormError(t('attendance.shiftsPage.problems.needName'))
       return
     }
 
@@ -350,11 +360,11 @@ export default function ShiftsPage() {
     // New hours need the day they start; an end day, when given, is on or after it.
     const changesHours = editing != null && hoursDiffer(form, editing)
     if (changesHours && !hoursFrom) {
-      setFormError('Choose the day the new hours start')
+      setFormError(t('attendance.shiftsPage.problems.needFrom'))
       return
     }
     if (changesHours && hoursTo && hoursTo < hoursFrom) {
-      setFormError('The last day of the new hours is before their first day')
+      setFormError(t('attendance.shiftsPage.problems.toBeforeFrom'))
       return
     }
     setFormError(null)
@@ -377,10 +387,15 @@ export default function ShiftsPage() {
         })
         notifications.show({
           message: !changesHours
-            ? `"${name}" saved.`
+            ? t('attendance.shiftsPage.notify.saved', { name })
             : hoursTo
-              ? `"${name}" saved. From ${formatDayLabel(hoursFrom)} to ${formatDayLabel(hoursTo)} a full day on it is ${formatMinutes(paid)}; after that its hours are as before. The days before keep the hours they were judged against.`
-              : `"${name}" saved. From ${formatDayLabel(hoursFrom)} a full day on it is ${formatMinutes(paid)}. The days before keep the hours they were judged against.`,
+              ? t('attendance.shiftsPage.notify.savedPeriod', {
+                  name,
+                  from: formatDayLabel(hoursFrom),
+                  to: formatDayLabel(hoursTo),
+                  minutes: formatMinutes(paid),
+                })
+              : t('attendance.shiftsPage.notify.savedFrom', { name, from: formatDayLabel(hoursFrom), minutes: formatMinutes(paid) }),
           color: 'green',
           autoClose: 4500,
         })
@@ -394,7 +409,11 @@ export default function ShiftsPage() {
           crossesMidnight: form.crossesMidnight,
         })
         notifications.show({
-          message: `"${name}" created: ${formatClock(form.startTime)}–${formatClock(form.endTime)}, a full day of ${formatMinutes(paid)}. Roster somebody onto it to use it.`,
+          message: t('attendance.shiftsPage.notify.created', {
+            name,
+            hours: `${formatClock(form.startTime)}–${formatClock(form.endTime)}`,
+            minutes: formatMinutes(paid),
+          }),
           color: 'green',
           autoClose: 2500,
         })
@@ -419,28 +438,28 @@ export default function ShiftsPage() {
               {formatClock(row.startTime)}–{formatClock(row.endTime)}
             </strong>
             <span className="shift-hours-day">
-              {formatMinutes(row.standardMinutes)} a day
-              {row.breakMinutes > 0 ? `, ${formatMinutes(row.breakMinutes)} break` : ''}
+              {t('attendance.shiftsPage.hours.perDay', { minutes: formatMinutes(row.standardMinutes) })}
+              {row.breakMinutes > 0 ? t('attendance.shiftsPage.hours.withBreak', { minutes: formatMinutes(row.breakMinutes) }) : ''}
             </span>
-            {row.isCurrent && <span className="shift-hours-now">now</span>}
+            {row.isCurrent && <span className="shift-hours-now">{t('attendance.shiftsPage.hours.now')}</span>}
           </div>
           {(row.note || row.createdBy) && !row.isFirst && (
             <div className="shift-hours-note">
               {row.note}
               {row.note && row.createdBy ? ' · ' : ''}
-              {row.createdBy ? `by ${row.createdBy}` : ''}
+              {row.createdBy ? t('attendance.shiftsPage.hours.by', { name: row.createdBy }) : ''}
             </div>
           )}
           {withTakeBack &&
             !row.isFirst &&
             (confirmRemove === row.shiftHoursId ? (
               <div className="shift-hours-confirm">
-                <span>Take this change back?</span>
+                <span>{t('attendance.shiftsPage.hours.confirm')}</span>
                 <Button size="compact-xs" color="red" onClick={() => void takeBack(row)} disabled={removing || saving}>
-                  {removing ? 'Taking back…' : 'Yes, take it back'}
+                  {removing ? t('attendance.shiftsPage.hours.takingBack') : t('attendance.shiftsPage.hours.yesTakeBack')}
                 </Button>
                 <Button size="compact-xs" variant="default" onClick={() => setConfirmRemove(null)} disabled={removing}>
-                  No
+                  {t('common.no')}
                 </Button>
               </div>
             ) : (
@@ -449,8 +468,8 @@ export default function ShiftsPage() {
                 variant="subtle"
                 color="gray"
                 size="sm"
-                aria-label={`Take back the change of ${formatDayLabel(row.effectiveFrom)}`}
-                title="Take this change back"
+                aria-label={t('attendance.shiftsPage.hours.takeBackAria', { day: formatDayLabel(row.effectiveFrom) })}
+                title={t('attendance.shiftsPage.hours.takeBackTitle')}
                 disabled={saving || removing}
                 onClick={() => setConfirmRemove(row.shiftHoursId)}
               >
@@ -467,50 +486,50 @@ export default function ShiftsPage() {
      table's natural alignment. */
   const columns = useMemo(
     () => [
-      columnHelper.accessor('name', { header: 'Shift' }),
+      columnHelper.accessor('name', { header: t('attendance.shiftsPage.col.shift') }),
       // 'HH:mm:ss' underneath, 'HH:mm' on screen — the filter takes the shorter one.
       columnHelper.accessor('startTime', {
-        header: 'Start',
+        header: t('attendance.shiftsPage.col.start'),
         cell: (info) => <span>{formatClock(info.row.original.startTime)}</span>,
         meta: { filterText: formatClock },
       }),
       columnHelper.accessor('endTime', {
-        header: 'End',
+        header: t('attendance.shiftsPage.col.end'),
         cell: (info) => <span>{formatClock(info.row.original.endTime)}</span>,
         meta: { filterText: formatClock },
       }),
       columnHelper.accessor('graceMinutes', {
-        header: 'Grace',
+        header: t('attendance.shiftsPage.col.grace'),
         cell: (info) => (
-          <span title="Arriving within this many minutes of the start is not late at all. Empty uses the Attendance tolerance setting.">
+          <span title={t('attendance.shiftsPage.col.graceTitle')}>
             {graceText(info.row.original.graceMinutes)}
           </span>
         ),
         meta: { filterText: graceText },
       }),
       columnHelper.accessor('breakMinutes', {
-        header: 'Break',
+        header: t('attendance.shiftsPage.col.break'),
         cell: (info) => (
-          <span title="Unpaid, and charged once against the day.">
-            {info.row.original.breakMinutes} min
+          <span title={t('attendance.shiftsPage.col.breakTitle')}>
+            {minutesText(info.row.original.breakMinutes)}
           </span>
         ),
-        meta: { filterText: (v) => `${v} min` },
+        meta: { filterText: (v) => minutesText(Number(v)) },
       }),
       columnHelper.accessor('crossesMidnight', {
-        header: 'Crosses midnight',
+        header: t('attendance.shiftsPage.col.crossesMidnight'),
         cell: (info) => <MidnightCell crosses={info.row.original.crossesMidnight} />,
-        meta: { filterText: midnightText, filterOptions: MIDNIGHT_LABELS },
+        meta: { filterText: midnightText, filterOptions: midnightLabels() },
       }),
       columnHelper.accessor('isActive', {
-        header: 'Status',
+        header: t('attendance.shiftsPage.col.status'),
         cell: (info) => <ActiveCell isActive={info.row.original.isActive} />,
-        meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
+        meta: { filterText: activeText, filterOptions: activeLabels() },
       }),
       // Managers open Edit (the history and the change log are inside it); everyone else opens the History window.
       columnHelper.display({
         id: 'actions',
-        header: 'Actions',
+        header: t('attendance.shiftsPage.col.actions'),
         cell: (info) => (
           <div className="grid-actions">
             {canManage ? (
@@ -519,7 +538,7 @@ export default function ShiftsPage() {
                 size="compact-sm"
                 onClick={() => openEdit(info.row.original)}
               >
-                Edit
+                {t('attendance.shiftsPage.edit')}
               </Button>
             ) : (
               <Button variant="subtle" size="compact-sm" onClick={() => openHistory(info.row.original)}>
@@ -571,35 +590,28 @@ export default function ShiftsPage() {
     <div>
       <div className="page-head">
         <div>
-          <h1 className="page-title">Shifts</h1>
-          <p className="page-subtitle">
-            The definitions that give “late”, “a full day” and “overtime” a meaning.
-          </p>
+          <h1 className="page-title">{t('attendance.shiftsPage.title')}</h1>
+          <p className="page-subtitle">{t('attendance.shiftsPage.subtitle')}</p>
         </div>
         <div className="page-head-actions">
           <ActionIcon
             variant="default"
             size="lg"
-            title="Refresh"
-            aria-label="Refresh"
+            title={t('common.refresh')}
+            aria-label={t('common.refresh')}
             onClick={refresh}
           >
             <IconRefresh size={16} />
           </ActionIcon>
           {canManage && (
             <Button leftSection={<IconPlus size={16} />} onClick={openCreate}>
-              New Shift
+              {t('attendance.shiftsPage.newShift')}
             </Button>
           )}
         </div>
       </div>
 
-      <PageHelp>
-        A shift is what makes “late” and “a full day” mean something: without one, there is
-        no start time to be late against and no target for the hours to fall short of.
-        A shift’s hours can change from a day you choose — and for a period, after which they come
-        back — without touching the days before: each day is judged against the hours in force on it.
-      </PageHelp>
+      <PageHelp>{t('attendance.shiftsPage.help')}</PageHelp>
 
       {error && (
         <div className="alert alert--error" role="alert">
@@ -608,12 +620,7 @@ export default function ShiftsPage() {
       )}
 
       <div className="card">
-        <p className="hint">
-          Somebody with no rostered shift is not judged against nothing — their day is measured
-          against the shift their first punch fits (the one that starts nearest to it). They
-          still earn a day fraction, but they cannot be late: without a roster there is no start
-          time to be late against.
-        </p>
+        <p className="hint">{t('attendance.shiftsPage.noRosterHint')}</p>
       </div>
 
       {loading ? (
@@ -626,7 +633,7 @@ export default function ShiftsPage() {
             <TextInput
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.currentTarget.value)}
-              placeholder="Search…"
+              placeholder={t('attendance.shiftsPage.search')}
               leftSection={<IconSearch size={14} />}
               w={240}
               size="xs"
@@ -677,7 +684,7 @@ export default function ShiftsPage() {
                           that point would be a lie, and would send somebody off to create one that
                           already exists. */}
                       <div className="empty-hint" style={{ padding: 16 }}>
-                        No shifts match the filter. Clear it to see the rest.
+                        {t('attendance.shiftsPage.noMatch')}
                       </div>
                     </Table.Td>
                   </Table.Tr>
@@ -698,8 +705,11 @@ export default function ShiftsPage() {
 
           <Group justify="space-between" p="xs">
             <span className="hint" style={{ margin: 0 }}>
-              {total === 0 ? 0 : pageIndex * pageSize + 1}–
-              {Math.min((pageIndex + 1) * pageSize, total)} of {total}
+              {t('common.pageInfo', {
+                from: total === 0 ? 0 : pageIndex * pageSize + 1,
+                to: Math.min((pageIndex + 1) * pageSize, total),
+                total,
+              })}
             </span>
             <Group gap="xs">
               <Select
@@ -725,10 +735,8 @@ export default function ShiftsPage() {
         !error && (
           <div className="card">
             <div className="empty-hint">
-              <div className="empty-hint-main">No shifts are defined yet.</div>
-              {canManage
-                ? 'Add the shifts people actually work — the morning, the evening, the overnight. Until one exists there is nothing to roster anybody onto, and nothing to measure a day against.'
-                : 'Until somebody with roster rights adds one, there is nothing to measure a day against.'}
+              <div className="empty-hint-main">{t('attendance.shiftsPage.emptyTitle')}</div>
+              {canManage ? t('attendance.shiftsPage.emptyManage') : t('attendance.shiftsPage.emptyRead')}
             </div>
           </div>
         )
@@ -737,7 +745,7 @@ export default function ShiftsPage() {
       <Modal
         opened={popupVisible}
         onClose={() => setPopupVisible(false)}
-        title={editing ? `Edit ${editing.name}` : 'New Shift'}
+        title={editing ? t('attendance.shiftsPage.editTitle', { name: editing.name }) : t('attendance.shiftsPage.newShift')}
         size={520}
         centered
       >
@@ -749,7 +757,7 @@ export default function ShiftsPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="shift-name">
-            Name
+            {t('attendance.shiftsPage.form.name')}
           </label>
           <TextInput
             id="shift-name"
@@ -758,7 +766,7 @@ export default function ShiftsPage() {
               const value = e.currentTarget.value
               setForm((f) => ({ ...f, name: value }))
             }}
-            placeholder="Morning, Evening, Overnight…"
+            placeholder={t('attendance.shiftsPage.form.namePlaceholder')}
             disabled={saving}
           />
         </div>
@@ -766,7 +774,7 @@ export default function ShiftsPage() {
         <div className="form-grid">
           <div className="form-field">
             <label className="form-label" htmlFor="shift-start">
-              Start
+              {t('attendance.shiftsPage.form.start')}
             </label>
             <TimePicker
               id="shift-start"
@@ -784,7 +792,7 @@ export default function ShiftsPage() {
 
           <div className="form-field">
             <label className="form-label" htmlFor="shift-end">
-              End
+              {t('attendance.shiftsPage.form.end')}
             </label>
             <TimePicker
               id="shift-end"
@@ -801,7 +809,7 @@ export default function ShiftsPage() {
 
         <div className="form-field">
           <label className="form-label" htmlFor="shift-grace">
-            Grace (minutes)
+            {t('attendance.shiftsPage.form.grace')}
           </label>
           {/* OPTIONAL, unlike the break: a blank box is null, and null tells the processor to use
               the company-wide AttendanceToleranceMinutes setting. A settled number overrides it
@@ -813,18 +821,15 @@ export default function ShiftsPage() {
               setForm((f) => ({ ...f, graceMinutes: typeof v === 'number' ? v : null }))
             }
             min={0}
-            placeholder="Tolerance setting"
+            placeholder={t('attendance.shiftsPage.values.toleranceSetting')}
             disabled={saving}
           />
-          <p className="hint">
-            Arriving within this many minutes of the start is not late at all. Empty = use the
-            tolerance setting (Settings → Attendance).
-          </p>
+          <p className="hint">{t('attendance.shiftsPage.form.graceHint')}</p>
         </div>
 
         <div className="form-field">
           <label className="form-label" htmlFor="shift-break">
-            Break (minutes)
+            {t('attendance.shiftsPage.form.break')}
           </label>
           <NumberInput
             id="shift-break"
@@ -833,11 +838,7 @@ export default function ShiftsPage() {
             min={0}
             disabled={saving}
           />
-          <p className="hint">
-            Unpaid, and charged once. If they punch out for it, the mid-day gap already
-            covers it; if they don’t, it comes off their worked time. Punching out for
-            lunch is never worse for them.
-          </p>
+          <p className="hint">{t('attendance.shiftsPage.form.breakHint')}</p>
         </div>
 
         <div className="form-field">
@@ -847,13 +848,10 @@ export default function ShiftsPage() {
               const checked = e.currentTarget.checked
               setForm((f) => ({ ...f, crossesMidnight: checked }))
             }}
-            label="Crosses midnight"
+            label={t('attendance.shiftsPage.form.crossesMidnight')}
             disabled={saving}
           />
-          <p className="hint">
-            Tick this for an overnight shift like 22:00–06:00. The shift belongs to the
-            day it STARTS on. Without this, its length computes as negative.
-          </p>
+          <p className="hint">{t('attendance.shiftsPage.form.crossesMidnightHint')}</p>
         </div>
 
         {editing && (
@@ -864,23 +862,20 @@ export default function ShiftsPage() {
                 const checked = e.currentTarget.checked
                 setForm((f) => ({ ...f, isActive: checked }))
               }}
-              label="Active"
+              label={t('attendance.shiftsPage.form.active')}
               disabled={saving}
             />
-            <p className="hint">
-              Turning a shift off stops it being rostered from now on. Days already
-              worked on it keep the hours they were judged against.
-            </p>
+            <p className="hint">{t('attendance.shiftsPage.form.activeHint')}</p>
           </div>
         )}
 
         {editing && changesHours && (
           <div className="form-section shift-hours-when">
-            <h3 className="form-section-title">When do the new hours apply?</h3>
+            <h3 className="form-section-title">{t('attendance.shiftsPage.form.whenTitle')}</h3>
             <div className="form-grid">
               <div className="form-field">
                 <label className="form-label" htmlFor="shift-hours-from">
-                  From
+                  {t('attendance.shiftsPage.form.from')}
                 </label>
                 <TextInput
                   id="shift-hours-from"
@@ -892,7 +887,7 @@ export default function ShiftsPage() {
               </div>
               <div className="form-field">
                 <label className="form-label" htmlFor="shift-hours-to">
-                  Until (optional)
+                  {t('attendance.shiftsPage.form.until')}
                 </label>
                 <TextInput
                   id="shift-hours-to"
@@ -906,30 +901,33 @@ export default function ShiftsPage() {
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="shift-hours-note">
-                Reason (optional)
+                {t('attendance.shiftsPage.form.reason')}
               </label>
               <TextInput
                 id="shift-hours-note"
                 value={hoursNote}
                 maxLength={200}
                 onChange={(e) => setHoursNote(e.currentTarget.value)}
-                placeholder="Winter hours, Ramadan, a trial…"
+                placeholder={t('attendance.shiftsPage.form.reasonPlaceholder')}
                 disabled={saving}
               />
             </div>
             <p className="hint">
               {hoursTo
-                ? `From ${formatDayLabel(hoursFrom)} to ${formatDayLabel(hoursTo)} the shift runs the new hours; the day after, it goes back to ${formatClock(editing.startTime)}–${formatClock(editing.endTime)} by itself.`
-                : `From ${formatDayLabel(hoursFrom)} the shift runs the new hours, until you change them again.`}{' '}
-              The days before keep the hours they were judged against. Days from that date
-              already processed are worked out again; a day already paid never changes.
+                ? t('attendance.shiftsPage.form.whenPeriod', {
+                    from: formatDayLabel(hoursFrom),
+                    to: formatDayLabel(hoursTo),
+                    hours: `${formatClock(editing.startTime)}–${formatClock(editing.endTime)}`,
+                  })
+                : t('attendance.shiftsPage.form.whenOpen', { from: formatDayLabel(hoursFrom) })}{' '}
+              {t('attendance.shiftsPage.form.whenAfter')}
             </p>
           </div>
         )}
 
         {editing && (history || historyError) && (
           <div className="form-field">
-            <span className="form-label">Hours over time</span>
+            <span className="form-label">{t('attendance.shiftsPage.history.hoursTitle')}</span>
             {historyError && <p className="hint">{historyError}</p>}
             {history && hoursList(history, canManage)}
           </div>
@@ -947,12 +945,13 @@ export default function ShiftsPage() {
           previewMinutes !== null && (
             <div className="form-field">
               <p className="hint">
-                A full day on this shift is{' '}
-                <strong>{formatMinutes(previewMinutes)}</strong> —{' '}
-                {formatClock(form.startTime)} to {formatClock(form.endTime)}
-                {form.crossesMidnight ? ' the next morning' : ''}, minus the{' '}
-                {formatMinutes(form.breakMinutes)} break. That is the target their hours
-                are measured against.
+                {t('attendance.shiftsPage.form.previewLead')} <strong>{formatMinutes(previewMinutes)}</strong>{' '}
+                {t('attendance.shiftsPage.form.previewRest', {
+                  start: formatClock(form.startTime),
+                  end: formatClock(form.endTime),
+                  nextMorning: form.crossesMidnight ? t('attendance.shiftsPage.form.nextMorning') : '',
+                  break: formatMinutes(form.breakMinutes),
+                })}
               </p>
             </div>
           )
@@ -964,10 +963,10 @@ export default function ShiftsPage() {
             onClick={() => setPopupVisible(false)}
             disabled={saving}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={() => void submitShift()} disabled={saving}>
-            {saving ? 'Saving…' : editing ? 'Save Shift' : 'Create Shift'}
+            {saving ? t('common.saving') : editing ? t('attendance.shiftsPage.form.save') : t('attendance.shiftsPage.form.create')}
           </Button>
         </div>
       </Modal>
