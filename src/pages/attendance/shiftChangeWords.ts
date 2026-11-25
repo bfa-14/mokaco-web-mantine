@@ -125,6 +125,22 @@ export function shiftChangeNote(change: ShiftChange, w: ChangeLogWords): string 
   return note
 }
 
+/**
+ * A note of the "Hours over time" list in the reader's language: the database writes two notes of its own in English
+ * (the first hours, and the hours coming back after a period); a reason a person typed is shown as typed. Null = the
+ * line says enough without it.
+ */
+export function shiftHoursNote(note: string | null | undefined, w: Pick<ChangeLogWords, 't' | 'day'>): string | null {
+  const text = note?.trim()
+  if (!text || FIRST_HOURS_NOTES.includes(text)) return null
+  const back = BACK_NOTE.exec(text)
+  if (back) {
+    const said = w.t(`${K}noteBack`, { day: w.day(`${back[3]}-${back[2]}-${back[1]}`) })
+    return said.charAt(0).toLocaleUpperCase() + said.slice(1)
+  }
+  return text
+}
+
 /** A day the way the change log says it: '22 Nov 2026' in English, the Arabic month name in Arabic. */
 export function changeLogDay(isoDate: string, locale: string): string {
   const day = new Date(`${isoDate.slice(0, 10)}T00:00:00Z`)

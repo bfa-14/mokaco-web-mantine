@@ -1441,6 +1441,13 @@ export interface AutoRosterSetupStaff {
   anchorWorkDays?: number | null
   /** 6 or 5: the month's first week as the planner would use it now. */
   firstWeekWorkDays: number
+  /**
+   * The new-hire rule: the Monday from which this person alternates 6 and 5 (every week before it is a 6-day week).
+   * Only while that Monday is still ahead of the month's first week. Absent from an older API.
+   */
+  sixDayWeeksUntil?: string | null
+  /** Each week of the month and its type (6 or 5) as the planner decides it now. Absent from an older API. */
+  weeks?: { weekStart: string; workDays: number }[]
 }
 
 export interface AutoRosterSetupHoliday {

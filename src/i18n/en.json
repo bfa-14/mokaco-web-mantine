@@ -1250,7 +1250,8 @@
           "none": "Nobody belongs to this branch in {{month}}.",
           "offHint": "Off rotation: shown on the grid, never planned.",
           "count_one": "{{count}} on rotation",
-          "count_other": "{{count}} on rotation"
+          "count_other": "{{count}} on rotation",
+          "newHireUntil": "New: 6-day weeks until {{date}}, then 6 and 5 in turn"
         },
         "holidays": {
           "title": "Public holidays",
@@ -1350,7 +1351,8 @@
           "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
           "LONG_RUN": "A long run of working days",
           "ROTATION_NOT_SET": "Not on the rotation list",
-          "LEADS_SAME_SHIFT": "More than one shift leader on the same shift"
+          "LEADS_SAME_SHIFT": "More than one shift leader on the same shift",
+          "LEADS_TOO_FEW_SHIFTS": "More shift leaders work than there are shifts to cover, so on some days leaders share a shift. Tick more shifts under “Shifts to cover every day”, or take a leader off the list."
         },
         "issueShift": {
           "SHORT_STAFFED": "Below the minimum on {{shift}}",

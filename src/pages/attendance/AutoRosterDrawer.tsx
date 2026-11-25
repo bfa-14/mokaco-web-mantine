@@ -672,6 +672,11 @@ export function AutoRosterDrawer({
                           <td>
                             <div className="auto-roster-name">{s.fullName}</div>
                             {s.position && <div className="auto-roster-sub">{s.position}</div>}
+                            {s.sixDayWeeksUntil && (
+                              <div className="auto-roster-sub">
+                                {t('attendance.roster.auto.staff.newHireUntil', { date: formatDayLabel(s.sixDayWeeksUntil.slice(0, 10)) })}
+                              </div>
+                            )}
                           </td>
                           <td>
                             <Checkbox

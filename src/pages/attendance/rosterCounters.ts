@@ -155,8 +155,17 @@ export interface StripWeek {
  * 5-day week. A week with an unknown day or a leave day is not judged — an employee hired on a
  * Thursday, or on leave, has a legitimately odd week. Two judged weeks in a row of the same type
  * break the alternation, and the second is marked.
+ *
+ * WITH `expected` (a saved month whose branch setup says each week's type: 6 or 5), a judged week is right when its
+ * shape is that type. That is what tells a new hire's 6-day weeks in a row (the first months are all 6) from a broken
+ * alternation, which the shape alone cannot.
  */
-export function weekStrip(weekStarts: string[], cellOf: CellOf, server?: ServerWeek[]): StripWeek[] {
+export function weekStrip(
+  weekStarts: string[],
+  cellOf: CellOf,
+  server?: ServerWeek[],
+  expected?: ReadonlyMap<string, number>,
+): StripWeek[] {
   const byStart = new Map((server ?? []).map((w) => [w.weekStart.slice(0, 10), w]))
   const strip: StripWeek[] = []
   let previous: StripWeek | null = null
@@ -186,10 +195,15 @@ export function weekStrip(weekStarts: string[], cellOf: CellOf, server?: ServerW
     } else {
       const type = rests === 1 ? 6 : rests === 2 ? 5 : null
       const judged = unknown === 0 && leave === 0
-      entry = { weekStart, rests, type: unknown === 0 ? type : null, quota: null, ok: judged ? type !== null : null }
-      const previousJudged = previous != null && previous.quota === null && previous.ok !== null
-      if (judged && entry.type !== null && previousJudged && previous?.type === entry.type) {
-        entry.ok = false
+      const want = expected?.get(weekStart)
+      if (want === 6 || want === 5) {
+        entry = { weekStart, rests, type: unknown === 0 ? type : null, quota: null, ok: judged ? type === want : null }
+      } else {
+        entry = { weekStart, rests, type: unknown === 0 ? type : null, quota: null, ok: judged ? type !== null : null }
+        const previousJudged = previous != null && previous.quota === null && previous.ok !== null
+        if (judged && entry.type !== null && previousJudged && previous?.type === entry.type) {
+          entry.ok = false
+        }
       }
     }
     strip.push(entry)

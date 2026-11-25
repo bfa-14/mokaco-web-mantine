@@ -123,6 +123,30 @@ test('a saved month reads 6·5 from the shape of each week and marks a broken al
   assert.equal(stripText(strip), '6·5·6·6')
 })
 
+test('a new hire on a saved month: the setup says every week is a 6, so 6·6·6 is right and a 5 is not', () => {
+  const starts = ['2026-12-07', '2026-12-14', '2026-12-21', '2026-12-28']
+  const cellOf = merge(
+    weekCells('2026-12-07', 'WWWWWWR'),
+    weekCells('2026-12-14', 'WWWWWRW'),
+    weekCells('2026-12-21', 'WWRWWWR'), // 2 rests: a 5 where the setup wants a 6
+    weekCells('2026-12-28', 'WWWWRWW'),
+  )
+  const expected = new Map(starts.map((s) => [s, 6]))
+  const strip = weekStrip(starts, cellOf, undefined, expected)
+  assert.deepEqual(strip.map((w) => w.type), [6, 6, 5, 6])
+  assert.deepEqual(strip.map((w) => w.ok), [true, true, false, true])
+})
+
+test('with the expected types, the shape is judged against them, not against the week before', () => {
+  const starts = ['2026-12-07', '2026-12-14']
+  const cellOf = merge(weekCells('2026-12-07', 'WWWWWWR'), weekCells('2026-12-14', 'WWWWWRW'))
+  // W0 on 14 Dec: the last 6-day week of the new-hire period, then the alternation starts with a 6.
+  const strip = weekStrip(starts, cellOf, undefined, new Map([['2026-12-07', 6], ['2026-12-14', 6]]))
+  assert.deepEqual(strip.map((w) => w.ok), [true, true])
+  // Without them the same two weeks read as a broken alternation.
+  assert.deepEqual(weekStrip(starts, cellOf).map((w) => w.ok), [true, false])
+})
+
 test('a holiday off does not use up the week: 5 worked + 1 rest + the holiday is a 6-day week', () => {
   const strip = weekStrip(['2026-12-21'], merge(weekCells('2026-12-21', 'WWWWNWR')))
   assert.equal(strip[0].type, 6)

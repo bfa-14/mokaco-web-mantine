@@ -8,6 +8,7 @@ import {
   describeShiftChange,
   shiftChangeLine,
   shiftChangeNote,
+  shiftHoursNote,
 } from '../src/pages/attendance/shiftChangeWords.ts'
 import type { ChangeLogWords } from '../src/pages/attendance/shiftChangeWords.ts'
 import type { ShiftChange } from '../src/types/attendance.ts'
@@ -106,4 +107,14 @@ test('every change-log key exists in English and in Arabic', () => {
   const enKeys = keysOf(load('en'))
   assert.ok(enKeys.length > 10)
   assert.deepEqual(keysOf(load('ar')), enKeys)
+})
+
+test('the hours list says the database notes in the reader\'s language and keeps a typed reason', () => {
+  const back = 'Back to the hours before the change of 01/12/2026'
+  assert.equal(shiftHoursNote(back, en), 'Back to the hours before the change of 1 Dec 2026')
+  const arabic = shiftHoursNote(back, ar) ?? ''
+  assert.ok(!/Back to the hours/.test(arabic) && arabic.length > 0, arabic)
+  assert.equal(shiftHoursNote('The hours the shift was created with', en), null)
+  assert.equal(shiftHoursNote('Ramadan hours', ar), 'Ramadan hours')
+  assert.equal(shiftHoursNote(null, en), null)
 })
