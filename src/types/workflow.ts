@@ -852,7 +852,10 @@ export interface ExitPermissionDetail {
   /** requested − approved, and the flag saying it happened. */
   minutesReduced: number
   wasReduced: boolean
-  /** The approved figure expressed as leave days at the configured standard day. */
+  /**
+   * The approved figure as leave days over the default day (core.fn_MinutesToLeaveDays: the length of the most-used
+   * shift) - a figure to show. What a posted day charges divides by that day's own shift hours.
+   */
   leaveDaysEquivalent: number
   reason: string
   convertToLeave: boolean

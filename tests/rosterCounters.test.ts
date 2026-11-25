@@ -14,6 +14,7 @@ import {
   dayOfWeek,
   employeeCounts,
   mondayOf,
+  newHireWeek,
   onDutyByDay,
   onDutyUnderDraft,
   onShiftUnderDraft,
@@ -294,4 +295,16 @@ test('staffing: a weekday row beats an every-day row; per-shift minimums add up'
   assert.deepEqual(staffingForDay(perShift, '2026-12-07'), { min: 4, target: 5 })
   assert.deepEqual(staffingForDay(perShift, '2026-12-13'), { min: 3, target: 4 }) // Sunday: shift 2 needs 1
   assert.deepEqual(staffingForDay([], '2026-12-07'), { min: null, target: null })
+})
+
+test("a new hire's week before their alternation starts is fixed; from that Monday on it is not", () => {
+  const ali = { sixDayWeeksUntil: '2027-01-04' } // hired 1 Oct 2026, 3 months: W0 = Monday 4 Jan 2027
+  assert.equal(newHireWeek(ali, '2026-11-30'), true) // December's first week
+  assert.equal(newHireWeek(ali, '2026-12-28'), true) // the last 6-day week
+  assert.equal(newHireWeek(ali, '2027-01-04'), false) // W0: a 6-day week again, but by the 6/5 order, which a pick may hold
+  assert.equal(newHireWeek(ali, '2027-01-11'), false)
+  assert.equal(newHireWeek(ali, '2027-01-02'), true) // any day of a week counts as its Monday (28 Dec)
+  assert.equal(newHireWeek({ sixDayWeeksUntil: '2027-01-04T00:00:00' }, '2026-11-30'), true) // a full timestamp
+  assert.equal(newHireWeek({ sixDayWeeksUntil: null }, '2026-11-30'), false) // long-serving, or no hire date
+  assert.equal(newHireWeek({}, '2026-11-30'), false) // an older API
 })

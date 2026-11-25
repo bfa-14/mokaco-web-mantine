@@ -1257,6 +1257,17 @@ export interface RosterLeaders {
   employeeIds: number[]
   /** Read only: everybody who counts as a leader - the list above and the rotation's leads - with names. */
   leaders: RosterLeader[]
+  /**
+   * Read only: who may be ADDED to the list - the branch's people today, still employed - exactly whom a PUT accepts
+   * as new leaders. Absent from an older API.
+   */
+  candidates?: RosterLeaderCandidate[]
+}
+
+/** Somebody the leaders picker may add (script 123). */
+export interface RosterLeaderCandidate {
+  employeeId: number
+  fullName: string
 }
 
 /** The row a cell had when the preview read it — echoed back by the commit as its concurrency check. */
@@ -1428,6 +1439,8 @@ export interface AutoRosterSettings {
   rosterPatternRestDays: string
   rosterMinHoursBetweenShifts: number
   rosterMinWeeklyRestHours: number
+  /** The new-hire rule: this many months of 6-day weeks from the hire date, then 6 and 5 in turn. Absent from an older API. */
+  rosterNewHireSixDayMonths?: number
 }
 
 /** A row of the drawer's staff list. */

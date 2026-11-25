@@ -48,6 +48,17 @@ export function mondayOf(date: string): string {
   return addDays(date, 1 - dayOfWeek(date))
 }
 
+/**
+ * Whether a person's week of `weekStart` is still under the new-hire rule: `sixDayWeeksUntil` is the Monday from which
+ * they alternate 6 and 5 (the setup's AutoRosterSetupStaff.sixDayWeeksUntil), and every week before it is a 6-day week
+ * whatever anchor or pick says. The drawer shows such a first week and offers no choice: an override sent for it would
+ * change nothing in the week and still be saved as the person's 6/5 anchor, which would then decide whether their
+ * first alternating week is a 6 or a 5 - and the owner's rule is that it is a 6.
+ */
+export function newHireWeek(staff: { sixDayWeeksUntil?: string | null }, weekStart: string): boolean {
+  return staff.sixDayWeeksUntil != null && mondayOf(weekStart) < staff.sixDayWeeksUntil.slice(0, 10)
+}
+
 /** 1900-01-01 was a Monday, so whole weeks counted from it never reset at a month or year end (D1). */
 const WEEK_ZERO = dayNumberOf('1900-01-01')
 

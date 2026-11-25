@@ -10,6 +10,8 @@ import { leaderIds, leaderOptions, rotationLeads } from './rosterLeaders'
  * this section's button, or first thing when Preview is pressed) and the server plans by what is stored.
  *
  * The rotation list's Lead 1 / Lead 2 stay as they are and count as leaders too: they are named under the picker.
+ * The picker offers only the people a save accepts (the API's candidates: the branch's people today), beside the
+ * leaders already stored, so it never offers somebody the save would refuse.
  */
 export function AutoRosterLeaders({
   staff,
@@ -25,7 +27,7 @@ export function AutoRosterLeaders({
   onSave,
   disabled,
 }: {
-  /** The people of the month on screen (the setup's staff). */
+  /** The people of the month on screen (the setup's staff): the picker's order. */
   staff: AutoRosterSetupStaff[]
   /** The leaders as the server holds them; null until read (or when the read failed). */
   stored: RosterLeaders | null
@@ -39,7 +41,7 @@ export function AutoRosterLeaders({
   onPicks: (ids: number[]) => void
   dirty: boolean
   saving: boolean
-  /** The save's refusal, verbatim. */
+  /** The save's refusal, in the reader's language when the drawer knows it, else verbatim. */
   error: string | null
   onSave: () => void
   disabled: boolean
@@ -68,7 +70,7 @@ export function AutoRosterLeaders({
           <MultiSelect
             aria-label={t('attendance.roster.auto.leaders.title')}
             placeholder={picks.length === 0 ? t('attendance.roster.auto.leaders.placeholder') : undefined}
-            data={leaderOptions(staff, stored.leaders)}
+            data={leaderOptions(staff, stored.leaders, stored.candidates)}
             value={picks.map(String)}
             onChange={(values) => onPicks(leaderIds(values))}
             searchable
@@ -79,6 +81,7 @@ export function AutoRosterLeaders({
           />
           <div className="hint" style={{ marginTop: 6 }}>
             {t('attendance.roster.auto.leaders.hint')}
+            {stored.candidates && <> {t('attendance.roster.auto.leaders.candidatesHint')}</>}
             {leads.length > 0 && (
               <>
                 {' '}

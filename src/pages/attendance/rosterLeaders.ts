@@ -5,7 +5,7 @@
  *
  * No imports beyond types: `npm test` reads this file directly.
  */
-import type { RosterLeader } from '../../types/attendance'
+import type { RosterLeader, RosterLeaderCandidate } from '../../types/attendance'
 
 export interface LeaderOption {
   value: string
@@ -13,21 +13,29 @@ export interface LeaderOption {
 }
 
 /**
- * What the picker offers: the people of the month on screen, in their order, then anybody already on the branch's
- * list who is not among them (moved to another branch, say), so a stored leader is always shown and can be removed.
+ * What the picker offers: the people who may be ADDED - the API's candidates, the branch's people today who still work
+ * here, exactly whom a save accepts - the month's people first in their order, then the other candidates; then anybody
+ * already on the branch's list who is not among them (moved to another branch, say), so a stored leader is always
+ * shown and can be removed. Somebody who worked here earlier in the month and has moved, or who only joins later in
+ * it, is not offered: the save would refuse them. An older API sends no candidates: the month's people stand in.
  */
 export function leaderOptions(
   staff: { employeeId: number; fullName: string }[],
   leaders: RosterLeader[],
+  candidates?: RosterLeaderCandidate[] | null,
 ): LeaderOption[] {
-  const options = staff.map((s) => ({ value: String(s.employeeId), label: s.fullName }))
-  const listed = new Set(staff.map((s) => s.employeeId))
-  for (const leader of leaders) {
-    if (leader.isStored && !listed.has(leader.employeeId)) {
-      options.push({ value: String(leader.employeeId), label: leader.fullName })
-      listed.add(leader.employeeId)
-    }
+  const pool = candidates ?? staff
+  const mayAdd = new Set(pool.map((c) => c.employeeId))
+  const options: LeaderOption[] = []
+  const listed = new Set<number>()
+  const add = (employeeId: number, fullName: string) => {
+    if (listed.has(employeeId)) return
+    options.push({ value: String(employeeId), label: fullName })
+    listed.add(employeeId)
   }
+  for (const s of staff) if (mayAdd.has(s.employeeId)) add(s.employeeId, s.fullName)
+  for (const c of pool) add(c.employeeId, c.fullName)
+  for (const leader of leaders) if (leader.isStored) add(leader.employeeId, leader.fullName)
   return options
 }
 
@@ -60,6 +68,19 @@ export const LEADERS_NOT_READY = 'leaders_not_ready'
  */
 export function leadersNotReady(body: unknown): boolean {
   return body != null && typeof body === 'object' && (body as { code?: unknown }).code === LEADERS_NOT_READY
+}
+
+/** The code the API sends beside a save refused because somebody on the list is not one of the branch's people today. */
+export const LEADER_NOT_IN_BRANCH = 'leader_not_in_branch'
+
+/**
+ * The person a refused save names as not in the branch, from the body the API sent (ApiError.data), so the section says
+ * it in the reader's language; null for any other answer.
+ */
+export function leaderNotInBranch(body: unknown): string | null {
+  if (body == null || typeof body !== 'object') return null
+  const { code, name } = body as { code?: unknown; name?: unknown }
+  return code === LEADER_NOT_IN_BRANCH && typeof name === 'string' && name.trim() !== '' ? name : null
 }
 
 /** The rotation list's leads, Lead 1 first: they are leaders whatever the picker says. */

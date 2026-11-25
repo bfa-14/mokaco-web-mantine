@@ -313,7 +313,6 @@
       "waiting_one": "Waiting {{count}} day",
       "waiting_other": "Waiting {{count}} days"
     },
-    "dayFraction": "{{duration}} — about {{fraction}} of a working day",
     "chain": {
       "noSteps": "No steps yet.",
       "step": "step"
@@ -542,7 +541,8 @@
       "toRequired": "Return time",
       "reasonRequired": "A reason is required",
       "convertToLeave": "Convert to leave",
-      "convertOn": "These hours come out of the employee’s annual leave balance.",
+      "duration": "Length: {{duration}}",
+      "convertOn": "These hours come out of the employee’s annual leave balance, as a share of that day’s shift hours.",
       "convertOff": "These hours are handled as a pay matter, not deducted from leave.",
       "missingDate": "a date",
       "missingFrom": "a leaving time",
@@ -1231,6 +1231,8 @@
           "AlignedHint": "Everyone's first planned week is a 6-day week, then 5, 6, 5…",
           "Staggered": "Staggered",
           "StaggeredHint": "Half the team starts on a 5-day week, so the number on duty stays even from week to week.",
+          "newHire_one": "New employees work 6 days every week in their first month, then 6 and 5 in turn, starting with 6.",
+          "newHire_other": "New employees work 6 days every week in their first {{count}} months, then 6 and 5 in turn, starting with 6.",
           "storedNote": "Only for people whose rhythm is not stored yet; a stored rhythm carries on across months."
         },
         "defaultShift": {
@@ -1244,7 +1246,9 @@
           "onRotation": "On rotation",
           "firstWeek": "First week",
           "firstWeekHint": "The week of {{date}}: 6 working days (1 rest) or 5 (2 rests). Change it to flip that person's rhythm from this week on.",
+          "firstWeekNewHireHint": "A new employee's week cannot be changed here: it stays a 6-day week until the date under their name.",
           "flipped": "Flipped",
+          "firstWeekNewHire": "Fixed: new employee",
           "firstWeekAuto": "set at preview",
           "firstWeekAutoHint": "A week left blank is set by the planner at preview (rhythm start: {{start}}); pick 6 or 5 to hold it.",
           "none": "Nobody belongs to this branch in {{month}}.",
@@ -1468,7 +1472,9 @@
           "Fair": "Fair weekends",
           "Rotation": "Fixed rotation",
           "FairHint": "The system chooses the days off: 6-day and 5-day weeks in turn, weekends shared fairly, every shift covered.",
-          "RotationHint": "Your rotation list decides: days off alternate two and one per week and move two weekdays every two weeks; the two leads swap morning and evening each week; everybody else is balanced between the two shifts."
+          "RotationHint": "Your rotation list decides: days off alternate two and one per week and move two weekdays every two weeks; the two leads swap morning and evening each week; everybody else is balanced between the two shifts.",
+          "rotationNewHire_one": "New employees have only one day off a week in their first month: on a week with two, the first one.",
+          "rotationNewHire_other": "New employees have only one day off a week in their first {{count}} months: on a week with two, the first one."
         },
         "rotation": {
           "title": "Rotation",
@@ -1492,7 +1498,7 @@
           "single": "One-day week: off on",
           "pair": "Two-day week: off on",
           "offThisWeek": "Week of {{date}}: off {{days}}",
-          "listHint": "Group A has two days off on the rotation's odd weeks (1, 3, 5…) and one on the even weeks; group B the other way round. The days you choose are the ones of weeks 1 and 2; after that they move two weekdays later every two weeks. Lead 1 works mornings on odd weeks and evenings on even weeks; Lead 2 the opposite. Lead 1 and Lead 2 are the branch's shift leaders: they are never planned on the same shift, by either method, even when one of them has a day set by hand.",
+          "listHint": "Group A has two days off on the rotation's odd weeks (1, 3, 5…) and one on the even weeks; group B the other way round. The days you choose are the ones of weeks 1 and 2; after that they move two weekdays later every two weeks. Lead 1 works mornings on odd weeks and evenings on even weeks; Lead 2 the opposite. Lead 1 and Lead 2 also count as shift leaders, beside the people under “Shift leaders”: no two leaders are planned on the same shift, by either method, while the day has enough shifts, even when one of them has a day set by hand.",
           "add": "Add somebody to the rotation…",
           "addHint": "People who are not on the list are not planned by the rotation: their days stay as they are.",
           "save": "Save rotation",
@@ -1523,9 +1529,11 @@
           "loading": "Reading the shift leaders…",
           "loadFailed": "The shift leaders could not be read. {{error}}",
           "notReady": "The shift leaders list is not available yet. Ask your administrator to finish the update.",
+          "notInBranch": "{{name}} is not one of this branch's people today, so cannot be added as a shift leader. Take them off the list.",
           "placeholder": "Choose the branch's shift leaders",
           "nobody": "Nobody found",
           "hint": "Never two leaders on the same shift: each leader who works a day gets a different shift, as long as the day has enough shifts.",
+          "candidatesHint": "Only people who work in this branch today can be added.",
           "rotationLeads_one": "The rotation list's lead counts too: {{names}}.",
           "rotationLeads_other": "The rotation list's leads count too: {{names}}.",
           "separator": ", ",
@@ -2268,7 +2276,8 @@
       },
       "notify": {
         "takenBack": "The change of {{day}} was taken back.",
-        "takenBackDays": "The change of {{day}} was taken back. {{count}} day(s) were worked out again.",
+        "takenBackDays_one": "The change of {{day}} was taken back. {{count}} day was worked out again.",
+        "takenBackDays_other": "The change of {{day}} was taken back. {{count}} days were worked out again.",
         "saved": "\"{{name}}\" saved.",
         "savedPeriod": "\"{{name}}\" saved. From {{from}} to {{to}} a full day on it is {{minutes}}; after that its hours are as before. The days before keep the hours they were judged against.",
         "savedFrom": "\"{{name}}\" saved. From {{from}} a full day on it is {{minutes}}. The days before keep the hours they were judged against.",
@@ -2318,7 +2327,8 @@
         "renamed": "renamed {{from}} → {{to}}",
         "deactivated": "switched off",
         "activated": "switched on again",
-        "daysNotRederived": "{{count}} day(s) from {{from}} to {{to}} could not be worked out again with the new hours and keep their old figures. Re-derive the month on the Roster page.",
+        "daysNotRederived_one": "{{count}} day from {{from}} to {{to}} could not be worked out again with the new hours and keeps its old figures. Re-derive the month on the Roster page.",
+        "daysNotRederived_other": "{{count}} days from {{from}} to {{to}} could not be worked out again with the new hours and keep their old figures. Re-derive the month on the Roster page.",
         "noteBack": "back to the hours before the change of {{day}}"
       }
     }

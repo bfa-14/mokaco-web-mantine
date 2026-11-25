@@ -13,14 +13,15 @@ import type {
   AutoRosterRequest,
   AutoRosterRhythmStart,
   AutoRosterSetup,
+  AutoRosterSetupStaff,
   RosterLeaders,
   StaffingRequirementDto,
 } from '../../types/attendance'
 import { formatDayLabel, periodLabel, periodRange } from './attendanceFormat'
-import { mondayOf } from './rosterCounters'
+import { mondayOf, newHireWeek } from './rosterCounters'
 import { AutoRosterRotation } from './AutoRosterRotation'
 import { AutoRosterLeaders } from './AutoRosterLeaders'
-import { leadersNotReady, sameLeaders } from './rosterLeaders'
+import { leaderNotInBranch, leadersNotReady, sameLeaders } from './rosterLeaders'
 import { proposeLine, rotationKey, rotationLines, rotationProblem, rotationToSave } from './rotationSetup'
 import type { RotationLine } from './rotationSetup'
 import {
@@ -96,7 +97,8 @@ export function AutoRosterDrawer({
   /**
    * The first week's type the manager PICKED, per person. Every pick is sent as an override, also one
    * equal to what the column showed: the shown value can be the planner's guess under other options
-   * (see firstWeekKnown), and only an override holds it to what the manager saw.
+   * (see firstWeekKnown), and only an override holds it to what the manager saw. Never for a new hire
+   * whose 6-day weeks run past the first week (newHireWeek): there is nothing to pick.
    */
   const [firstWeek, setFirstWeek] = useState<Map<number, number>>(new Map())
   const [cover, setCover] = useState<Map<string, number>>(new Map())
@@ -202,8 +204,9 @@ export function AutoRosterDrawer({
       new Set(current?.offRotationEmployeeIds ?? setup.staff.filter((s) => !s.onRotation).map((s) => s.employeeId)),
     )
     const weeks = new Map<number, number>()
+    const fixedWeek = new Set(setup.staff.filter((s) => newHireWeek(s, firstMonday)).map((s) => s.employeeId))
     for (const o of current?.rhythmOverrides ?? []) {
-      if (mondayOf(o.weekStart) === firstMonday) weeks.set(o.employeeId, o.workDays)
+      if (mondayOf(o.weekStart) === firstMonday && !fixedWeek.has(o.employeeId)) weeks.set(o.employeeId, o.workDays)
     }
     setFirstWeek(weeks)
     const covers = new Map<string, number>()
@@ -261,8 +264,8 @@ export function AutoRosterDrawer({
   const setupWeeksHold =
     rhythmStart === settingStart &&
     (rhythmStart === 'Aligned' || (firstWeek.size === 0 && offRotation.size === 0))
-  function firstWeekKnown(staff: { anchorWeekStart?: string | null }): boolean {
-    return staff.anchorWeekStart != null || setupWeeksHold
+  function firstWeekKnown(staff: AutoRosterSetupStaff): boolean {
+    return staff.anchorWeekStart != null || setupWeeksHold || newHireWeek(staff, firstMonday)
   }
 
   function shiftName(shiftId: number): string {
@@ -325,10 +328,14 @@ export function AutoRosterDrawer({
       setLeaderPicks(stored.employeeIds)
       return true
     } catch (err) {
+      // The two refusals the API codes are said in the reader's language; any other keeps the server's sentence.
+      const outsider = err instanceof ApiError ? leaderNotInBranch(err.data) : null
       setLeadersError(
         err instanceof ApiError && leadersNotReady(err.data)
           ? t('attendance.roster.auto.leaders.notReady')
-          : getErrorMessage(err),
+          : outsider != null
+            ? t('attendance.roster.auto.leaders.notInBranch', { name: outsider })
+            : getErrorMessage(err),
       )
       return false
     } finally {
@@ -415,8 +422,10 @@ export function AutoRosterDrawer({
     }
     // The planner reads the staffing from the database, so an unsaved one would be planned without.
     if (staffingDirty && !(await saveStaffing())) return
+    // A new hire's first week is a 6-day week whatever is picked: an override would only be saved and later decide the
+    // order of their 6 and 5 weeks, so none is sent.
     const rhythmOverrides = setup.staff
-      .filter((s) => firstWeek.has(s.employeeId) && !offRotation.has(s.employeeId))
+      .filter((s) => firstWeek.has(s.employeeId) && !offRotation.has(s.employeeId) && !newHireWeek(s, firstMonday))
       .map((s) => ({
         employeeId: s.employeeId,
         weekStart: firstMonday,
@@ -453,6 +462,9 @@ export function AutoRosterDrawer({
   const anyWeekUnknown = setup
     ? setup.staff.some((s) => !offRotation.has(s.employeeId) && !firstWeek.has(s.employeeId) && !firstWeekKnown(s))
     : false
+  /** Somebody of the month still on the new-hire rule: the hints then say what it does (in its months, when sent). */
+  const anyNewHire = setup ? setup.staff.some((s) => s.sixDayWeeksUntil != null) : false
+  const newHireMonths = setup?.settings?.rosterNewHireSixDayMonths
 
   return (
     <Drawer
@@ -515,6 +527,9 @@ export function AutoRosterDrawer({
             />
             <div className="hint" style={{ marginTop: 6 }}>
               {t(`attendance.roster.auto.method.${method}Hint`)}
+              {method === 'Rotation' && anyNewHire && newHireMonths != null && (
+                <> {t('attendance.roster.auto.method.rotationNewHire', { count: newHireMonths })}</>
+              )}
             </div>
           </div>
 
@@ -636,6 +651,9 @@ export function AutoRosterDrawer({
             </div>
             <div className="hint full" style={{ marginTop: -8, marginBottom: 12 }}>
               {t(`attendance.roster.auto.rhythm.${rhythmStart}Hint`)}{' '}
+              {anyNewHire && newHireMonths != null && (
+                <>{t('attendance.roster.auto.rhythm.newHire', { count: newHireMonths })} </>
+              )}
               {t('attendance.roster.auto.rhythm.storedNote')}{' '}
               {t('attendance.roster.auto.defaultShift.hint')}
             </div>
@@ -662,7 +680,9 @@ export function AutoRosterDrawer({
                   <tbody>
                     {setup.staff.map((s) => {
                       const on = !offRotation.has(s.employeeId)
-                      const picked = firstWeek.get(s.employeeId)
+                      // A new hire's first week is fixed (a 6-day week): shown, not picked, never sent.
+                      const fixed = newHireWeek(s, firstMonday)
+                      const picked = fixed ? undefined : firstWeek.get(s.employeeId)
                       const known = firstWeekKnown(s)
                       // '' selects neither segment: the planner decides at preview.
                       const week = picked != null ? String(picked) : known ? String(s.firstWeekWorkDays) : ''
@@ -705,11 +725,14 @@ export function AutoRosterDrawer({
                                 { value: '6', label: '6' },
                                 { value: '5', label: '5' },
                               ]}
-                              disabled={busy || !on}
+                              disabled={busy || !on || fixed}
                               aria-label={`${t('attendance.roster.auto.staff.firstWeek')}: ${s.fullName}`}
                             />
                             {flipped && (
                               <span className="auto-roster-flag">{t('attendance.roster.auto.staff.flipped')}</span>
+                            )}
+                            {fixed && on && (
+                              <span className="auto-roster-sub">{t('attendance.roster.auto.staff.firstWeekNewHire')}</span>
                             )}
                             {week === '' && on && (
                               <span className="auto-roster-sub">{t('attendance.roster.auto.staff.firstWeekAuto')}</span>
@@ -722,6 +745,7 @@ export function AutoRosterDrawer({
                 </table>
                 <div className="hint" style={{ marginTop: 6 }}>
                   {t('attendance.roster.auto.staff.firstWeekHint', { date: formatDayLabel(firstMonday) })}{' '}
+                  {anyNewHire && <>{t('attendance.roster.auto.staff.firstWeekNewHireHint')} </>}
                   {anyWeekUnknown && (
                     <>
                       {t('attendance.roster.auto.staff.firstWeekAutoHint', {
