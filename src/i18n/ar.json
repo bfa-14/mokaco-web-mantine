@@ -1510,11 +1510,12 @@
           "PATTERN_REST_WORKED": "عمل في يوم راحة النمط الأسبوعي",
           "LONG_RUN": "سلسلة طويلة من أيام العمل",
           "ROTATION_NOT_SET": "ليس على قائمة التناوب",
-          "LEADS_SAME_SHIFT": "مسؤولا وردية في الوردية نفسها"
+          "LEADS_SAME_SHIFT": "أكثر من مسؤول وردية في الوردية نفسها"
         },
         "issueShift": {
           "SHORT_STAFFED": "أقل من الحد الأدنى في وردية {{shift}}",
-          "SHIFT_UNCOVERED": "لا أحد في وردية {{shift}}"
+          "SHIFT_UNCOVERED": "لا أحد في وردية {{shift}}",
+          "LEADS_SAME_SHIFT": "أكثر من مسؤول وردية في وردية {{shift}}"
         },
         "reason": {
           "REST_WEEKEND_OWED": "راحة: له يوم عطلة نهاية أسبوع مستحق",
@@ -1528,7 +1529,8 @@
           "REST_ROTATION": "راحة: يوم الراحة بحسب التناوب",
           "WORK_ROTATION": "التناوب: المناوبة الأقل عددًا ذلك اليوم",
           "WORK_ROTATION_LEAD": "التناوب: مناوبة المسؤول هذا الأسبوع",
-          "WORK_LEAD_APART": "نُقل كي يكون مسؤولا الوردية في ورديتين مختلفتين"
+          "WORK_LEAD_APART": "نُقل كي يكون مسؤولو الوردية في ورديات مختلفة",
+          "WORK_SHIFT_BALANCE": "نُقل إلى {{shift}} لتوزيع الموظفين على الورديات بالتساوي"
         },
         "reasonArgs": {
           "owed": "المستحق {{value}}",

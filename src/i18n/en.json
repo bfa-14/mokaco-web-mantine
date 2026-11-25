@@ -1350,11 +1350,12 @@
           "PATTERN_REST_WORKED": "Working on a weekly-pattern rest day",
           "LONG_RUN": "A long run of working days",
           "ROTATION_NOT_SET": "Not on the rotation list",
-          "LEADS_SAME_SHIFT": "Two shift leaders on the same shift"
+          "LEADS_SAME_SHIFT": "More than one shift leader on the same shift"
         },
         "issueShift": {
           "SHORT_STAFFED": "Below the minimum on {{shift}}",
-          "SHIFT_UNCOVERED": "Nobody on {{shift}}"
+          "SHIFT_UNCOVERED": "Nobody on {{shift}}",
+          "LEADS_SAME_SHIFT": "More than one shift leader on {{shift}}"
         },
         "reason": {
           "REST_WEEKEND_OWED": "Rest: owed a weekend day off",
@@ -1368,7 +1369,8 @@
           "REST_ROTATION": "Rest: the rotation's day off",
           "WORK_ROTATION": "The rotation: the shift with fewer people that day",
           "WORK_ROTATION_LEAD": "The rotation: the lead's shift this week",
-          "WORK_LEAD_APART": "Moved so the two shift leaders are on different shifts"
+          "WORK_LEAD_APART": "Moved so the shift leaders are on different shifts",
+          "WORK_SHIFT_BALANCE": "Moved to {{shift}} to even out the shifts"
         },
         "reasonArgs": {
           "owed": "owed {{value}}",
