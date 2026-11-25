@@ -5,7 +5,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import i18next from 'i18next'
-import { leaderIds, leaderOptions, rotationLeads, sameLeaders } from '../src/pages/attendance/rosterLeaders.ts'
+import {
+  LEADERS_NOT_READY,
+  leaderIds,
+  leaderOptions,
+  leadersNotReady,
+  rotationLeads,
+  sameLeaders,
+} from '../src/pages/attendance/rosterLeaders.ts'
 import en from '../src/i18n/en.json' with { type: 'json' }
 import ar from '../src/i18n/ar.json' with { type: 'json' }
 
@@ -52,6 +59,14 @@ test('the rotation leads are listed Lead 1 first and only them', () => {
   assert.deepEqual(rotationLeads([{ employeeId: 2, fullName: 'Rami', isStored: true }]), [])
 })
 
+test("the API's own 'not there yet' answer is told apart by its code, not by the 503 alone", () => {
+  assert.equal(leadersNotReady({ error: 'The shift leaders list is not available yet.', code: LEADERS_NOT_READY }), true)
+  assert.equal(leadersNotReady({ error: 'The database did not answer in time.' }), false) // a slow database is a 503 too
+  assert.equal(leadersNotReady({ code: 'paused' }), false)
+  assert.equal(leadersNotReady(null), false) // the web server's own 503 page: ApiError.data is null
+  assert.equal(leadersNotReady('leaders_not_ready'), false)
+})
+
 async function translators() {
   const i18n = i18next.createInstance()
   await i18n.init({
@@ -82,4 +97,15 @@ test('the rotation leads line agrees in number with one lead or two, in both lan
     arT(key, { count: 2, names: 'رامي (مسؤول 1)، مايا (مسؤول 2)' }),
     'مسؤولا قائمة التناوب يُحسبان أيضًا: رامي (مسؤول 1)، مايا (مسؤول 2).',
   )
+})
+
+test("the 'not there yet' sentence is plain and in each language", async () => {
+  const { enT, arT } = await translators()
+  const key = 'attendance.roster.auto.leaders.notReady'
+  const english = enT(key)
+  const arabic = arT(key)
+
+  assert.equal(english, 'The shift leaders list is not available yet. Ask your administrator to finish the update.')
+  assert.notEqual(arabic, english) // an Arabic sentence, not the English one inside Arabic text
+  for (const sentence of [english, arabic]) assert.doesNotMatch(sentence, /docs\/|\.sql|script|123/i)
 })

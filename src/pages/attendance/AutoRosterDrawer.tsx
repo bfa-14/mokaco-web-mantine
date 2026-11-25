@@ -4,6 +4,7 @@ import { Button, Checkbox, Loader, NumberInput, SegmentedControl, Select } from 
 import { notifications } from '@mantine/notifications'
 import { IconDeviceFloppy } from '@tabler/icons-react'
 import { Drawer } from '../../components/dialogs'
+import { ApiError } from '../../api/client'
 import { getErrorMessage } from '../../api/errorMessage'
 import { autoRosterService } from '../../services/autoRosterService'
 import type {
@@ -19,7 +20,7 @@ import { formatDayLabel, periodLabel, periodRange } from './attendanceFormat'
 import { mondayOf } from './rosterCounters'
 import { AutoRosterRotation } from './AutoRosterRotation'
 import { AutoRosterLeaders } from './AutoRosterLeaders'
-import { sameLeaders } from './rosterLeaders'
+import { leadersNotReady, sameLeaders } from './rosterLeaders'
 import { proposeLine, rotationKey, rotationLines, rotationProblem, rotationToSave } from './rotationSetup'
 import type { RotationLine } from './rotationSetup'
 import {
@@ -132,8 +133,14 @@ export function AutoRosterDrawer({
 
   /* THE SHIFT LEADERS (script 123), for both methods: the branch's own list, beside the rotation's Lead 1 / Lead 2.
      Read each time the drawer opens; like the staffing and the rotation it belongs to the branch, so Preview saves it
-     first when it has changed. State is set only when an answer arrives: until then the section says it is loading. */
-  const [leadersRead, setLeadersRead] = useState<{ branchId: number; stored: RosterLeaders | null; error: string | null } | null>(null)
+     first when it has changed. State is set only when an answer arrives: until then the section says it is loading.
+     notReady: the API said the list is not there yet (its update is still to be applied), which the section words itself. */
+  const [leadersRead, setLeadersRead] = useState<{
+    branchId: number
+    stored: RosterLeaders | null
+    error: string | null
+    notReady: boolean
+  } | null>(null)
   const [leaderPicks, setLeaderPicks] = useState<number[]>([])
   const [savingLeaders, setSavingLeaders] = useState(false)
   const [leadersError, setLeadersError] = useState<string | null>(null)
@@ -146,12 +153,19 @@ export function AutoRosterDrawer({
     autoRosterService.leaders(branchId).then(
       (stored) => {
         if (!live) return
-        setLeadersRead({ branchId, stored, error: null })
+        setLeadersRead({ branchId, stored, error: null, notReady: false })
         setLeaderPicks(stored.employeeIds)
         setLeadersError(null)
       },
       (err: unknown) => {
-        if (live) setLeadersRead({ branchId, stored: null, error: getErrorMessage(err) })
+        if (live) {
+          setLeadersRead({
+            branchId,
+            stored: null,
+            error: getErrorMessage(err),
+            notReady: err instanceof ApiError && leadersNotReady(err.data),
+          })
+        }
       },
     )
     return () => {
@@ -307,11 +321,15 @@ export function AutoRosterDrawer({
     setLeadersError(null)
     try {
       const stored = await autoRosterService.saveLeaders(branchId, ids)
-      setLeadersRead({ branchId, stored, error: null })
+      setLeadersRead({ branchId, stored, error: null, notReady: false })
       setLeaderPicks(stored.employeeIds)
       return true
     } catch (err) {
-      setLeadersError(getErrorMessage(err))
+      setLeadersError(
+        err instanceof ApiError && leadersNotReady(err.data)
+          ? t('attendance.roster.auto.leaders.notReady')
+          : getErrorMessage(err),
+      )
       return false
     } finally {
       setSavingLeaders(false)
@@ -720,6 +738,7 @@ export function AutoRosterDrawer({
             stored={leadersStored}
             loading={leadersLoading}
             loadError={leadersRead?.branchId === branchId ? leadersRead.error : null}
+            notReady={leadersRead?.branchId === branchId && leadersRead.notReady}
             picks={leaderPicks}
             onPicks={setLeaderPicks}
             dirty={leadersDirty}

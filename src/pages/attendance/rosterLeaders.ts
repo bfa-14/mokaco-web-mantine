@@ -48,6 +48,20 @@ export function sameLeaders(a: number[], b: number[]): boolean {
   return left.size === right.size && [...left].every((id) => right.has(id))
 }
 
+/**
+ * The code the API sends beside its 503 while the shift leaders list is not there yet (the update that adds it is still
+ * to be applied on the server). A 503 alone is not enough: the database being too slow to answer is one as well.
+ */
+export const LEADERS_NOT_READY = 'leaders_not_ready'
+
+/**
+ * Whether a refused leaders call is that answer, from the body the API sent (ApiError.data), so the section says it in
+ * the reader's language instead of printing the server's English sentence.
+ */
+export function leadersNotReady(body: unknown): boolean {
+  return body != null && typeof body === 'object' && (body as { code?: unknown }).code === LEADERS_NOT_READY
+}
+
 /** The rotation list's leads, Lead 1 first: they are leaders whatever the picker says. */
 export function rotationLeads(leaders: RosterLeader[]): RosterLeader[] {
   return leaders

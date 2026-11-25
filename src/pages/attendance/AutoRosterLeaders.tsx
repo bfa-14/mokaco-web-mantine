@@ -16,6 +16,7 @@ export function AutoRosterLeaders({
   stored,
   loading,
   loadError,
+  notReady,
   picks,
   onPicks,
   dirty,
@@ -31,6 +32,8 @@ export function AutoRosterLeaders({
   loading: boolean
   /** Why the leaders could not be read: the section shows it and offers nothing to edit. */
   loadError: string | null
+  /** The read failed because the list is not there yet on the server: said in the reader's language, not the server's. */
+  notReady: boolean
   /** The picker's people (the branch's own list as edited). */
   picks: number[]
   onPicks: (ids: number[]) => void
@@ -54,7 +57,11 @@ export function AutoRosterLeaders({
         </div>
       )}
       {!loading && loadError && (
-        <div className="form-error">{t('attendance.roster.auto.leaders.loadFailed', { error: loadError })}</div>
+        <div className="form-error">
+          {notReady
+            ? t('attendance.roster.auto.leaders.notReady')
+            : t('attendance.roster.auto.leaders.loadFailed', { error: loadError })}
+        </div>
       )}
       {!loading && !loadError && stored && (
         <>

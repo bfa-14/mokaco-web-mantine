@@ -1518,6 +1518,7 @@
           "title": "Shift leaders",
           "loading": "Reading the shift leaders…",
           "loadFailed": "The shift leaders could not be read. {{error}}",
+          "notReady": "The shift leaders list is not available yet. Ask your administrator to finish the update.",
           "placeholder": "Choose the branch's shift leaders",
           "nobody": "Nobody found",
           "hint": "Never two leaders on the same shift: each leader who works a day gets a different shift, as long as the day has enough shifts.",
