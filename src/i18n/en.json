@@ -1756,7 +1756,7 @@
         "worked": "Worked",
         "workedRule": "The sum of the intervals actually clocked, minus any break not already taken as a gap. NOT first-in to last-out — time away in the middle of the day is not worked time.",
         "standard": "Standard",
-        "standardRule": "What a full day means for this person on this date: their rostered shift's length minus its break, or the configured standard day when nothing was rostered.",
+        "standardRule": "What a full day means for this person on this date: the hours of their shift on the approved roster, as they stood that day, minus its break. A day with no rostered shift is measured against the shift their first punch fits. It never comes from Settings.",
         "fraction": "Day fraction",
         "fractionRule": "Worked divided by standard, capped at 1.00. Payroll sums these, so somebody who left two hours early counts 0.75 of a day, not 1.",
         "late": "Late",

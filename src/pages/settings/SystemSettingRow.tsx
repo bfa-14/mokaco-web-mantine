@@ -264,8 +264,9 @@ export function describeValue(
  *
  * These used to be a card each — a full-width panel per value, which made three settings look like
  * three separate pages of policy and pushed the fourth below the fold. They are one decision each,
- * not one page each, and reading them side by side is how somebody checks that the standard day
- * and the full-day threshold agree with one another.
+ * not one page each, and reading them side by side is how somebody checks that the tolerance and
+ * the full-day threshold agree with one another. (A day's LENGTH is never a setting: it is the hours
+ * of that day's shift, as they stood on that date.)
  *
  * SAVE SEMANTICS ARE UNCHANGED: a draft is held locally, the Save button is dead until it differs
  * from what the server holds, and the write sends the database's own dataType and description
@@ -282,7 +283,7 @@ export function SystemSettingRow({
   setting: Setting
   draft: string
   saving: boolean
-  /** The configured standard day, so a fraction can be shown as real hours rather than a bare decimal. */
+  /** The value typed in the box: a draft until Save. */
   onDraftChange: (value: string) => void
   onSave: () => void
 }) {
