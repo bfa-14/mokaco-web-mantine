@@ -9,6 +9,7 @@ import type {
   RosterPinRequest,
   RosterRhythmDto,
   StaffingRequirementDto,
+  RosterLeaders,
   RosterRotation,
 } from '../types/attendance'
 
@@ -73,5 +74,15 @@ export const autoRosterService = {
     apiRequest<RosterRotation>('/api/roster/auto/rotation', {
       method: 'PUT',
       body: JSON.stringify(rotation),
+    }),
+
+  /** The branch's shift leaders: its own list, and everybody who counts as a leader (the rotation's leads too). */
+  leaders: (branchId: number) => apiRequest<RosterLeaders>(`/api/roster/auto/leaders?branchId=${branchId}`),
+
+  /** Replaces the branch's own list of shift leaders (the rotation's leads stay). Returns the leaders as stored. */
+  saveLeaders: (branchId: number, employeeIds: number[]) =>
+    apiRequest<RosterLeaders>('/api/roster/auto/leaders', {
+      method: 'PUT',
+      body: JSON.stringify({ branchId, employeeIds }),
     }),
 }
