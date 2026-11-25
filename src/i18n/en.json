@@ -1237,8 +1237,8 @@
         },
         "defaultShift": {
           "label": "Default shift",
-          "hint": "For a working day with no weekly-pattern shift and no usual shift in the last 4 weeks.",
-          "placeholder": "The first active shift"
+          "hint": "For a working day with no weekly-pattern shift and no usual shift in the last 8 weeks.",
+          "placeholder": "A shift the branch covers"
         },
         "staff": {
           "title": "Staff",
