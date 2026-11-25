@@ -2168,3 +2168,32 @@ a.pipeline-stat:hover {
   margin-top: 6px;
   font-size: 12px;
 }
+
+/* ── Shifts: the change log (script 122) - every change, who made it, the before and the after ── */
+.shift-change-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.shift-change-row {
+  padding-block: 7px;
+  padding-inline: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.shift-change-row:first-child {
+  border-top: 0;
+}
+.shift-change-row--warn {
+  background: rgba(214, 158, 46, 0.12);
+}
+.shift-change-note {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}

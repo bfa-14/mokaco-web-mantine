@@ -2178,6 +2178,39 @@
       "title": "My branch's shifts",
       "subtitle": "Who works which shift this week in your branch. Print it or save it as a PDF.",
       "noEmployee": "This account is not linked to an employee, so there is no branch to show."
+    },
+    "shiftsPage": {
+      "history": {
+        "button": "History",
+        "title": "History of {{name}}",
+        "hoursTitle": "Hours over time"
+      },
+      "changeLog": {
+        "title": "Change log",
+        "hint": "Every change to this shift, kept for good: who made it, when, and what it was before.",
+        "empty": "No change recorded yet.",
+        "lineBy": "{{date}}, {{who}}: {{what}}",
+        "line": "{{date}}: {{what}}",
+        "created": "created with the hours {{hours}}",
+        "hours": "hours {{from}} → {{to}}",
+        "hoursSet": "hours set to {{to}}",
+        "hoursRewritten": "hours written again, unchanged",
+        "break": "break {{from}} → {{to}}",
+        "grace": "grace {{from}} → {{to}}",
+        "joiner": ", ",
+        "overnight": "(overnight)",
+        "graceSetting": "the tolerance setting",
+        "allDays": "for every day",
+        "fromDay": "from {{day}}",
+        "fromTo": "from {{from}} to {{to}}",
+        "removed": "the change of {{day}} ({{hours}}) was taken back: {{back}} again",
+        "removedNone": "the hours of {{day}} ({{hours}}) were removed",
+        "renamed": "renamed {{from}} → {{to}}",
+        "deactivated": "switched off",
+        "activated": "switched on again",
+        "daysNotRederived": "{{count}} day(s) from {{from}} to {{to}} could not be worked out again with the new hours and keep their old figures. Re-derive the month on the Roster page.",
+        "noteBack": "back to the hours before the change of {{day}}"
+      }
     }
   },
   "payroll": {

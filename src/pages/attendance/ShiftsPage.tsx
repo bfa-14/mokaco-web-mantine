@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createColumnHelper, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
 import { ActionIcon, Button, Checkbox, Group, Loader, NumberInput, Pagination, Select, Table, TextInput } from '@mantine/core'
@@ -18,7 +19,8 @@ import {
 import { beirutToday } from '../../components/DateRangeField'
 import { useAuth } from '../../auth/useAuth'
 import { PERMISSIONS } from '../../types/attendance'
-import type { Shift, ShiftHours } from '../../types/attendance'
+import type { Shift, ShiftChange, ShiftHours } from '../../types/attendance'
+import { ShiftChangeLog } from './ShiftChangeLog'
 
 interface ShiftFormState {
   name: string
@@ -155,6 +157,7 @@ const columnHelper = createColumnHelper<Shift>()
 const PAGE_SIZES = ['15', '30', '50']
 
 export default function ShiftsPage() {
+  const { t } = useTranslation()
   const { hasPermission } = useAuth()
   // Shifts define what "late" and "a full day" mean, so editing them is ATTENDANCE_MANAGE.
   const canManage = hasPermission(PERMISSIONS.manage)
@@ -176,6 +179,11 @@ export default function ShiftsPage() {
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null)
   const [removing, setRemoving] = useState(false)
+  // The change log (script 122): every change to the shift, who made it, the before and the after.
+  const [changes, setChanges] = useState<ShiftChange[] | null>(null)
+  const [changesError, setChangesError] = useState<string | null>(null)
+  // The History window: the hours over time and the change log, for people who may read the shifts but not edit them.
+  const [historyFor, setHistoryFor] = useState<Shift | null>(null)
 
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -225,15 +233,41 @@ export default function ShiftsPage() {
     setPopupVisible(true)
   }
 
+  /** The hours over time and the change log, each on its own: one failing does not hide the other. */
   const loadHistory = useCallback(async (shiftId: number) => {
-    try {
-      setHistory(await shiftsService.getHours(shiftId))
-      setHistoryError(null)
-    } catch (err) {
-      setHistory(null)
-      setHistoryError(getErrorMessage(err))
-    }
+    await Promise.all([
+      (async () => {
+        try {
+          setHistory(await shiftsService.getHours(shiftId))
+          setHistoryError(null)
+        } catch (err) {
+          setHistory(null)
+          setHistoryError(getErrorMessage(err))
+        }
+      })(),
+      (async () => {
+        try {
+          setChanges(await shiftsService.getChanges(shiftId))
+          setChangesError(null)
+        } catch (err) {
+          setChanges(null)
+          setChangesError(getErrorMessage(err))
+        }
+      })(),
+    ])
   }, [])
+
+  const openHistory = useCallback(
+    (shift: Shift) => {
+      setHistoryFor(shift)
+      setHistory(null)
+      setHistoryError(null)
+      setChanges(null)
+      setChangesError(null)
+      void loadHistory(shift.shiftId)
+    },
+    [loadHistory],
+  )
 
   const openEdit = useCallback(
     (shift: Shift) => {
@@ -252,6 +286,8 @@ export default function ShiftsPage() {
       setHoursNote('')
       setHistory(null)
       setHistoryError(null)
+      setChanges(null)
+      setChangesError(null)
       setConfirmRemove(null)
       setFormError(null)
       setPopupVisible(true)
@@ -372,6 +408,60 @@ export default function ShiftsPage() {
     }
   }
 
+  /** A shift's hours over time; the managers' Edit dialog can take a change back from it. */
+  const hoursList = (rows: ShiftHours[], withTakeBack: boolean) => (
+    <ul className="shift-hours-list">
+      {rows.map((row) => (
+        <li key={row.shiftHoursId} className={row.isCurrent ? 'shift-hours-row shift-hours-row--now' : 'shift-hours-row'}>
+          <div className="shift-hours-main">
+            <span className="shift-hours-period">{periodText(row)}</span>
+            <strong>
+              {formatClock(row.startTime)}–{formatClock(row.endTime)}
+            </strong>
+            <span className="shift-hours-day">
+              {formatMinutes(row.standardMinutes)} a day
+              {row.breakMinutes > 0 ? `, ${formatMinutes(row.breakMinutes)} break` : ''}
+            </span>
+            {row.isCurrent && <span className="shift-hours-now">now</span>}
+          </div>
+          {(row.note || row.createdBy) && !row.isFirst && (
+            <div className="shift-hours-note">
+              {row.note}
+              {row.note && row.createdBy ? ' · ' : ''}
+              {row.createdBy ? `by ${row.createdBy}` : ''}
+            </div>
+          )}
+          {withTakeBack &&
+            !row.isFirst &&
+            (confirmRemove === row.shiftHoursId ? (
+              <div className="shift-hours-confirm">
+                <span>Take this change back?</span>
+                <Button size="compact-xs" color="red" onClick={() => void takeBack(row)} disabled={removing || saving}>
+                  {removing ? 'Taking back…' : 'Yes, take it back'}
+                </Button>
+                <Button size="compact-xs" variant="default" onClick={() => setConfirmRemove(null)} disabled={removing}>
+                  No
+                </Button>
+              </div>
+            ) : (
+              <ActionIcon
+                className="shift-hours-remove"
+                variant="subtle"
+                color="gray"
+                size="sm"
+                aria-label={`Take back the change of ${formatDayLabel(row.effectiveFrom)}`}
+                title="Take this change back"
+                disabled={saving || removing}
+                onClick={() => setConfirmRemove(row.shiftHoursId)}
+              >
+                <IconX size={14} />
+              </ActionIcon>
+            ))}
+        </li>
+      ))}
+    </ul>
+  )
+
   /* PORT NOTE: the DX SearchPanel is the global-search box below and the FilterRow is the strip
      under the header; the explicit start alignment on the Grace/Break columns is the plain
      table's natural alignment. */
@@ -417,27 +507,30 @@ export default function ShiftsPage() {
         cell: (info) => <ActiveCell isActive={info.row.original.isActive} />,
         meta: { filterText: activeText, filterOptions: ACTIVE_LABELS },
       }),
-      ...(canManage
-        ? [
-            columnHelper.display({
-              id: 'actions',
-              header: 'Actions',
-              cell: (info) => (
-                <div className="grid-actions">
-                  <Button
-                    variant="subtle"
-                    size="compact-sm"
-                    onClick={() => openEdit(info.row.original)}
-                  >
-                    Edit
-                  </Button>
-                </div>
-              ),
-            }),
-          ]
-        : []),
+      // Managers open Edit (the history and the change log are inside it); everyone else opens the History window.
+      columnHelper.display({
+        id: 'actions',
+        header: 'Actions',
+        cell: (info) => (
+          <div className="grid-actions">
+            {canManage ? (
+              <Button
+                variant="subtle"
+                size="compact-sm"
+                onClick={() => openEdit(info.row.original)}
+              >
+                Edit
+              </Button>
+            ) : (
+              <Button variant="subtle" size="compact-sm" onClick={() => openHistory(info.row.original)}>
+                {t('attendance.shiftsPage.history.button')}
+              </Button>
+            )}
+          </div>
+        ),
+      }),
     ],
-    [canManage, openEdit],
+    [canManage, openEdit, openHistory, t],
   )
 
   const table = useReactTable({
@@ -838,60 +931,11 @@ export default function ShiftsPage() {
           <div className="form-field">
             <span className="form-label">Hours over time</span>
             {historyError && <p className="hint">{historyError}</p>}
-            {history && (
-              <ul className="shift-hours-list">
-                {history.map((row) => (
-                  <li key={row.shiftHoursId} className={row.isCurrent ? 'shift-hours-row shift-hours-row--now' : 'shift-hours-row'}>
-                    <div className="shift-hours-main">
-                      <span className="shift-hours-period">{periodText(row)}</span>
-                      <strong>
-                        {formatClock(row.startTime)}–{formatClock(row.endTime)}
-                      </strong>
-                      <span className="shift-hours-day">
-                        {formatMinutes(row.standardMinutes)} a day
-                        {row.breakMinutes > 0 ? `, ${formatMinutes(row.breakMinutes)} break` : ''}
-                      </span>
-                      {row.isCurrent && <span className="shift-hours-now">now</span>}
-                    </div>
-                    {(row.note || row.createdBy) && !row.isFirst && (
-                      <div className="shift-hours-note">
-                        {row.note}
-                        {row.note && row.createdBy ? ' · ' : ''}
-                        {row.createdBy ? `by ${row.createdBy}` : ''}
-                      </div>
-                    )}
-                    {canManage &&
-                      !row.isFirst &&
-                      (confirmRemove === row.shiftHoursId ? (
-                        <div className="shift-hours-confirm">
-                          <span>Take this change back?</span>
-                          <Button size="compact-xs" color="red" onClick={() => void takeBack(row)} disabled={removing || saving}>
-                            {removing ? 'Taking back…' : 'Yes, take it back'}
-                          </Button>
-                          <Button size="compact-xs" variant="default" onClick={() => setConfirmRemove(null)} disabled={removing}>
-                            No
-                          </Button>
-                        </div>
-                      ) : (
-                        <ActionIcon
-                          className="shift-hours-remove"
-                          variant="subtle"
-                          color="gray"
-                          size="sm"
-                          aria-label={`Take back the change of ${formatDayLabel(row.effectiveFrom)}`}
-                          title="Take this change back"
-                          disabled={saving || removing}
-                          onClick={() => setConfirmRemove(row.shiftHoursId)}
-                        >
-                          <IconX size={14} />
-                        </ActionIcon>
-                      ))}
-                  </li>
-                ))}
-              </ul>
-            )}
+            {history && hoursList(history, canManage)}
           </div>
         )}
+
+        {editing && <ShiftChangeLog changes={changes} error={changesError} />}
 
         {timeProblem ? (
           <div className="form-field">
@@ -924,6 +968,33 @@ export default function ShiftsPage() {
           </Button>
           <Button onClick={() => void submitShift()} disabled={saving}>
             {saving ? 'Saving…' : editing ? 'Save Shift' : 'Create Shift'}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        opened={historyFor != null}
+        onClose={() => setHistoryFor(null)}
+        title={historyFor ? t('attendance.shiftsPage.history.title', { name: historyFor.name }) : ''}
+        size={520}
+        centered
+      >
+        {(history || historyError) && (
+          <div className="form-field">
+            <span className="form-label">{t('attendance.shiftsPage.history.hoursTitle')}</span>
+            {historyError && <p className="hint">{historyError}</p>}
+            {history && hoursList(history, false)}
+          </div>
+        )}
+        {!history && !historyError && !changes && !changesError && (
+          <div className="page-loading">
+            <Loader size={28} />
+          </div>
+        )}
+        <ShiftChangeLog changes={changes} error={changesError} />
+        <div className="form-actions">
+          <Button variant="default" onClick={() => setHistoryFor(null)}>
+            {t('common.close')}
           </Button>
         </div>
       </Modal>

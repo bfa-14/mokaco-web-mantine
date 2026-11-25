@@ -334,6 +334,52 @@ export interface ShiftHours {
   isCurrent: boolean
 }
 
+/** What one line of a shift's change log records (script 122). */
+export type ShiftChangeAction =
+  | 'Created'
+  | 'HoursChanged'
+  | 'HoursRemoved'
+  | 'Renamed'
+  | 'Deactivated'
+  | 'Activated'
+  | 'DaysNotRederived'
+
+/**
+ * One line of a shift's change log — GET /api/shifts/{id}/changes, newest first. Written by the database on every
+ * change and never deleted: who changed what, when, from what to what. Times are 'HH:mm:ss'; dates 'yyyy-MM-ddT00:00:00'.
+ */
+export interface ShiftChange {
+  shiftChangeId: number
+  shiftId: number
+  changedAtUtc: string
+  /** The day of the change, in Beirut. */
+  changedOn: string
+  changedByUserId: number | null
+  /** The person's name (else their user name); null when not known. */
+  changedBy: string | null
+  action: ShiftChangeAction | string
+  /** Hours: the first day they apply (2000-01-01 = every day). Null for a name or on/off change. */
+  effectiveFrom: string | null
+  /** Hours: the last day they apply when that was known; null = until the next change. */
+  effectiveTo: string | null
+  oldStartTime: string | null
+  newStartTime: string | null
+  oldEndTime: string | null
+  newEndTime: string | null
+  oldCrossesMidnight: boolean | null
+  newCrossesMidnight: boolean | null
+  oldBreakMinutes: number | null
+  newBreakMinutes: number | null
+  /** On an hours line, null = the tolerance setting. */
+  oldGraceMinutes: number | null
+  newGraceMinutes: number | null
+  oldName: string | null
+  newName: string | null
+  /** DaysNotRederived: how many days kept their old figures. */
+  daysCount: number | null
+  note: string | null
+}
+
 /* ── Roster ── */
 
 /**
