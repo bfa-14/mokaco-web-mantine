@@ -1257,6 +1257,17 @@ export interface RosterLeaders {
   employeeIds: number[]
   /** Read only: everybody who counts as a leader - the list above and the rotation's leads - with names. */
   leaders: RosterLeader[]
+  /**
+   * Read only: who may be ADDED to the list - the branch's people today, still employed - exactly whom a PUT accepts
+   * as new leaders. Absent from an older API.
+   */
+  candidates?: RosterLeaderCandidate[]
+}
+
+/** Somebody the leaders picker may add (script 123). */
+export interface RosterLeaderCandidate {
+  employeeId: number
+  fullName: string
 }
 
 /** The row a cell had when the preview read it — echoed back by the commit as its concurrency check. */
@@ -1428,6 +1439,8 @@ export interface AutoRosterSettings {
   rosterPatternRestDays: string
   rosterMinHoursBetweenShifts: number
   rosterMinWeeklyRestHours: number
+  /** The new-hire rule: this many months of 6-day weeks from the hire date, then 6 and 5 in turn. Absent from an older API. */
+  rosterNewHireSixDayMonths?: number
 }
 
 /** A row of the drawer's staff list. */
@@ -1441,6 +1454,13 @@ export interface AutoRosterSetupStaff {
   anchorWorkDays?: number | null
   /** 6 or 5: the month's first week as the planner would use it now. */
   firstWeekWorkDays: number
+  /**
+   * The new-hire rule: the Monday from which this person alternates 6 and 5 (every week before it is a 6-day week).
+   * Only while that Monday is still ahead of the month's first week. Absent from an older API.
+   */
+  sixDayWeeksUntil?: string | null
+  /** Each week of the month and its type (6 or 5) as the planner decides it now. Absent from an older API. */
+  weeks?: { weekStart: string; workDays: number }[]
 }
 
 export interface AutoRosterSetupHoliday {

@@ -8,6 +8,7 @@ import {
   describeShiftChange,
   shiftChangeLine,
   shiftChangeNote,
+  shiftHoursNote,
 } from '../src/pages/attendance/shiftChangeWords.ts'
 import type { ChangeLogWords } from '../src/pages/attendance/shiftChangeWords.ts'
 import type { ShiftChange } from '../src/types/attendance.ts'
@@ -15,21 +16,32 @@ import type { ShiftChange } from '../src/types/attendance.ts'
 type Dict = { [key: string]: string | Dict }
 const load = (lang: string): Dict => JSON.parse(readFileSync(new URL(`../src/i18n/${lang}.json`, import.meta.url), 'utf-8')) as Dict
 
-function translator(dict: Dict) {
-  return (key: string, options: Record<string, unknown> = {}): string => {
+/**
+ * A key as i18next finds it: the key itself, else - with a number `count` - its plural form for the language
+ * (key_one / key_other in English; key_zero, _one, _two, _few, _many, _other in Arabic), by the same CLDR rules.
+ * A missing key throws, so a sentence absent from one language fails here instead of falling back to English.
+ */
+function translator(dict: Dict, lang: string) {
+  const plural = new Intl.PluralRules(lang)
+  const lookup = (key: string): string | undefined => {
     let node: string | Dict | undefined = dict
     for (const part of key.split('.')) node = typeof node === 'object' ? node[part] : undefined
-    if (typeof node !== 'string') throw new Error(`missing translation: ${key}`)
-    return node.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(options[name] ?? `{{${name}}}`))
+    return typeof node === 'string' ? node : undefined
+  }
+  return (key: string, options: Record<string, unknown> = {}): string => {
+    let text = lookup(key)
+    if (text === undefined && typeof options.count === 'number') text = lookup(`${key}_${plural.select(options.count)}`)
+    if (text === undefined) throw new Error(`missing translation: ${key}`)
+    return text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(options[name] ?? `{{${name}}}`))
   }
 }
 
 const en: ChangeLogWords = {
-  t: translator(load('en')),
+  t: translator(load('en'), 'en'),
   day: (iso) => changeLogDay(iso, 'en'),
   minutes: (m) => `${m}m`,
 }
-const ar: ChangeLogWords = { ...en, t: translator(load('ar')), day: (iso) => changeLogDay(iso, 'ar-u-nu-latn') }
+const ar: ChangeLogWords = { ...en, t: translator(load('ar'), 'ar'), day: (iso) => changeLogDay(iso, 'ar-u-nu-latn') }
 
 const base: ShiftChange = {
   shiftChangeId: 1, shiftId: 5, changedAtUtc: '2026-11-22T10:00:00', changedOn: '2026-11-22T00:00:00', changedByUserId: 7,
@@ -71,7 +83,9 @@ test('created, taken back, renamed, switched off and on, days not worked out aga
   assert.equal(describeShiftChange(change({ action: 'Deactivated' }), en), 'switched off')
   assert.equal(describeShiftChange(change({ action: 'Activated' }), en), 'switched on again')
   assert.match(describeShiftChange(change({ action: 'DaysNotRederived', daysCount: 3, effectiveFrom: '2026-11-01T00:00:00',
-    effectiveTo: '2026-11-25T00:00:00' }), en), /^3 day\(s\) from 1 Nov 2026 to 25 Nov 2026 could not be worked out again/)
+    effectiveTo: '2026-11-25T00:00:00' }), en), /^3 days from 1 Nov 2026 to 25 Nov 2026 could not be worked out again/)
+  assert.match(describeShiftChange(change({ action: 'DaysNotRederived', daysCount: 1, effectiveFrom: '2026-11-01T00:00:00',
+    effectiveTo: '2026-11-01T00:00:00' }), en), /^1 day from 1 Nov 2026 to 1 Nov 2026 could not be worked out again .* keeps its old figures/)
   // nobody known: no name, no comma
   assert.equal(shiftChangeLine(change({ action: 'Activated', changedBy: null }), en), '22 Nov 2026: switched on again')
 })
@@ -98,12 +112,39 @@ test('the same lines in Arabic, with Western digits', () => {
 })
 
 test('every change-log key exists in English and in Arabic', () => {
+  // A counted sentence has its plural forms instead of the key itself: two in English, six in Arabic.
+  const base = (key: string) => key.replace(/_(zero|one|two|few|many|other)$/, '')
   const keysOf = (dict: Dict): string[] => {
     let node: string | Dict | undefined = dict
     for (const part of CHANGE_LOG_KEYS.split('.').filter(Boolean)) node = typeof node === 'object' ? node[part] : undefined
-    return typeof node === 'object' ? Object.keys(node).sort() : []
+    return typeof node === 'object' ? [...new Set(Object.keys(node).map(base))].sort() : []
   }
   const enKeys = keysOf(load('en'))
   assert.ok(enKeys.length > 10)
   assert.deepEqual(keysOf(load('ar')), enKeys)
+})
+
+test('the days a change could not work out again are counted in words, in both languages', () => {
+  const days = (count: number, w: ChangeLogWords) =>
+    describeShiftChange(change({ action: 'DaysNotRederived', daysCount: count, effectiveFrom: '2026-11-01T00:00:00',
+      effectiveTo: '2026-11-25T00:00:00' }), w)
+  assert.match(days(1, en), /^1 day from /)
+  assert.match(days(2, en), /^2 days from /)
+  assert.doesNotMatch(days(4, en), /day\(s\)/)
+  // Arabic: one day, two days (dual), 3-10 days, 11-99 days, 100 days - never "4 يوم".
+  assert.match(days(1, ar), /يوم واحد/)
+  assert.match(days(2, ar), /يومين/)
+  assert.match(days(4, ar), /4 أيام/)
+  assert.match(days(11, ar), /11 يومًا/)
+  assert.match(days(100, ar), /100 يوم /)
+})
+
+test('the hours list says the database notes in the reader\'s language and keeps a typed reason', () => {
+  const back = 'Back to the hours before the change of 01/12/2026'
+  assert.equal(shiftHoursNote(back, en), 'Back to the hours before the change of 1 Dec 2026')
+  const arabic = shiftHoursNote(back, ar) ?? ''
+  assert.ok(!/Back to the hours/.test(arabic) && arabic.length > 0, arabic)
+  assert.equal(shiftHoursNote('The hours the shift was created with', en), null)
+  assert.equal(shiftHoursNote('Ramadan hours', ar), 'Ramadan hours')
+  assert.equal(shiftHoursNote(null, en), null)
 })

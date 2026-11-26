@@ -146,18 +146,6 @@ export function durationText(minutes: number): string {
   return t('common.hoursMinutes', { hours: h, minutes: m })
 }
 
-/**
- * "2h 0m — about 0.25 of a working day". The day length is the configured standard (8h by default);
- * shown so a requester sees the leave impact of the hours they are asking for.
- */
-export function minutesWithDayFraction(minutes: number, standardHours = 8): string {
-  const fraction = minutes / (standardHours * 60)
-  return t('workflow.dayFraction', {
-    duration: durationText(minutes),
-    fraction: fraction.toFixed(2),
-  })
-}
-
 /** Minutes between two 'HH:mm' times, or null if the order is wrong. */
 export function minutesBetween(from: string, to: string): number | null {
   if (!from || !to) return null

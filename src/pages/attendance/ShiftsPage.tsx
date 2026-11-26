@@ -22,6 +22,8 @@ import { t as translate } from '../../i18n/t'
 import { PERMISSIONS } from '../../types/attendance'
 import type { Shift, ShiftChange, ShiftHours } from '../../types/attendance'
 import { ShiftChangeLog } from './ShiftChangeLog'
+import { changeLogDay, shiftHoursNote } from './shiftChangeWords'
+import { currentLocale } from '../../i18n'
 
 interface ShiftFormState {
   name: string
@@ -428,6 +430,8 @@ export default function ShiftsPage() {
   }
 
   /** A shift's hours over time; the managers' Edit dialog can take a change back from it. */
+  /* The database's own notes ("Back to the hours before the change of ...") in the reader's language. */
+  const noteWords = { t: (key: string, options?: Record<string, unknown>) => t(key, options ?? {}), day: (iso: string) => changeLogDay(iso, currentLocale()) }
   const hoursList = (rows: ShiftHours[], withTakeBack: boolean) => (
     <ul className="shift-hours-list">
       {rows.map((row) => (
@@ -445,8 +449,8 @@ export default function ShiftsPage() {
           </div>
           {(row.note || row.createdBy) && !row.isFirst && (
             <div className="shift-hours-note">
-              {row.note}
-              {row.note && row.createdBy ? ' · ' : ''}
+              {shiftHoursNote(row.note, noteWords)}
+              {shiftHoursNote(row.note, noteWords) && row.createdBy ? ' · ' : ''}
               {row.createdBy ? t('attendance.shiftsPage.hours.by', { name: row.createdBy }) : ''}
             </div>
           )}

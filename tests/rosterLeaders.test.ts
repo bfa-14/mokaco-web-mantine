@@ -6,8 +6,10 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import i18next from 'i18next'
 import {
+  LEADER_NOT_IN_BRANCH,
   LEADERS_NOT_READY,
   leaderIds,
+  leaderNotInBranch,
   leaderOptions,
   leadersNotReady,
   rotationLeads,
@@ -33,6 +35,39 @@ test('the picker offers the people of the month, then a stored leader who is not
     [['1', 'Lina'], ['2', 'Rami'], ['3', 'Maya'], ['9', 'Nour (moved)']],
   )
   assert.deepEqual(leaderOptions([], []), [])
+})
+
+test('the picker offers only whom a save accepts: the candidates, the month\'s people first, then the stored leaders', () => {
+  const leaders = [
+    { employeeId: 2, fullName: 'Rami', isStored: true, leadSlot: null },
+    { employeeId: 9, fullName: 'Nour (moved)', isStored: true, leadSlot: null }, // stored: shown so it can be removed
+  ]
+  // Maya (3) worked here earlier in the month and has moved: not a candidate, not offered (the save would refuse her).
+  // Omar (5) is in the branch today but not on the month's days (he leaves before it starts): offered after the month.
+  const candidates = [
+    { employeeId: 5, fullName: 'Omar' },
+    { employeeId: 2, fullName: 'Rami' },
+    { employeeId: 1, fullName: 'Lina' },
+  ]
+  assert.deepEqual(
+    leaderOptions(staff, leaders, candidates).map((o) => [o.value, o.label]),
+    [['1', 'Lina'], ['2', 'Rami'], ['5', 'Omar'], ['9', 'Nour (moved)']],
+  )
+  // Nobody may be added: only the stored leaders, to be kept or taken off.
+  assert.deepEqual(leaderOptions(staff, leaders, []).map((o) => o.value), ['2', '9'])
+  // An older API sends no candidates: the month's people stand in, as before.
+  assert.deepEqual(leaderOptions(staff, leaders, undefined).map((o) => o.value), ['1', '2', '3', '9'])
+  assert.deepEqual(leaderOptions(staff, leaders, null).map((o) => o.value), ['1', '2', '3', '9'])
+})
+
+test("the save's 'not in this branch' answer is told apart by its code and gives back the name", () => {
+  assert.equal(leaderNotInBranch({ error: 'Rami Haddad is not in this branch: ...', code: LEADER_NOT_IN_BRANCH, name: 'Rami Haddad' }), 'Rami Haddad')
+  assert.equal(leaderNotInBranch({ error: 'Rami Haddad is not in this branch: ...' }), null) // an older API: no code
+  assert.equal(leaderNotInBranch({ code: LEADER_NOT_IN_BRANCH }), null) // no name to say
+  assert.equal(leaderNotInBranch({ code: LEADER_NOT_IN_BRANCH, name: '  ' }), null)
+  assert.equal(leaderNotInBranch({ code: LEADERS_NOT_READY, name: 'x' }), null)
+  assert.equal(leaderNotInBranch(null), null)
+  assert.equal(leaderNotInBranch('leader_not_in_branch'), null)
 })
 
 test('the picker sends each person once, as numbers, in the order picked', () => {
@@ -108,4 +143,19 @@ test("the 'not there yet' sentence is plain and in each language", async () => {
   assert.equal(english, 'The shift leaders list is not available yet. Ask your administrator to finish the update.')
   assert.notEqual(arabic, english) // an Arabic sentence, not the English one inside Arabic text
   for (const sentence of [english, arabic]) assert.doesNotMatch(sentence, /docs\/|\.sql|script|123/i)
+})
+
+test("the 'not in this branch' refusal is said in each language, with the name", async () => {
+  const { enT, arT } = await translators()
+  const key = 'attendance.roster.auto.leaders.notInBranch'
+  const english = enT(key, { name: 'Rami Haddad' })
+  const arabic = arT(key, { name: 'رامي حداد' })
+
+  assert.equal(english, "Rami Haddad is not one of this branch's people today, so cannot be added as a shift leader. Take them off the list.")
+  assert.match(arabic, /^رامي حداد /)
+  assert.ok(/[\u0600-\u06FF]/.test(arabic.replace('رامي حداد', '')), arabic)
+  assert.doesNotMatch(arabic, /branch|leader/i) // not the English sentence inside Arabic text
+  // The picker's line about whom it offers, in both languages.
+  assert.equal(enT('attendance.roster.auto.leaders.candidatesHint'), 'Only people who work in this branch today can be added.')
+  assert.notEqual(arT('attendance.roster.auto.leaders.candidatesHint'), enT('attendance.roster.auto.leaders.candidatesHint'))
 })
