@@ -3,7 +3,7 @@ import { Switch, Textarea } from '@mantine/core'
 import { DatePickerInput, TimePicker } from '@mantine/dates'
 import { IconCalendar } from '@tabler/icons-react'
 import { exitPermissionsService } from '../../services/workflowService'
-import { minutesBetween, minutesWithDayFraction } from './workflowFormat'
+import { durationText, minutesBetween } from './workflowFormat'
 import type { RequestFormBody } from './newRequestShared'
 import { t } from '../../i18n/t'
 
@@ -78,8 +78,10 @@ export function useExitPermissionForm(saving: boolean): RequestFormBody {
         </div>
       </div>
 
-      {/* Live feedback on the duration and its leave impact. */}
-      {minutes != null && <p className="hint">{minutesWithDayFraction(minutes)}</p>}
+      {/* Live feedback on the length only. Turned into leave, the minutes are charged as a share of THAT DAY'S shift
+          hours (the server reads the shift in force on the date), which this form does not know - so it shows no share
+          of a day rather than one measured against a fixed day length. The "convert" hint below says how it counts. */}
+      {minutes != null && <p className="hint">{t('body.exitPermission.duration', { duration: durationText(minutes) })}</p>}
 
       <div className="form-field">
         <Textarea

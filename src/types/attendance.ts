@@ -334,6 +334,52 @@ export interface ShiftHours {
   isCurrent: boolean
 }
 
+/** What one line of a shift's change log records (script 122). */
+export type ShiftChangeAction =
+  | 'Created'
+  | 'HoursChanged'
+  | 'HoursRemoved'
+  | 'Renamed'
+  | 'Deactivated'
+  | 'Activated'
+  | 'DaysNotRederived'
+
+/**
+ * One line of a shift's change log — GET /api/shifts/{id}/changes, newest first. Written by the database on every
+ * change and never deleted: who changed what, when, from what to what. Times are 'HH:mm:ss'; dates 'yyyy-MM-ddT00:00:00'.
+ */
+export interface ShiftChange {
+  shiftChangeId: number
+  shiftId: number
+  changedAtUtc: string
+  /** The day of the change, in Beirut. */
+  changedOn: string
+  changedByUserId: number | null
+  /** The person's name (else their user name); null when not known. */
+  changedBy: string | null
+  action: ShiftChangeAction | string
+  /** Hours: the first day they apply (2000-01-01 = every day). Null for a name or on/off change. */
+  effectiveFrom: string | null
+  /** Hours: the last day they apply when that was known; null = until the next change. */
+  effectiveTo: string | null
+  oldStartTime: string | null
+  newStartTime: string | null
+  oldEndTime: string | null
+  newEndTime: string | null
+  oldCrossesMidnight: boolean | null
+  newCrossesMidnight: boolean | null
+  oldBreakMinutes: number | null
+  newBreakMinutes: number | null
+  /** On an hours line, null = the tolerance setting. */
+  oldGraceMinutes: number | null
+  newGraceMinutes: number | null
+  oldName: string | null
+  newName: string | null
+  /** DaysNotRederived: how many days kept their old figures. */
+  daysCount: number | null
+  note: string | null
+}
+
 /* ── Roster ── */
 
 /**
@@ -1191,6 +1237,39 @@ export interface RosterRotation {
   members: RosterRotationMember[]
 }
 
+/** One shift leader of a branch (script 123): on the branch's own list, a lead of the rotation list, or both. */
+export interface RosterLeader {
+  employeeId: number
+  fullName: string
+  /** On the branch's own list (what the drawer's picker holds). */
+  isStored: boolean
+  /** Lead 1 / Lead 2 of the fixed-rotation list; they count as leaders whichever method plans. */
+  leadSlot?: 'L1' | 'L2' | null
+}
+
+/**
+ * GET / PUT api/roster/auto/leaders - the branch's shift leaders, never planned on the same shift of a day.
+ * A PUT sends branchId and employeeIds (it replaces the branch's own list) and answers with the leaders as stored.
+ */
+export interface RosterLeaders {
+  branchId: number
+  /** The branch's own list. */
+  employeeIds: number[]
+  /** Read only: everybody who counts as a leader - the list above and the rotation's leads - with names. */
+  leaders: RosterLeader[]
+  /**
+   * Read only: who may be ADDED to the list - the branch's people today, still employed - exactly whom a PUT accepts
+   * as new leaders. Absent from an older API.
+   */
+  candidates?: RosterLeaderCandidate[]
+}
+
+/** Somebody the leaders picker may add (script 123). */
+export interface RosterLeaderCandidate {
+  employeeId: number
+  fullName: string
+}
+
 /** The row a cell had when the preview read it — echoed back by the commit as its concurrency check. */
 export interface AutoRosterCellExpected {
   exists: boolean
@@ -1360,6 +1439,8 @@ export interface AutoRosterSettings {
   rosterPatternRestDays: string
   rosterMinHoursBetweenShifts: number
   rosterMinWeeklyRestHours: number
+  /** The new-hire rule: this many months of 6-day weeks from the hire date, then 6 and 5 in turn. Absent from an older API. */
+  rosterNewHireSixDayMonths?: number
 }
 
 /** A row of the drawer's staff list. */
@@ -1373,6 +1454,13 @@ export interface AutoRosterSetupStaff {
   anchorWorkDays?: number | null
   /** 6 or 5: the month's first week as the planner would use it now. */
   firstWeekWorkDays: number
+  /**
+   * The new-hire rule: the Monday from which this person alternates 6 and 5 (every week before it is a 6-day week).
+   * Only while that Monday is still ahead of the month's first week. Absent from an older API.
+   */
+  sixDayWeeksUntil?: string | null
+  /** Each week of the month and its type (6 or 5) as the planner decides it now. Absent from an older API. */
+  weeks?: { weekStart: string; workDays: number }[]
 }
 
 export interface AutoRosterSetupHoliday {

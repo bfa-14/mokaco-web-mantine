@@ -230,6 +230,32 @@ export function awaitsPayment(row: Pick<BookingRow, 'status' | 'source' | 'holdE
   return row.status === 'Pending' && row.source === 'Website' && !!row.holdExpiresUtc
 }
 
+/**
+ * NOT A BOOKING TO STAFF: an attempt nobody paid for. Still held for its online deposit, or released because
+ * the deposit was not paid. The API decides (unpaidAttempt); an older API, which sends nothing, is read by the
+ * held half of the rule alone.
+ */
+export function isUnpaidAttempt(row: Pick<BookingRow, 'status' | 'source' | 'holdExpiresUtc' | 'unpaidAttempt'>): boolean {
+  return row.unpaidAttempt ?? awaitsPayment(row)
+}
+
+/** Whether unpaid attempts are shown: one choice for the list and the calendar, remembered on this device. */
+const SHOW_UNPAID_KEY = 'mokaco.bookings.showUnpaid'
+export function readShowUnpaid(): boolean {
+  try {
+    return localStorage.getItem(SHOW_UNPAID_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+export function writeShowUnpaid(show: boolean): void {
+  try {
+    localStorage.setItem(SHOW_UNPAID_KEY, show ? '1' : '0')
+  } catch {
+    /* private mode: the choice lasts for this page only */
+  }
+}
+
 /** The status as a person should read it: "Awaiting payment" for a held booking, else the status's own name. */
 export function statusText(row: Pick<BookingRow, 'status' | 'source' | 'holdExpiresUtc'>): string {
   return awaitsPayment(row) ? t('booking.status.AwaitingPayment') : statusLabel(row.status)

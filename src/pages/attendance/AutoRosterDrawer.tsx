@@ -4,6 +4,7 @@ import { Button, Checkbox, Loader, NumberInput, SegmentedControl, Select } from 
 import { notifications } from '@mantine/notifications'
 import { IconDeviceFloppy } from '@tabler/icons-react'
 import { Drawer } from '../../components/dialogs'
+import { ApiError } from '../../api/client'
 import { getErrorMessage } from '../../api/errorMessage'
 import { autoRosterService } from '../../services/autoRosterService'
 import type {
@@ -12,11 +13,15 @@ import type {
   AutoRosterRequest,
   AutoRosterRhythmStart,
   AutoRosterSetup,
+  AutoRosterSetupStaff,
+  RosterLeaders,
   StaffingRequirementDto,
 } from '../../types/attendance'
 import { formatDayLabel, periodLabel, periodRange } from './attendanceFormat'
-import { mondayOf } from './rosterCounters'
+import { mondayOf, newHireWeek } from './rosterCounters'
 import { AutoRosterRotation } from './AutoRosterRotation'
+import { AutoRosterLeaders } from './AutoRosterLeaders'
+import { leaderNotInBranch, leadersNotReady, sameLeaders } from './rosterLeaders'
 import { proposeLine, rotationKey, rotationLines, rotationProblem, rotationToSave } from './rotationSetup'
 import type { RotationLine } from './rotationSetup'
 import {
@@ -92,7 +97,8 @@ export function AutoRosterDrawer({
   /**
    * The first week's type the manager PICKED, per person. Every pick is sent as an override, also one
    * equal to what the column showed: the shown value can be the planner's guess under other options
-   * (see firstWeekKnown), and only an override holds it to what the manager saw.
+   * (see firstWeekKnown), and only an override holds it to what the manager saw. Never for a new hire
+   * whose 6-day weeks run past the first week (newHireWeek): there is nothing to pick.
    */
   const [firstWeek, setFirstWeek] = useState<Map<number, number>>(new Map())
   const [cover, setCover] = useState<Map<string, number>>(new Map())
@@ -127,6 +133,48 @@ export function AutoRosterDrawer({
   const [rotationError, setRotationError] = useState<string | null>(null)
   const rotationDirty = rotationKey(rotationStart, rotationMorning, rotationEvening, rotationList) !== rotationSaved
 
+  /* THE SHIFT LEADERS (script 123), for both methods: the branch's own list, beside the rotation's Lead 1 / Lead 2.
+     Read each time the drawer opens; like the staffing and the rotation it belongs to the branch, so Preview saves it
+     first when it has changed. State is set only when an answer arrives: until then the section says it is loading.
+     notReady: the API said the list is not there yet (its update is still to be applied), which the section words itself. */
+  const [leadersRead, setLeadersRead] = useState<{
+    branchId: number
+    stored: RosterLeaders | null
+    error: string | null
+    notReady: boolean
+  } | null>(null)
+  const [leaderPicks, setLeaderPicks] = useState<number[]>([])
+  const [savingLeaders, setSavingLeaders] = useState(false)
+  const [leadersError, setLeadersError] = useState<string | null>(null)
+  const leadersStored = leadersRead?.branchId === branchId ? leadersRead.stored : null
+  const leadersLoading = opened && leadersRead?.branchId !== branchId
+  const leadersDirty = leadersStored != null && !sameLeaders(leaderPicks, leadersStored.employeeIds)
+  useEffect(() => {
+    if (!opened) return
+    let live = true
+    autoRosterService.leaders(branchId).then(
+      (stored) => {
+        if (!live) return
+        setLeadersRead({ branchId, stored, error: null, notReady: false })
+        setLeaderPicks(stored.employeeIds)
+        setLeadersError(null)
+      },
+      (err: unknown) => {
+        if (live) {
+          setLeadersRead({
+            branchId,
+            stored: null,
+            error: getErrorMessage(err),
+            notReady: err instanceof ApiError && leadersNotReady(err.data),
+          })
+        }
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [opened, branchId])
+
   const shiftCoverChanged = !sameShiftCover(shiftCover, coverSaved.lines)
   /** One unsaved state for the whole staffing: the weekdays and the shifts are one save. */
   const staffingDirty = daysDirty || shiftCoverChanged
@@ -156,8 +204,9 @@ export function AutoRosterDrawer({
       new Set(current?.offRotationEmployeeIds ?? setup.staff.filter((s) => !s.onRotation).map((s) => s.employeeId)),
     )
     const weeks = new Map<number, number>()
+    const fixedWeek = new Set(setup.staff.filter((s) => newHireWeek(s, firstMonday)).map((s) => s.employeeId))
     for (const o of current?.rhythmOverrides ?? []) {
-      if (mondayOf(o.weekStart) === firstMonday) weeks.set(o.employeeId, o.workDays)
+      if (mondayOf(o.weekStart) === firstMonday && !fixedWeek.has(o.employeeId)) weeks.set(o.employeeId, o.workDays)
     }
     setFirstWeek(weeks)
     const covers = new Map<string, number>()
@@ -215,8 +264,8 @@ export function AutoRosterDrawer({
   const setupWeeksHold =
     rhythmStart === settingStart &&
     (rhythmStart === 'Aligned' || (firstWeek.size === 0 && offRotation.size === 0))
-  function firstWeekKnown(staff: { anchorWeekStart?: string | null }): boolean {
-    return staff.anchorWeekStart != null || setupWeeksHold
+  function firstWeekKnown(staff: AutoRosterSetupStaff): boolean {
+    return staff.anchorWeekStart != null || setupWeeksHold || newHireWeek(staff, firstMonday)
   }
 
   function shiftName(shiftId: number): string {
@@ -268,6 +317,40 @@ export function AutoRosterDrawer({
     }
   }
 
+  async function saveLeaders(): Promise<boolean> {
+    // Read before the await: the picker is disabled while saving, but what was sent is what was saved.
+    const ids = leaderPicks
+    setSavingLeaders(true)
+    setLeadersError(null)
+    try {
+      const stored = await autoRosterService.saveLeaders(branchId, ids)
+      setLeadersRead({ branchId, stored, error: null, notReady: false })
+      setLeaderPicks(stored.employeeIds)
+      return true
+    } catch (err) {
+      // The two refusals the API codes are said in the reader's language; any other keeps the server's sentence.
+      const outsider = err instanceof ApiError ? leaderNotInBranch(err.data) : null
+      setLeadersError(
+        err instanceof ApiError && leadersNotReady(err.data)
+          ? t('attendance.roster.auto.leaders.notReady')
+          : outsider != null
+            ? t('attendance.roster.auto.leaders.notInBranch', { name: outsider })
+            : getErrorMessage(err),
+      )
+      return false
+    } finally {
+      setSavingLeaders(false)
+    }
+  }
+
+  /** The rotation's leads count as leaders: after a rotation save, the leaders' note reads them again (the picks stay). */
+  function refreshRotationLeads() {
+    autoRosterService.leaders(branchId).then(
+      (stored) => setLeadersRead((read) => (read?.branchId === branchId && read.stored ? { ...read, stored } : read)),
+      () => undefined, // the note keeps what it showed; the list itself did not change
+    )
+  }
+
   async function saveRotation(): Promise<boolean> {
     const problem = rotationProblem(rotationStart, rotationMorning, rotationEvening, rotationList)
     if (problem) {
@@ -285,6 +368,7 @@ export function AutoRosterDrawer({
       const saved = lines.map((l) => ({ ...l, isNew: false }))
       setRotationList(saved)
       setRotationSaved(rotationKey(rotationStart, rotationMorning, rotationEvening, saved))
+      refreshRotationLeads()
       return true
     } catch (err) {
       setRotationError(getErrorMessage(err))
@@ -317,6 +401,8 @@ export function AutoRosterDrawer({
 
   async function preview() {
     if (!setup) return
+    // Both methods keep the leaders apart, and the server plans by the stored list.
+    if (leadersDirty && !(await saveLeaders())) return
     if (method === 'Rotation') {
       // The server plans by the stored rotation, so an unsaved one would be planned without its changes.
       if ((rotationDirty || rotationSaved === '') && !(await saveRotation())) return
@@ -336,8 +422,10 @@ export function AutoRosterDrawer({
     }
     // The planner reads the staffing from the database, so an unsaved one would be planned without.
     if (staffingDirty && !(await saveStaffing())) return
+    // A new hire's first week is a 6-day week whatever is picked: an override would only be saved and later decide the
+    // order of their 6 and 5 weeks, so none is sent.
     const rhythmOverrides = setup.staff
-      .filter((s) => firstWeek.has(s.employeeId) && !offRotation.has(s.employeeId))
+      .filter((s) => firstWeek.has(s.employeeId) && !offRotation.has(s.employeeId) && !newHireWeek(s, firstMonday))
       .map((s) => ({
         employeeId: s.employeeId,
         weekStart: firstMonday,
@@ -359,7 +447,13 @@ export function AutoRosterDrawer({
 
   const waiting = setup?.openRequestId != null
   const canPreview =
-    setup != null && !waiting && !busy && !savingStaffing && !savingRotation && (mode !== 'ReplanAll' || confirmAll)
+    setup != null &&
+    !waiting &&
+    !busy &&
+    !savingStaffing &&
+    !savingRotation &&
+    !savingLeaders &&
+    (mode !== 'ReplanAll' || confirmAll)
   /** Staff who could be put on the rotation list: everybody not on it. */
   const notOnRotationList = setup
     ? setup.staff.filter((s) => !rotationList.some((l) => l.employeeId === s.employeeId))
@@ -368,6 +462,9 @@ export function AutoRosterDrawer({
   const anyWeekUnknown = setup
     ? setup.staff.some((s) => !offRotation.has(s.employeeId) && !firstWeek.has(s.employeeId) && !firstWeekKnown(s))
     : false
+  /** Somebody of the month still on the new-hire rule: the hints then say what it does (in its months, when sent). */
+  const anyNewHire = setup ? setup.staff.some((s) => s.sixDayWeeksUntil != null) : false
+  const newHireMonths = setup?.settings?.rosterNewHireSixDayMonths
 
   return (
     <Drawer
@@ -430,6 +527,9 @@ export function AutoRosterDrawer({
             />
             <div className="hint" style={{ marginTop: 6 }}>
               {t(`attendance.roster.auto.method.${method}Hint`)}
+              {method === 'Rotation' && anyNewHire && newHireMonths != null && (
+                <> {t('attendance.roster.auto.method.rotationNewHire', { count: newHireMonths })}</>
+              )}
             </div>
           </div>
 
@@ -551,6 +651,9 @@ export function AutoRosterDrawer({
             </div>
             <div className="hint full" style={{ marginTop: -8, marginBottom: 12 }}>
               {t(`attendance.roster.auto.rhythm.${rhythmStart}Hint`)}{' '}
+              {anyNewHire && newHireMonths != null && (
+                <>{t('attendance.roster.auto.rhythm.newHire', { count: newHireMonths })} </>
+              )}
               {t('attendance.roster.auto.rhythm.storedNote')}{' '}
               {t('attendance.roster.auto.defaultShift.hint')}
             </div>
@@ -577,7 +680,9 @@ export function AutoRosterDrawer({
                   <tbody>
                     {setup.staff.map((s) => {
                       const on = !offRotation.has(s.employeeId)
-                      const picked = firstWeek.get(s.employeeId)
+                      // A new hire's first week is fixed (a 6-day week): shown, not picked, never sent.
+                      const fixed = newHireWeek(s, firstMonday)
+                      const picked = fixed ? undefined : firstWeek.get(s.employeeId)
                       const known = firstWeekKnown(s)
                       // '' selects neither segment: the planner decides at preview.
                       const week = picked != null ? String(picked) : known ? String(s.firstWeekWorkDays) : ''
@@ -587,6 +692,11 @@ export function AutoRosterDrawer({
                           <td>
                             <div className="auto-roster-name">{s.fullName}</div>
                             {s.position && <div className="auto-roster-sub">{s.position}</div>}
+                            {s.sixDayWeeksUntil && (
+                              <div className="auto-roster-sub">
+                                {t('attendance.roster.auto.staff.newHireUntil', { date: formatDayLabel(s.sixDayWeeksUntil.slice(0, 10)) })}
+                              </div>
+                            )}
                           </td>
                           <td>
                             <Checkbox
@@ -615,11 +725,14 @@ export function AutoRosterDrawer({
                                 { value: '6', label: '6' },
                                 { value: '5', label: '5' },
                               ]}
-                              disabled={busy || !on}
+                              disabled={busy || !on || fixed}
                               aria-label={`${t('attendance.roster.auto.staff.firstWeek')}: ${s.fullName}`}
                             />
                             {flipped && (
                               <span className="auto-roster-flag">{t('attendance.roster.auto.staff.flipped')}</span>
+                            )}
+                            {fixed && on && (
+                              <span className="auto-roster-sub">{t('attendance.roster.auto.staff.firstWeekNewHire')}</span>
                             )}
                             {week === '' && on && (
                               <span className="auto-roster-sub">{t('attendance.roster.auto.staff.firstWeekAuto')}</span>
@@ -632,6 +745,7 @@ export function AutoRosterDrawer({
                 </table>
                 <div className="hint" style={{ marginTop: 6 }}>
                   {t('attendance.roster.auto.staff.firstWeekHint', { date: formatDayLabel(firstMonday) })}{' '}
+                  {anyNewHire && <>{t('attendance.roster.auto.staff.firstWeekNewHireHint')} </>}
                   {anyWeekUnknown && (
                     <>
                       {t('attendance.roster.auto.staff.firstWeekAutoHint', {
@@ -646,6 +760,32 @@ export function AutoRosterDrawer({
           </div>
           </>
           )}
+
+          {/* ── shift leaders (both methods) ── */}
+          <AutoRosterLeaders
+            staff={setup.staff}
+            stored={leadersStored}
+            loading={leadersLoading}
+            loadError={leadersRead?.branchId === branchId ? leadersRead.error : null}
+            notReady={leadersRead?.branchId === branchId && leadersRead.notReady}
+            picks={leaderPicks}
+            onPicks={setLeaderPicks}
+            dirty={leadersDirty}
+            saving={savingLeaders}
+            error={leadersError}
+            onSave={() => {
+              void saveLeaders().then((ok) => {
+                if (ok) {
+                  notifications.show({
+                    message: t('attendance.roster.auto.leaders.saved'),
+                    color: 'green',
+                    autoClose: 2500,
+                  })
+                }
+              })
+            }}
+            disabled={busy || waiting}
+          />
 
           {/* ── public holidays ── */}
           <div className="form-section">

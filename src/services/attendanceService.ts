@@ -57,6 +57,7 @@ import type {
   SettingUpsertRequest,
   Shift,
   ShiftAssignment,
+  ShiftChange,
   ShiftCreateRequest,
   ShiftPattern,
   ShiftPatternUpsertRequest,
@@ -167,6 +168,8 @@ export const shiftsService = {
   /** Takes one change of hours back; the days it covered are worked out again. */
   deleteHours: (id: number, shiftHoursId: number) =>
     apiRequest<{ daysRederived: number }>(`/api/shifts/${id}/hours/${shiftHoursId}`, { method: 'DELETE' }),
+  /** The shift's change log, newest first: every change, who made it, the before and the after (script 122). */
+  getChanges: (id: number) => apiRequest<ShiftChange[]>(`/api/shifts/${id}/changes`),
 }
 
 /** The roster. Read: ATTENDANCE_VIEW. Write: ATTENDANCE_MANAGE. */

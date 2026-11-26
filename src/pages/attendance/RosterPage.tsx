@@ -1326,6 +1326,16 @@ export default function RosterPage() {
     [draft.preview],
   )
 
+  /* Each person's week types as the branch setup says them (a saved month has no preview to ask): what tells a new
+     hire's 6-day weeks in a row from a broken 6/5. */
+  const expectedWeeks = useMemo(() => {
+    const map = new Map<number, Map<string, number>>()
+    for (const s of setup?.staff ?? []) {
+      if (s.weeks && s.weeks.length > 0) map.set(s.employeeId, new Map(s.weeks.map((w) => [w.weekStart.slice(0, 10), w.workDays])))
+    }
+    return map
+  }, [setup])
+
   /** Work · Rest · Sat · Sun · 6·5 for every row, counted from what the grid shows. */
   const rowCounters = useMemo(() => {
     const map = new Map<
@@ -1337,12 +1347,12 @@ export default function RosterPage() {
       const server = serverCounters.get(employee.employeeId)
       map.set(employee.employeeId, {
         counts: employeeCounts(days, cellOf),
-        strip: weekStrip(monthWeeks, cellOf, server?.weeks),
+        strip: weekStrip(monthWeeks, cellOf, server?.weeks, expectedWeeks.get(employee.employeeId)),
         owed: server ? { sat: server.owedSaturday, sun: server.owedSunday } : null,
       })
     }
     return map
-  }, [employees, days, monthWeeks, counterCell, serverCounters])
+  }, [employees, days, monthWeeks, counterCell, serverCounters, expectedWeeks])
 
   /* The minimum a day is measured against: the preview's (which knows each holiday's cover), else the
      branch's staffing rows — except on a holiday, whose cover only a preview knows. */

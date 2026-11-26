@@ -11,7 +11,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import type { ColumnFiltersState, SortingState } from '@tanstack/react-table'
-import { Badge, Group, Loader, Pagination, Select, Table, TextInput } from '@mantine/core'
+import { Badge, Group, Loader, Pagination, Select, Switch, Table, TextInput } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useAuth } from '../../auth/useAuth'
 import { getErrorMessage } from '../../api/errorMessage'
@@ -38,6 +38,9 @@ import {
   today,
   statusColor,
   statusText,
+  isUnpaidAttempt,
+  readShowUnpaid,
+  writeShowUnpaid,
 } from './bookingShared'
 import { BookingDrawer } from './BookingDrawer'
 import { balanceOwed } from './bookingMoney'
@@ -84,6 +87,16 @@ export default function BookingsListPage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
   const [selected, setSelected] = useState<BookingRow | null>(null)
+  /* Unpaid attempts (held for the online deposit, or released unpaid) are not bookings to staff: left out
+     unless asked for. The switch says how many are hidden, so nothing disappears silently. */
+  const [showUnpaid, setShowUnpaid] = useState(readShowUnpaid)
+  const unpaidCount = useMemo(() => rows.filter(isUnpaidAttempt).length, [rows])
+  /* The line whose drawer is open stays in the table even when it is an unpaid attempt: a link to one (the
+     Payments page) must not open a drawer over a list that does not show it. */
+  const shownRows = useMemo(
+    () => (showUnpaid ? rows : rows.filter((row) => !isUnpaidAttempt(row) || row.bookingId === selected?.bookingId)),
+    [rows, showUnpaid, selected],
+  )
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
@@ -247,7 +260,7 @@ export default function BookingsListPage() {
               ? `${statusText(row)} ${refundLabel(refundStatusOf(row))}`
               : statusText(row),
           // Only the statuses actually present, so every option in the dropdown returns something.
-          filterOptions: optionsFrom(rows, (row) => statusText(row)),
+          filterOptions: optionsFrom(shownRows, (row) => statusText(row)),
         },
       }),
       columnHelper.accessor('source', {
@@ -255,16 +268,16 @@ export default function BookingsListPage() {
         cell: (info) => t(`booking.source.${info.getValue()}`),
         meta: {
           filterText: (_v, row) => t(`booking.source.${row.source}`),
-          filterOptions: optionsFrom(rows, (row) => t(`booking.source.${row.source}`)),
+          filterOptions: optionsFrom(shownRows, (row) => t(`booking.source.${row.source}`)),
         },
       }),
     ],
-    // `rows` feeds the two option lists only; the column shapes do not depend on the data.
-    [t, rows],
+    // The rows feed the two option lists only; the column shapes do not depend on the data.
+    [t, shownRows],
   )
 
   const table = useReactTable({
-    data: rows,
+    data: shownRows,
     columns,
     state: { sorting, globalFilter, columnFilters },
     onSortingChange: setSorting,
@@ -366,6 +379,21 @@ export default function BookingsListPage() {
             value={statusFilter ?? ''}
             onChange={(value) => setStatusFilter(value || null)}
             allowDeselect={false}
+          />
+        </div>
+
+        <div className="form-field">
+          <span className="form-label">{t('booking.list.unpaid')}</span>
+          <Switch
+            checked={showUnpaid}
+            onChange={(event) => {
+              const show = event.currentTarget.checked
+              setShowUnpaid(show)
+              writeShowUnpaid(show)
+            }}
+            label={t('booking.list.showUnpaid', { count: unpaidCount })}
+            title={t('booking.list.unpaidHint')}
+            data-testid="show-unpaid"
           />
         </div>
       </div>
